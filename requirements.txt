@@ -6,3 +6,5 @@ waitress>=3.0.0
 apscheduler>=3.10.0
 flask-wtf>=1.2.2
 flask-limiter>=3.5.0
+numpy>=1.26.0
+scipy>=1.12.0

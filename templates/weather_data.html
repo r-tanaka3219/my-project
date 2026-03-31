@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}気温データ管理{% endblock %}
+{% block content %}
+<style>
+.temp-hot{color:#dc2626;font-weight:600}
+.temp-warm{color:#d97706;font-weight:600}
+.temp-cool{color:#2563eb;font-weight:600}
+.temp-cold{color:#7c3aed;font-weight:600}
+.input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:end}
+</style>
+
+<div class="page-title">
+  <span>気温データ管理</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/reports/weather/template" class="btn btn-outline btn-sm">テンプレートDL</a>
+    <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
+    <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
+  </div>
+</div>
+
+<div class="card" style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px">
+  気温データをAI需要予測に反映します。気温と売上の相関が強い商品（飲料・食品等）には自動的に気温補正係数が適用されます。
+  気象庁CSVをダウンロードしてインポートするか、手動で入力してください。
+</div>
+
+<div class="card">
+  <div class="card-title">手動入力</div>
+  <form method="post" action="/reports/weather/add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="input-grid">
+      <div>
+        <label style="font-size:12px;color:#6b7280">日付 *</label>
+        <input type="date" name="obs_date" required style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280">地点</label>
+        <input type="text" name="location" value="東京" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280">平均気温(℃) *</label>
+        <input type="number" name="avg_temp" step="0.1" required style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280">最高気温(℃)</label>
+        <input type="number" name="max_temp" step="0.1" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280">最低気温(℃)</label>
+        <input type="number" name="min_temp" step="0.1" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280">降水量(mm)</label>
+        <input type="number" name="precipitation" step="0.1" value="0" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div style="padding-top:18px">
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">登録</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">CSVインポート（気象庁フォーマット対応）</div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <form method="post" action="/reports/weather/import" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit" class="btn btn-outline btn-sm">インポート</button>
+    </form>
+    <form method="post" action="/reports/weather/recalc_sensitivity"
+          onsubmit="return confirm('全商品の気温感応度を再計算します（時間がかかる場合があります）。よろしいですか？')" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-purple btn-sm">気温感応度を再計算</button>
+    </form>
+  </div>
+  <div style="font-size:11px;color:#6b7280;margin-top:8px">
+    列名：日付, 地点, 平均気温, 最高気温, 最低気温（テンプレートDLで確認できます）
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">気温データ一覧（直近90日）</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>地点</th>
+          <th style="text-align:right">平均気温</th>
+          <th style="text-align:right">最高気温</th>
+          <th style="text-align:right">最低気温</th>
+          <th style="text-align:right">降水量(mm)</th>
+          <th>ソース</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.obs_date }}</td>
+        <td>{{ r.location }}</td>
+        <td style="text-align:right">
+          {% if r.avg_temp is not none %}
+            {% set t = r.avg_temp|float %}
+            <span class="{% if t >= 30 %}temp-hot{% elif t >= 20 %}temp-warm{% elif t >= 10 %}temp-cool{% else %}temp-cold{% endif %}">
+              {{ t }}℃
+            </span>
+          {% else %}-{% endif %}
+        </td>
+        <td style="text-align:right">{% if r.max_temp is not none %}{{ r.max_temp }}℃{% else %}-{% endif %}</td>
+        <td style="text-align:right">{% if r.min_temp is not none %}{{ r.min_temp }}℃{% else %}-{% endif %}</td>
+        <td style="text-align:right">{% if r.precipitation %}{{ r.precipitation }}{% else %}0{% endif %}</td>
+        <td><span style="font-size:11px;color:#6b7280">{{ r.source }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px">気温データがありません。手動入力またはCSVインポートしてください。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

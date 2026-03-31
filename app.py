@@ -92,6 +92,7 @@ from blueprints.inventory import bp as inventory_bp
 from blueprints.orders import bp as orders_bp
 from blueprints.products import bp as products_bp
 from blueprints.chains import bp as chains_bp
+from blueprints.forecast import bp as forecast_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
@@ -99,6 +100,7 @@ app.register_blueprint(inventory_bp)
 app.register_blueprint(orders_bp)
 app.register_blueprint(products_bp)
 app.register_blueprint(chains_bp)
+app.register_blueprint(forecast_bp)
 @app.template_filter('format_number')
 def format_number_filter(value):
     """数値をカンマ区切りで表示するJinjaフィルター"""

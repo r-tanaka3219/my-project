@@ -211,6 +211,7 @@ tr:hover td.table-actions-cell {
   {% if has_permission('order_history') %}<a href="/order_history" {% if request.endpoint=='order_history' %}class="active"{% endif %}>発注履歴</a>{% endif %}
   {% if has_permission('stocktake') %}<a href="/stocktake" {% if request.endpoint in ['stocktake','stocktake_create','stocktake_save'] %}class="active"{% endif %}>棚卸</a>{% endif %}
   {% if has_permission('reports') %}<a href="/reports" {% if request.endpoint=='reports' %}class="active"{% endif %}>レポート</a>{% endif %}
+  {% if has_permission('reports') %}<a href="/reports/forecast/wholesale" {% if request.endpoint in ['forecast.forecast_wholesale','forecast.abc_analysis','forecast.weekly_md','forecast.weather_data'] %}class="active"{% endif %}>AI予測</a>{% endif %}
   {% if has_permission('products') %}<a href="/products" {% if request.endpoint in ['products','product_new','product_edit'] %}class="active"{% endif %}>商品管理</a>{% endif %}
   {% if has_permission('csv') %}<a href="/csv" {% if request.endpoint in ['csv_settings','csv_new','csv_edit'] %}class="active"{% endif %}>CSV取込</a>{% endif %}
   {% if has_permission('chains') %}<a href="/chains" {% if request.endpoint == 'chains' %}class="active"{% endif %}>チェーン管理</a>{% endif %}

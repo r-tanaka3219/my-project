@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}問屋向け需要予測{% endblock %}
+{% block content %}
+<style>
+.abc-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.abc-A{background:#fef3c7;color:#92400e;border:1px solid #f59e0b}
+.abc-B{background:#dbeafe;color:#1e40af;border:1px solid #3b82f6}
+.abc-C{background:#f1f5f9;color:#475569;border:1px solid #94a3b8}
+.algo-tag{font-size:10px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:4px;padding:1px 5px}
+.dss-bar{height:6px;background:#e2e8f0;border-radius:3px;margin-top:3px}
+.dss-fill{height:6px;background:#f59e0b;border-radius:3px}
+.stat-box{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.stat-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;min-width:120px;text-align:center}
+.stat-item .val{font-size:22px;font-weight:700;color:#1a2744}
+.stat-item .lbl{font-size:11px;color:#6b7280;margin-top:2px}
+.stat-A .val{color:#d97706}
+.stat-B .val{color:#2563eb}
+.stat-C .val{color:#64748b}
+.q-cell{font-size:11px;color:#6b7280}
+</style>
+
+<div class="page-title">
+  <span>問屋向け需要予測（ハイブリッドAI）</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/reports/forecast/wholesale/export{% if q %}?q={{ q }}{% endif %}" class="btn btn-outline btn-sm">CSV出力</a>
+    <a href="/reports/abc" class="btn btn-outline btn-sm">ABC分析</a>
+    <a href="/reports/weekly_md" class="btn btn-outline btn-sm">52週MD</a>
+    <a href="/reports/weather" class="btn btn-outline btn-sm">気温データ</a>
+    <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
+  </div>
+</div>
+
+<div class="card" style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px">
+  <strong>問屋向けハイブリッド予測</strong>：
+  Aランク商品はホルト・ウィンタース指数平滑法＋Q25/Q50/Q75分位点＋気温補正＋動的安全在庫を適用。
+  B/Cランクは移動平均＋固定安全在庫で効率的に処理します。
+</div>
+
+<div class="card" style="padding:10px 16px">
+  <div class="stat-box">
+    <div class="stat-item stat-A"><div class="val">{{ abc_counts.A }}</div><div class="lbl">Aランク（高重要）</div></div>
+    <div class="stat-item stat-B"><div class="val">{{ abc_counts.B }}</div><div class="lbl">Bランク（中重要）</div></div>
+    <div class="stat-item stat-C"><div class="val">{{ abc_counts.C }}</div><div class="lbl">Cランク（低重要）</div></div>
+    <div class="stat-item"><div class="val">{{ rows|length }}</div><div class="lbl">対象商品数</div></div>
+    <div class="stat-item"><div class="val">{{ z_score }}</div><div class="lbl">安全係数Z（欠品率制御）</div></div>
+  </div>
+</div>
+
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/reports/forecast/wholesale" class="search-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名" style="flex:1;min-width:200px">
+    <button type="submit" class="btn btn-outline btn-sm">検索</button>
+    {% if q %}<a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b;padding:10px 16px">
+  <form method="post" action="/reports/forecast/wholesale/apply" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="q" value="{{ q or '' }}">
+    <span style="font-weight:600;font-size:13px">予測値を設定へ反映</span>
+    <select name="mode" class="btn btn-outline btn-sm">
+      <option value="reorder_point">発注点のみ</option>
+      <option value="order_qty">発注数のみ</option>
+      <option value="both">発注点＋発注数</option>
+    </select>
+    <button type="submit" class="btn btn-warning btn-sm"
+            onclick="return confirm('表示中の商品を予測値で更新します。よろしいですか？')">一括反映</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>仕入先</th>
+          <th>商品CD/JAN</th>
+          <th>商品名</th>
+          <th>ABC</th>
+          <th>現在庫</th>
+          <th>消化日数</th>
+          <th>30日予測</th>
+          <th>Q25/Q50/Q75<br><span style="font-weight:400;font-size:10px">日次分位点</span></th>
+          <th>動的安全在庫<br><span style="font-weight:400;font-size:10px">σ_AI×Z×√L</span></th>
+          <th>気温補正</th>
+          <th>推奨発注点</th>
+          <th>推奨発注数</th>
+          <th>52週MD<br><span style="font-weight:400;font-size:10px">計画/達成率</span></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="white-space:nowrap">{{ r.supplier_cd }}<br><span style="color:#6b7280;font-size:11px">{{ r.supplier_name }}</span></td>
+        <td style="white-space:nowrap">
+          {{ r.product_cd }}<br>
+          <span style="color:#6b7280;font-size:11px">{{ r.jan }}</span>
+        </td>
+        <td>
+          {{ r.product_name }}<br>
+          <span class="algo-tag">{{ r.algorithm }}</span>
+        </td>
+        <td><span class="abc-badge abc-{{ r.abc_rank }}">{{ r.abc_rank }}</span></td>
+        <td style="text-align:right">{{ r.stock_qty|int }}</td>
+        <td style="text-align:right">
+          {% if r.cover_days is not none %}
+            <span style="color:{% if r.cover_days < 7 %}#dc2626{% elif r.cover_days < 14 %}#d97706{% else %}#16a34a{% endif %};font-weight:600">
+              {{ r.cover_days }}日
+            </span>
+          {% else %}-{% endif %}
+        </td>
+        <td style="text-align:right;font-weight:600">{{ r.forecast_30d }}</td>
+        <td style="text-align:right">
+          {% if r.abc_rank == 'A' and r.q50_daily > 0 %}
+            <span class="q-cell">
+              Q25: {{ r.q25_daily }}<br>
+              <strong>Q50: {{ r.q50_daily }}</strong><br>
+              Q75: {{ r.q75_daily }}
+            </span>
+          {% else %}
+            <span style="color:#94a3b8;font-size:11px">SMA</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right">
+          {% if r.abc_rank == 'A' and r.dynamic_safety_stock > 0 %}
+            <span style="color:#d97706;font-weight:600">{{ r.dynamic_safety_stock|int }}</span>
+            {% if r.iqr_std > 0 %}
+              <div class="dss-bar"><div class="dss-fill" style="width:{{ [r.iqr_std * 10, 100]|min }}%"></div></div>
+              <span class="q-cell">σ={{ r.iqr_std }}</span>
+            {% endif %}
+          {% else %}
+            <span style="color:#94a3b8">固定</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right">
+          {% if r.temp_adj_factor != 1.0 %}
+            <span style="color:{% if r.temp_adj_factor > 1 %}#2563eb{% else %}#6b7280{% endif %};font-weight:600">
+              ×{{ r.temp_adj_factor }}
+            </span>
+          {% else %}
+            <span style="color:#94a3b8">-</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;font-weight:700;color:#dc2626">{{ r.suggested_reorder_point }}</td>
+        <td style="text-align:right;font-weight:700;color:#2563eb">{{ r.suggested_order_qty }}</td>
+        <td style="text-align:right">
+          {% if r.md_plan_qty %}
+            {{ r.md_plan_qty }}
+            {% if r.md_achievement is not none %}
+              <br><span style="font-size:11px;color:{% if r.md_achievement >= 100 %}#16a34a{% elif r.md_achievement >= 70 %}#d97706{% else %}#dc2626{% endif %}">
+                {{ r.md_achievement }}%
+              </span>
+            {% endif %}
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:24px">データがありません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

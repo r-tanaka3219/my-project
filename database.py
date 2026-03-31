@@ -382,6 +382,90 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER DEFAULT 0",
     # デフォルトパスワードのままのユーザーにフラグを立てる（admin123 / user123）
     "UPDATE users SET must_change_password=1 WHERE password IN ('240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9','e606e38b0d8c19b24cf0ee3808183162ea7cd63ff7912dbb22b5e803286b4446') AND must_change_password=0",
+
+    # ── 問屋向け拡張 ──────────────────────────────────────────────────────
+    # 気温データ（気象庁API or 手動入力）
+    """CREATE TABLE IF NOT EXISTS weather_data (
+        id           SERIAL PRIMARY KEY,
+        obs_date     DATE NOT NULL,
+        location     TEXT DEFAULT '東京',
+        avg_temp     REAL,
+        max_temp     REAL,
+        min_temp     REAL,
+        precipitation REAL DEFAULT 0,
+        source       TEXT DEFAULT 'manual',
+        created_at   TIMESTAMP DEFAULT NOW(),
+        UNIQUE(obs_date, location)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_weather_data_date ON weather_data(obs_date)",
+
+    # 52週MDプラン（週次販売計画）
+    """CREATE TABLE IF NOT EXISTS weekly_md_plans (
+        id            SERIAL PRIMARY KEY,
+        jan           TEXT NOT NULL,
+        fiscal_year   INTEGER NOT NULL,
+        week_no       INTEGER NOT NULL,
+        week_start    DATE NOT NULL,
+        plan_qty      INTEGER DEFAULT 0,
+        plan_amount   NUMERIC(14,2) DEFAULT 0,
+        actual_qty    INTEGER DEFAULT 0,
+        actual_amount NUMERIC(14,2) DEFAULT 0,
+        note          TEXT DEFAULT '',
+        created_by    TEXT DEFAULT '',
+        created_at    TIMESTAMP DEFAULT NOW(),
+        updated_at    TIMESTAMP DEFAULT NOW(),
+        UNIQUE(jan, fiscal_year, week_no)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_weekly_md_jan_year ON weekly_md_plans(jan, fiscal_year)",
+
+    # 得意先マスタ（問屋→小売店）
+    """CREATE TABLE IF NOT EXISTS customer_masters (
+        id             SERIAL PRIMARY KEY,
+        customer_cd    TEXT NOT NULL UNIQUE,
+        customer_name  TEXT NOT NULL,
+        customer_type  TEXT DEFAULT 'retailer',
+        region         TEXT DEFAULT '',
+        contact_email  TEXT DEFAULT '',
+        is_active      INTEGER DEFAULT 1,
+        note           TEXT DEFAULT '',
+        created_at     TIMESTAMP DEFAULT NOW()
+    )""",
+
+    # 気温感応度（商品×気温の相関係数をキャッシュ）
+    """CREATE TABLE IF NOT EXISTS temp_sensitivity (
+        id              SERIAL PRIMARY KEY,
+        jan             TEXT NOT NULL UNIQUE,
+        temp_coef       REAL DEFAULT 0,
+        r_squared       REAL DEFAULT 0,
+        base_temp       REAL DEFAULT 20.0,
+        updated_at      TIMESTAMP DEFAULT NOW()
+    )""",
+
+    # 予測結果キャッシュ（計算コスト削減）
+    """CREATE TABLE IF NOT EXISTS forecast_cache (
+        id              SERIAL PRIMARY KEY,
+        jan             TEXT NOT NULL,
+        calc_date       DATE NOT NULL,
+        abc_rank        TEXT DEFAULT 'C',
+        q25_daily       REAL DEFAULT 0,
+        q50_daily       REAL DEFAULT 0,
+        q75_daily       REAL DEFAULT 0,
+        dynamic_ss      REAL DEFAULT 0,
+        suggested_rp    INTEGER DEFAULT 0,
+        suggested_oq    INTEGER DEFAULT 0,
+        temp_adj_factor REAL DEFAULT 1.0,
+        algorithm       TEXT DEFAULT 'sma',
+        updated_at      TIMESTAMP DEFAULT NOW(),
+        UNIQUE(jan, calc_date)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_forecast_cache_jan_date ON forecast_cache(jan, calc_date)",
+
+    # settingsに問屋向け設定追加
+    "INSERT INTO settings(key,value) SELECT 'wholesale_mode','1' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='wholesale_mode')",
+    "INSERT INTO settings(key,value) SELECT 'safety_level_z','1.65' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='safety_level_z')",
+    "INSERT INTO settings(key,value) SELECT 'abc_a_threshold','0.70' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='abc_a_threshold')",
+    "INSERT INTO settings(key,value) SELECT 'abc_b_threshold','0.90' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='abc_b_threshold')",
+    "INSERT INTO settings(key,value) SELECT 'weather_location','東京' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='weather_location')",
 ]
 
 def migrate_db():

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}ABC分析{% endblock %}
+{% block content %}
+<style>
+.abc-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700}
+.abc-A{background:#fef3c7;color:#92400e;border:1px solid #f59e0b}
+.abc-B{background:#dbeafe;color:#1e40af;border:1px solid #3b82f6}
+.abc-C{background:#f1f5f9;color:#475569;border:1px solid #94a3b8}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.sum-card{border-radius:10px;padding:16px;text-align:center}
+.sum-card.sa{background:#fffbeb;border:2px solid #f59e0b}
+.sum-card.sb{background:#eff6ff;border:2px solid #3b82f6}
+.sum-card.sc{background:#f8fafc;border:2px solid #94a3b8}
+.sum-card .big{font-size:28px;font-weight:700}
+.sum-card .small{font-size:12px;color:#6b7280;margin-top:4px}
+.bar-wrap{height:12px;background:#e2e8f0;border-radius:6px;overflow:hidden;width:120px;display:inline-block;vertical-align:middle}
+.bar-fill-A{background:#f59e0b;height:12px;border-radius:6px}
+.bar-fill-B{background:#3b82f6;height:12px;border-radius:6px}
+.bar-fill-C{background:#94a3b8;height:12px;border-radius:6px}
+</style>
+
+<div class="page-title">
+  <span>ABC分析（過去365日）</span>
+  <div style="display:flex;gap:8px">
+    <a href="/reports/abc/export" class="btn btn-outline btn-sm">CSV出力</a>
+    <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
+    <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
+  </div>
+</div>
+
+<div class="card" style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px">
+  売上金額の累計構成比でA（上位{{ (a_threshold*100)|int }}%）・B（{{ (a_threshold*100)|int }}〜{{ (b_threshold*100)|int }}%）・C（残り）に分類。
+  Aランクには高精度なAI予測、B/Cには移動平均を自動適用します。
+</div>
+
+<div class="summary-grid">
+  <div class="sum-card sa">
+    <div class="big" style="color:#d97706">{{ summary.A.count }}</div>
+    <div class="small">Aランク商品数</div>
+    <div style="font-size:13px;margin-top:6px;font-weight:600">{{ "{:,.0f}".format(summary.A.value) }} 円</div>
+  </div>
+  <div class="sum-card sb">
+    <div class="big" style="color:#2563eb">{{ summary.B.count }}</div>
+    <div class="small">Bランク商品数</div>
+    <div style="font-size:13px;margin-top:6px;font-weight:600">{{ "{:,.0f}".format(summary.B.value) }} 円</div>
+  </div>
+  <div class="sum-card sc">
+    <div class="big" style="color:#64748b">{{ summary.C.count }}</div>
+    <div class="small">Cランク商品数</div>
+    <div style="font-size:13px;margin-top:6px;font-weight:600">{{ "{:,.0f}".format(summary.C.value) }} 円</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>順位</th>
+          <th>ABC</th>
+          <th>仕入先</th>
+          <th>商品CD</th>
+          <th>商品名</th>
+          <th style="text-align:right">販売数量</th>
+          <th style="text-align:right">売上金額（円）</th>
+          <th style="text-align:right">累計構成比</th>
+          <th>構成比バー</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="color:#94a3b8;font-size:12px">{{ loop.index }}</td>
+        <td><span class="abc-badge abc-{{ r.abc_rank }}">{{ r.abc_rank }}</span></td>
+        <td style="white-space:nowrap">
+          {{ r.supplier_cd }}<br>
+          <span style="color:#6b7280;font-size:11px">{{ r.supplier_name }}</span>
+        </td>
+        <td>{{ r.product_cd }}<br><span style="color:#6b7280;font-size:11px">{{ r.jan }}</span></td>
+        <td>{{ r.product_name }}</td>
+        <td style="text-align:right">{{ "{:,}".format(r.total_qty|int) }}</td>
+        <td style="text-align:right">{{ "{:,.0f}".format(r.sales_value) }}</td>
+        <td style="text-align:right;font-weight:600">{{ r.running_ratio_pct }}%</td>
+        <td>
+          <div class="bar-wrap">
+            <div class="bar-fill-{{ r.abc_rank }}" style="width:{{ [r.running_ratio_pct, 100]|min }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">売上データがありません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
