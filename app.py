@@ -3179,8 +3179,11 @@ def settings():
         'stocktake_export_name': get_setting('stocktake_export_name', '棚卸リスト'),
     }
     forecast_flags = {
-        'forecast_ai_mode':      get_setting('forecast_ai_mode', 1),           # AIモードON/OFF
-        'forecast_reorder_mode': get_setting('forecast_reorder_mode', 'sf'),  # P2発注点モード
+        'forecast_ai_mode':      get_setting('forecast_ai_mode', 1),
+        'forecast_reorder_mode': get_setting('forecast_reorder_mode', 'sf'),
+        'safety_level_z':        get_setting('safety_level_z', '1.65'),
+        'abc_a_threshold':       get_setting('abc_a_threshold', '0.70'),
+        'abc_b_threshold':       get_setting('abc_b_threshold', '0.90'),
     }
     return render_template('settings.html', env=env_content, retention=retention, forecast_flags=forecast_flags)
 
@@ -3216,6 +3219,7 @@ def settings_save():
     db = get_db()
     int_keys = {'order_history_months', 'disposed_months', 'sales_history_months', 'csv_log_months',
                 'forecast_ai_mode'}
+    float_keys = {'safety_level_z', 'abc_a_threshold', 'abc_b_threshold'}
     for key, default in [
         ('order_history_months', 12), ('disposed_months', 12), ('sales_history_months', 12),
         ('csv_log_months', 6),
@@ -3223,8 +3227,11 @@ def settings_save():
         ('product_export_name', '商品マスタ'),
         ('receipt_template_name', '入庫一括インポート_テンプレート'),
         ('stocktake_export_name', '棚卸リスト'),
-        ('forecast_ai_mode', 1),              # AIモードON/OFF
-        ('forecast_reorder_mode', 'sf'),       # P2発注点モード
+        ('forecast_ai_mode', 1),
+        ('forecast_reorder_mode', 'sf'),
+        ('safety_level_z', '1.65'),
+        ('abc_a_threshold', '0.70'),
+        ('abc_b_threshold', '0.90'),
     ]:
         if key == 'forecast_ai_mode':
             raw = '1' if f.get(key) else '0'
@@ -3235,6 +3242,11 @@ def settings_save():
         if key in int_keys:
             try:
                 val = str(int(raw))
+            except Exception:
+                val = str(default)
+        elif key in float_keys:
+            try:
+                val = str(float(raw))
             except Exception:
                 val = str(default)
         else:

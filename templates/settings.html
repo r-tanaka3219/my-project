@@ -319,9 +319,9 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
         <div>
           <div style="font-weight:500;font-size:13px;color:var(--color-text-info)">🤖 AIモード（推奨）</div>
           <div style="font-size:12px;margin-top:4px;line-height:1.7;color:var(--color-text-secondary)">
-            WMA-30日・季節指数・曜日指数・<br>
-            販促上振れ・受注予定・手動調整係数<br>
-            を複合的に適用した高精度予測
+            問屋向けハイブリッド予測：<br>
+            Aランク → ホルト・ウィンタース＋分位点＋動的安全在庫＋気温補正<br>
+            B/Cランク → 移動平均＋固定安全在庫
           </div>
         </div>
       </label>
@@ -340,8 +340,33 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
       </label>
     </div>
     <div class="help" style="margin-top:8px">
-      AIモードON時は P1(WMA)/P2(分位点)/P3(手動調整係数)/季節指数/曜日指数/販促上振れ/受注予定 が全て有効になります。<br>
-      前年実績モードでは上記の全機能がOFFになり、前年同月の日次平均のみで発注点を計算します。
+      AIモードON時：Aランク商品にホルト・ウィンタース指数平滑法＋Q25/Q50/Q75分位点＋動的安全在庫（σ_AI=(Q75-Q25)/1.349）＋気温補正を適用。B/Cランクは移動平均。<br>
+      前年実績モードでは全商品を前年同月日次平均で計算します。
+    </div>
+  </div>
+
+  <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
+    <label style="font-weight:500;font-size:13px;display:block;margin-bottom:8px">問屋向けAI設定</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:560px">
+      <div>
+        <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px">安全係数 Z（欠品率制御）</label>
+        <select name="safety_level_z" class="form-control">
+          <option value="1.28" {% if forecast_flags.get('safety_level_z','1.65') == '1.28' %}selected{% endif %}>1.28（欠品率10%・低在庫優先）</option>
+          <option value="1.65" {% if forecast_flags.get('safety_level_z','1.65') in ['1.65',''] or not forecast_flags.get('safety_level_z') %}selected{% endif %}>1.65（欠品率5%・標準・推奨）</option>
+          <option value="1.96" {% if forecast_flags.get('safety_level_z','1.65') == '1.96' %}selected{% endif %}>1.96（欠品率2.5%・欠品厳禁品）</option>
+          <option value="2.33" {% if forecast_flags.get('safety_level_z','1.65') == '2.33' %}selected{% endif %}>2.33（欠品率1%・最重要品）</option>
+        </select>
+        <div class="help">動的安全在庫 = Z × σ_AI × √リードタイム</div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:4px">ABC分析 Aランク閾値</label>
+        <select name="abc_a_threshold" class="form-control">
+          <option value="0.70" {% if forecast_flags.get('abc_a_threshold','0.70') in ['0.70',''] or not forecast_flags.get('abc_a_threshold') %}selected{% endif %}>70%（上位70%をAランク・標準）</option>
+          <option value="0.60" {% if forecast_flags.get('abc_a_threshold','0.70') == '0.60' %}selected{% endif %}>60%（上位60%をAランク・厳選）</option>
+          <option value="0.80" {% if forecast_flags.get('abc_a_threshold','0.70') == '0.80' %}selected{% endif %}>80%（上位80%をAランク・広め）</option>
+        </select>
+        <div class="help">売上累計構成比でAI予測適用範囲を決定</div>
+      </div>
     </div>
   </div>
 
