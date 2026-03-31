@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}在庫一覧{% endblock %}
+{% block content %}
+<div class="page-title"><span>📦 在庫一覧</span><div class="page-title-actions"><a href="/inventory/picking" class="btn btn-outline btn-sm">🧾 ピッキング候補</a><a href="/inventory/replenishment" class="btn btn-outline btn-sm">🪜 棚補充指示</a><a href="/inventory/transfers" class="btn btn-outline btn-sm">🔁 ロケーション移動履歴</a><a href="/inventory/disposed" class="btn btn-danger btn-sm">🗑 廃棄・退避在庫</a></div></div>
+<div class="card" style="padding:10px 16px;margin-bottom:0">
+  <form method="get" action="/inventory" class="filter-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/inventory" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+<div class="card">
+<div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+  <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:16%">商品名</th>
+  <th class="text-center" style="width:5%">数量</th><th class="text-center" style="width:8%">賞味期限</th><th class="text-center" style="width:6%">ロット</th><th class="text-center" style="width:8%">ロケーション</th><th class="text-center" style="width:7%">状態</th><th class="text-center" style="width:23%">操作</th>
+</tr></thead><tbody>
+{% for s in stocks %}
+<tr>
+  <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd or '-' }}</td>
+  <td>{{ s.supplier_name }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ s.product_cd or '-' }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ s.jan }}</td>
+  <td>{{ s.product_name }}</td>
+  <td class="text-center"><b>{{ s.quantity|format_number }}</b></td>
+  <td class="text-center">{{ s.expiry_date or '-' }}</td>
+  <td class="text-center" style="font-size:12px">{{ s.lot_no or '-' }}</td>
+  <td class="text-center" style="font-family:monospace">{{ s.display_location or '未設定' }}</td>
+  <td class="text-center">
+    {% if s.expiry_date and s.expiry_date < today|string %}
+      <span class="badge badge-red">期限切れ</span>
+    {% elif s.expiry_date and s.expiry_date <= alert_date %}
+      <span class="badge badge-yellow">期限注意</span>
+    {% elif s.total_qty is not none and s.reorder_point is not none and s.total_qty <= s.reorder_point %}
+      <span class="badge badge-red">発注点以下</span>
+    {% else %}
+      <span class="badge badge-green">正常</span>
+    {% endif %}
+  </td>
+  <td class="table-actions-cell text-center">
+    <button type="button" class="btn btn-edit btn-sm"
+            data-id="{{ s.id }}" data-name="{{ s.product_name|e }}"
+            data-qty="{{ s.quantity }}" data-expiry="{{ s.expiry_date or '' }}"
+            data-lot="{{ s.lot_no or '' }}" data-location="{{ s.display_location or '' }}"
+            onclick="openEditFromData(this)">
+      ✏️ 編集
+    </button>
+    <button type="button" class="btn btn-move btn-sm"
+            data-id="{{ s.id }}" data-name="{{ s.product_name|e }}"
+            data-qty="{{ s.quantity }}" data-location="{{ s.display_location or '' }}"
+            onclick="openTransferFromData(this)">
+      🔁 移動
+    </button>
+    <button type="button" class="btn btn-dispose btn-sm"
+            data-id="{{ s.id }}" data-name="{{ s.product_name|e }}"
+            data-qty="{{ s.quantity }}"
+            onclick="openDisposeFromData(this)">
+      🗑 退避
+    </button>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="11" class="text-center" style="padding:20px;color:#9ca3af">在庫データがありません</td></tr>
+{% endfor %}
+</tbody></table>
+</div>
+</div>
+
+<div id="dispose-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:10px;padding:24px;width:420px;max-width:95vw">
+    <div style="font-size:16px;font-weight:bold;margin-bottom:16px">🗑 在庫を退避</div>
+    <div id="dispose-name" style="font-weight:bold;margin-bottom:12px;color:#374151"></div>
+    <form id="dispose-form" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>数量 *</label><input type="number" name="quantity" id="dispose-qty" min="1" style="width:100%"><div style="font-size:12px;color:#6b7280" id="dispose-max"></div></div>
+      <div class="form-group"><label>退避理由 *</label>
+        <select name="reason_type" required style="width:100%">
+          <option value="">選択してください</option><option value="期限切れ">期限切れ</option><option value="出荷不可">出荷不可</option><option value="破損">破損</option><option value="品質不良">品質不良</option><option value="自主回収">自主回収</option><option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group"><label>備考</label><input type="text" name="reason_note" placeholder="任意" style="width:100%"></div>
+      <div class="form-actions"><button type="submit" class="btn btn-danger">退避実行</button><button type="button" class="btn btn-outline" onclick="closeDispose()">キャンセル</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="transfer-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:10px;padding:24px;width:440px;max-width:95vw">
+    <div style="font-size:16px;font-weight:bold;margin-bottom:16px">🔁 ロケーション移動</div>
+    <div id="transfer-name" style="font-weight:bold;margin-bottom:12px;color:#374151;font-size:13px"></div>
+    <form id="transfer-form" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>移動数量 *</label><input type="number" name="quantity" id="transfer-qty" min="1" required style="width:100%"></div>
+      <div class="form-group"><label>移動先ロケーション *</label><input type="text" name="to_location_code" id="transfer-location" required style="width:100%"></div>
+      <div class="form-group"><label>備考</label><input type="text" name="note" placeholder="任意" style="width:100%"></div>
+      <div id="transfer-from" style="font-size:12px;color:#6b7280;margin-bottom:12px"></div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary" onclick="return confirm('ロケーション移動を登録します。よろしいですか？')">登録</button><button type="button" class="btn btn-outline" onclick="closeTransfer()">キャンセル</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:10px;padding:24px;width:440px;max-width:95vw">
+    <div style="font-size:16px;font-weight:bold;margin-bottom:16px">✏️ 在庫を編集</div>
+    <div id="edit-name" style="font-weight:bold;margin-bottom:12px;color:#374151;font-size:13px"></div>
+    <form id="edit-form" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label>数量 *</label><input type="number" name="quantity" id="edit-qty" min="0" required style="width:100%"></div>
+      <div class="form-group"><label>賞味期限 *</label><input type="date" name="expiry_date" id="edit-expiry" required style="width:100%"></div>
+      <div class="form-group"><label>ロット番号（任意）</label><input type="text" name="lot_no" id="edit-lot" placeholder="任意" style="width:100%"></div>
+      <div class="form-group"><label>ロケーション</label><input type="text" name="location_code" id="edit-location" placeholder="任意" style="width:100%"></div>
+      <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ 変更すると入庫履歴に「在庫直接編集」として記録されます。</div>
+      <div class="form-actions"><button type="submit" class="btn btn-primary" onclick="return confirm('在庫を更新します。よろしいですか？')">💾 更新</button><button type="button" class="btn btn-outline" onclick="closeEdit()">キャンセル</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openDisposeFromData(btn) { openDispose(btn.dataset.id, btn.dataset.name, btn.dataset.qty); }
+function openTransferFromData(btn) { openTransfer(btn.dataset.id, btn.dataset.name, btn.dataset.qty, btn.dataset.location); }
+function openEditFromData(btn) { openEdit(btn.dataset.id, btn.dataset.name, btn.dataset.qty, btn.dataset.expiry, btn.dataset.lot, btn.dataset.location); }
+function openDispose(id, name, maxQty) {
+  document.getElementById('dispose-modal').style.display = 'flex';
+  document.getElementById('dispose-name').textContent = name;
+  document.getElementById('dispose-qty').value = maxQty;
+  document.getElementById('dispose-qty').max = maxQty;
+  document.getElementById('dispose-max').textContent = '最大: ' + maxQty + '個';
+  document.getElementById('dispose-form').action = '/inventory/dispose/' + id;
+}
+function closeDispose() { document.getElementById('dispose-modal').style.display = 'none'; }
+function openTransfer(id, name, qty, fromLocation) {
+  document.getElementById('transfer-modal').style.display = 'flex';
+  document.getElementById('transfer-name').textContent = name;
+  document.getElementById('transfer-qty').value = qty;
+  document.getElementById('transfer-qty').max = qty;
+  document.getElementById('transfer-location').value = '';
+  document.getElementById('transfer-from').textContent = '移動元: ' + (fromLocation || '未設定') + ' / 最大: ' + qty + '個';
+  document.getElementById('transfer-form').action = '/inventory/transfer/' + id;
+}
+function closeTransfer() { document.getElementById('transfer-modal').style.display = 'none'; }
+function openEdit(id, name, qty, expiry, lot, location) {
+  document.getElementById('edit-modal').style.display = 'flex';
+  document.getElementById('edit-name').textContent = name;
+  document.getElementById('edit-qty').value = qty;
+  document.getElementById('edit-expiry').value = expiry;
+  document.getElementById('edit-lot').value = lot;
+  document.getElementById('edit-location').value = location || '';
+  document.getElementById('edit-form').action = '/inventory/' + id + '/edit';
+}
+function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; }
+</script>
+{% endblock %}

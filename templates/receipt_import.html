@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}入庫一括インポート{% endblock %}
+{% block content %}
+<div class="page-title">📥 入庫一括インポート
+  <a href="/receipt" class="btn btn-outline btn-sm">← 入庫登録に戻る</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+{% if session.get('import_errors') %}
+<div class="card" style="border-left:4px solid #f59e0b;margin-bottom:16px">
+  <div class="card-title" style="color:#d97706">⚠️ エラー・スキップ詳細（{{ session['import_errors']|length }}件）</div>
+  <table style="table-layout:fixed;width:100%;font-size:12px"><thead>
+    <tr><th style="width:10%">#</th><th style="width:90%">内容</th></tr>
+  </thead><tbody>
+  {% for err in session['import_errors'] %}
+  <tr>
+    <td style="color:#9ca3af;white-space:nowrap">{{ loop.index }}</td>
+    <td>{{ err }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  <div style="margin-top:10px">
+    <a href="/receipt/import/clear_errors" class="btn btn-outline btn-sm">✕ エラー詳細を閉じる</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:560px">
+  <div class="card-title">📄 ファイル形式</div>
+  <div style="font-size:13px;color:#374151;margin-bottom:12px">
+    CSV または Excel（.xlsx）ファイルをアップロードしてください。<br>
+    1行目はヘッダー行として読み込みます。
+  </div>
+  <table style="table-layout:fixed;width:100%;font-size:13px;margin-bottom:16px">
+    <thead><tr style="background:#f8fafc">
+      <th style="width:25%">列名</th>
+      <th style="width:15%">必須</th>
+      <th style="width:60%">説明</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:6px 10px;border:1px solid #e5e7eb"><b>JANコード</b></td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center">※</td><td style="padding:6px 10px;border:1px solid #e5e7eb">JANコードまたは商品CDのいずれか必須</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #e5e7eb"><b>商品CD</b></td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center">※</td><td style="padding:6px 10px;border:1px solid #e5e7eb">JANコードの代わりに商品CDで指定可</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #e5e7eb"><b>数量</b></td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center">✅</td><td style="padding:6px 10px;border:1px solid #e5e7eb">入庫個数</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">賞味期限</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center">-</td><td style="padding:6px 10px;border:1px solid #e5e7eb">YYYY-MM-DD または YYYYMMDD</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">ロット番号</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center">-</td><td style="padding:6px 10px;border:1px solid #e5e7eb">任意のロット番号</td></tr>
+    </tbody>
+  </table>
+
+  <form method="post" action="/receipt/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>ファイル選択 *</label>
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required
+             style="padding:6px;border:1px solid #d1d5db;border-radius:6px;width:100%">
+    </div>
+    <button type="submit" class="btn btn-primary">📥 インポート実行</button>
+  </form>
+</div>
+
+<div class="card" style="max-width:560px">
+  <div class="card-title">📋 サンプルデータ</div>
+  <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:10px;font-size:12px">JANコード,商品CD,数量,賞味期限,ロット番号
+4901234567890,P001,24,2026-09-30,LOT001
+,P002,12,2026-12-31,LOT002
+4909876543210,,48,,</pre>
+  <a href="/receipt/import/template" class="btn btn-outline btn-sm" style="margin-top:8px">📥 テンプレートをダウンロード</a>
+</div>
+{% endblock %}

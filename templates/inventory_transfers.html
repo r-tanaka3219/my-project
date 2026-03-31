@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}ロケーション移動履歴{% endblock %}
+{% block content %}
+<div class="page-title">🔁 ロケーション移動履歴
+  <a href="/inventory" class="btn btn-outline btn-sm">← 在庫一覧へ</a>
+</div>
+<div class="card">
+  <div class="card-title">最近の移動履歴</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:10%">移動日</th><th style="width:18%">商品</th><th style="width:12%">移動元</th><th style="width:12%">移動先</th><th class="text-right" style="width:8%">数量</th><th style="width:8%">ロット</th><th style="width:10%">賞味期限</th><th style="width:10%">作業者</th><th style="width:12%">備考</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.transfer_date }}</td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td style="font-family:monospace">{{ r.from_location or '未設定' }}</td>
+    <td style="font-family:monospace">{{ r.to_location or '未設定' }}</td>
+    <td class="text-right">{{ r.quantity|format_number }}</td>
+    <td>{{ r.lot_no or '-' }}</td>
+    <td>{{ r.expiry_date or '-' }}</td>
+    <td>{{ r.created_by or '-' }}</td>
+    <td>{{ r.note or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

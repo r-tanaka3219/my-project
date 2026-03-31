@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}発注残・部分入荷{% endblock %}
+{% block content %}
+<div class="page-title"><span>📥 発注残・部分入荷管理</span><div class="page-title-actions"><a href="/orders" class="btn btn-outline btn-sm">← 発注画面へ</a></div></div>
+<div class="kpi-grid">
+  <div class="kpi kpi-blue"><div class="kpi-value">{{ summary.open_count }}</div><div class="kpi-label">未完了件数</div></div>
+  <div class="kpi kpi-red"><div class="kpi-value">{{ summary.open_qty|format_number }}</div><div class="kpi-label">未入荷数量</div></div>
+  <div class="kpi kpi-yellow"><div class="kpi-value">{{ summary.overdue_count }}</div><div class="kpi-label">遅延件数</div></div><div class="kpi kpi-red"><div class="kpi-value">{{ summary.warning_count }}</div><div class="kpi-label">警告件数</div></div>
+</div>
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/orders/backorders" class="filter-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/orders/backorders" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+<div class="card">
+  <div class="card-title">部分入荷・未納終了</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
+  <th style="width:10%">発注日</th>
+  <th style="width:15%">仕入先</th>
+  <th style="width:20%">商品</th>
+  <th class="text-center" style="width:7%">発注数</th>
+  <th class="text-center" style="width:7%">受領済</th>
+  <th class="text-center" style="width:7%">残数</th>
+  <th class="text-center" style="width:7%">入荷予定</th>
+  <th class="text-center" style="width:7%">警告</th>
+  <th class="text-center" style="width:7%">経過</th>
+  <th class="text-center" style="width:13%">操作</th>
+</tr></thead><tbody>
+  {% for r in rows %}
+  <tr {% if r.delay_level in ['遅延','長期未着'] %}style="background:#fef2f2"{% elif r.delay_level == '入荷接近' %}style="background:#fff7ed"{% endif %}>
+    <td>{{ r.order_date }}</td>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}{% if r.location_code %} / {{ r.location_code }}{% endif %}</div></td>
+    <td class="text-center">{{ r.order_qty|format_number }}</td>
+    <td class="text-center">{{ r.received_qty|format_number }}</td>
+    <td class="text-center">
+      {% if r.outstanding_qty > 0 %}<span class="badge badge-red">{{ r.outstanding_qty|format_number }}</span>{% else %}<span class="badge badge-green">完了</span>{% endif %}
+    </td>
+    <td class="text-center">{{ r.expected_receipt_date or '-' }}</td><td class="text-center">{% if r.delay_level == '遅延' %}<span class="badge badge-red">遅延 {{ r.delay_days }}日</span>{% elif r.delay_level == '長期未着' %}<span class="badge badge-yellow">長期未着 {{ r.delay_days }}日</span>{% elif r.delay_level == '入荷接近' %}<span class="badge badge-blue">入荷接近</span>{% elif r.delay_level == '完了' %}<span class="badge badge-green">完了</span>{% else %}<span class="badge badge-gray">正常</span>{% endif %}</td><td class="text-center">{{ r.order_age }}日{% if r.last_receipt_date %}<div style="font-size:11px;color:#6b7280">最終受領: {{ r.last_receipt_date }}</div>{% endif %}</td>
+    <td class="text-center">
+  {% if r.outstanding_qty > 0 %}
+  <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
+    <details>
+      <summary class="btn btn-outline btn-sm" style="display:inline-block">受領登録</summary>
+      <form method="post" action="/orders/backorders/receive" class="inline-form-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="order_history_id" value="{{ r.id }}">
+        <input type="number" name="receive_qty" min="1" max="{{ r.outstanding_qty }}" value="{{ r.outstanding_qty }}" placeholder="数量">
+        <input type="date" name="expiry_date" required>
+        <input type="text" name="location_code" value="{{ r.location_code or '' }}" placeholder="棚番">
+        <input type="text" name="note" placeholder="備考">
+        <button type="submit" class="btn btn-primary btn-sm">登録</button>
+      </form>
+    </details>
+    <form method="post" action="/orders/backorders/close" onsubmit="return confirm('未納残を終了しますか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="order_history_id" value="{{ r.id }}">
+      <input type="hidden" name="reason" value="未納終了">
+      <button type="submit" class="btn btn-warning btn-sm">未納終了</button>
+    </form>
+  </div>
+  {% else %}
+  <span class="badge badge-green">処理済</span>
+  {% endif %}
+</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

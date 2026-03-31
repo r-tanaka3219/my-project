@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}入庫履歴{% endblock %}
+{% block content %}
+<div class="page-title">踏 入庫履歴
+  <a href="/receipt" class="btn btn-outline btn-sm">← 入庫登録へ</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card" style="padding:10px 16px;margin-bottom:12px">
+  <form method="get" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/receipt/history" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">入庫履歴（全{{ total }}件）
+    <span style="font-size:12px;font-weight:normal;color:#6b7280">
+      ※ 削除すると在庫数も元に戻ります
+    </span>
+  </div>
+  {% if rows %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:12%">登録日時</th>
+    <th style="width:6%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:10%">JAN</th><th style="width:18%">商品名</th>
+    <th class="text-right" style="width:7%">数量</th><th class="text-center" style="width:10%">賞味期限</th><th style="width:8%">区分</th>
+    <th style="width:13%">操作</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr style="vertical-align:top">
+    <td style="font-size:11px;white-space:nowrap">{{ r.created_at }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.supplier_cd or '-' }}</td>
+    <td style="font-size:12px">{{ r.supplier_name or '-' }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.product_cd or '-' }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.jan }}</td>
+    <td>{{ r.product_name }}</td>
+    <td class="text-right"><b>{{ r.quantity|format_number }}</b></td>
+    <td class="text-center" style="font-size:12px">{{ r.expiry_date or '-' }}</td>
+    <td style="font-size:11px">
+      {% if 'manual' in (r.source_file or '') %}<span class="badge badge-blue">手動</span>
+      {% elif r.source_file %}<span class="badge badge-green">一括</span>
+      {% else %}<span class="badge badge-gray">その他</span>{% endif %}
+    </td>
+    <td style="text-align:left;vertical-align:middle;padding-left:8px">
+      <form method="post" action="/receipt/history/{{ r.id }}/delete"
+            onsubmit="return confirm('この入庫履歴を削除しますか？
+在庫から {{ r.quantity|format_number }}個が減少します。
+
+商品: {{ r.product_name }}')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:11px">🗑 削除</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+
+  {% if pages > 1 %}
+  <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+    {% if page > 1 %}
+    <a href="?page={{ page-1 }}{% if q %}&q={{ q }}{% endif %}" class="btn btn-outline btn-sm">← 前</a>
+    {% endif %}
+    <span style="padding:6px 10px;font-size:13px;color:#6b7280">{{ page }} / {{ pages }}ページ</span>
+    {% if page < pages %}
+    <a href="?page={{ page+1 }}{% if q %}&q={{ q }}{% endif %}" class="btn btn-outline btn-sm">次 →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <p style="color:#9ca3af;padding:20px 0">入庫履歴がありません。</p>
+  {% endif %}
+</div>
+{% endblock %}

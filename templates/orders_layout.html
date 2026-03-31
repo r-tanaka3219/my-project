@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}発注チェック{% endblock %}
+{% block content %}
+<style>
+  .page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .page-head-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .toolbar-form{display:grid;grid-template-columns:minmax(280px,1fr) auto auto;gap:8px;align-items:center}
+  .toolbar-form input{width:100%}
+  .right-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .group-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+  .group-header .right-actions{margin-left:auto}
+  .bulk-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .submit-actions{display:flex;justify-content:flex-end;margin-top:12px}
+  @media (max-width: 960px){
+    .toolbar-form{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="page-head">
+  <div class="page-title">📋 発注チェック</div>
+  <div class="page-head-actions">
+    <form method="post" action="/orders/auto_check" style="margin:0"
+          onsubmit="return confirm('自動発注チェックを実行します。\n発注点以下の商品は自動的にメール送信されます。\n本当に実行しますか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline btn-sm">🔄 自動チェック実行</button>
+    </form>
+    <a href="/orders/backorders" class="btn btn-outline btn-sm">📥 発注残・部分入荷</a>
+  </div>
+</div>
+
+<div class="card" style="padding:14px 16px">
+  <form method="get" action="/orders" class="toolbar-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/orders" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+{% if pending %}
+<div class="card" style="border-left:4px solid #7c3aed">
+  <div class="card-title" style="color:#7c3aed">
+    🚚 混載ロット保留中（{{ pending|length }}件）
+    <span style="font-size:11px;font-weight:normal;color:#9ca3af;margin-left:8px">
+      ロット条件達成 または 強制発注期限超過 で自動送信されます
+    </span>
+  </div>
+
+  {% set ns = namespace(cur_group='') %}
+  {% for item in pending %}
+  {% if item.mixed_group != ns.cur_group %}
+    {% set ns.cur_group = item.mixed_group %}
+    {% set group_total = item.group_total_cases %}
+    {% set lot_cases   = item.mixed_lot_cases or 10 %}
+    {% set pct = [((group_total / lot_cases * 100)|int), 100]|min %}
+    <div style="background:#f5f3ff;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+      <div class="group-header">
+        <b style="color:#7c3aed">グループ：{{ item.mixed_group }}</b>
+        <span class="badge badge-purple">{{ group_total }}ケース / {{ lot_cases }}ケース</span>
+        {% if group_total >= lot_cases %}
+          <span class="badge badge-green">✅ ロット達成 → 次回チェックで送信</span>
+        {% else %}
+          {% if item.mixed_lot_mode == 'gte' %}
+          <span class="badge badge-gray">あと {{ lot_cases - group_total }}ケースで発注</span>
+          {% else %}
+          <span class="badge badge-blue">単位{{ lot_cases }}ケース（{{ group_total }}ケース保留中）</span>
+          {% endif %}
+        {% endif %}
+        <div class="right-actions">
+          <form method="get" action="/orders/pending_force_group_edit" style="margin:0">
+            <input type="hidden" name="mixed_group" value="{{ item.mixed_group }}">
+            <button type="submit" class="btn btn-outline btn-sm">✍ 手動調整して強制発注</button>
+          </form>
+        </div>
+      </div>
+      <div style="background:#e5e7eb;border-radius:9999px;height:8px;overflow:hidden">
+        <div style="background:{% if group_total >= lot_cases %}#16a34a{% else %}#7c3aed{% endif %};width:{{ pct }}%;height:100%;border-radius:9999px;transition:width .3s"></div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="display:flex;align-items:center;gap:10px;padding:6px 12px;font-size:13px;background:#fff;border-radius:6px;margin-bottom:4px;border:1px solid #ede9fe;flex-wrap:wrap">
+    <span style="color:#6b7280;font-family:monospace;font-size:11px">{{ item.jan }}</span>
+    <span><b>{{ item.product_name }}</b></span>
+    <span class="badge badge-purple">{{ item.order_cases|format_number }}ケース / {{ item.order_qty|format_number }}個</span>
+    {% if item.trigger_type == 'reorder' %}
+      <span class="badge badge-red">発注点到達</span>
+    {% else %}
+      <span class="badge badge-orange">ロット数到達</span>
+    {% endif %}
+    <span style="color:#9ca3af;font-size:11px;margin-left:auto">
+      保留開始: {{ item.pending_since }}　強制送信: {{ item.force_send_date }}
+      {% if item.force_send_date < today|string %}
+        <span class="badge badge-red" style="margin-left:4px">⚠️ 期限超過</span>
+      {% endif %}
+    </span>
+  </div>
+  {% endfor %}
+
+  <div class="bulk-actions">
+    <form method="post" action="/orders/pending_force" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for item in pending %}
+      <input type="hidden" name="pending_id" value="{{ item.id }}">
+      {% endfor %}
+      <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('保留中の全発注を今すぐ強制送信しますか？')">⚡ 全件今すぐ強制発注</button>
+    </form>
+    <form method="post" action="/orders/pending_cancel" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for item in pending %}
+      <input type="hidden" name="pending_id" value="{{ item.id }}">
+      {% endfor %}
+      <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('保留中の発注を全てキャンセルしますか？')">🗑 全件キャンセル</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if low_stock %}
+<div class="card" style="border-left:4px solid #dc2626">
+  <div class="card-title" style="color:#dc2626">⚠️ 発注対象商品（{{ low_stock|length }}件）</div>
+  <form method="post" action="/orders/send">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-wrap">
+      <table style="table-layout:fixed;width:100%"><thead><tr>
+        <th style="width:3%"><input type="checkbox" id="ca" onclick="document.querySelectorAll('.chk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="width:6%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:10%">JAN</th><th style="width:30%">商品名</th><th class="text-right" style="width:7%">在庫</th>
+        <th class="text-right" style="width:9%">発注点</th><th class="text-right" style="width:9%">発注数</th><th style="width:10%">混載グループ</th>
+      </tr></thead><tbody>
+      {% for p in low_stock %}
+      <tr>
+        <td><input type="checkbox" class="chk" name="jan" value="{{ p.jan }}"></td>
+        <td style="font-family:monospace;font-size:12px">{{ p.supplier_cd or '-' }}</td>
+        <td>{{ p.supplier_name }}</td>
+        <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '-' }}</td>
+        <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
+        <td>{{ p.product_name }}</td>
+        <td class="text-right"><span class="badge badge-red">{{ p.stock_qty|format_number }}</span></td>
+        <td class="text-right">{{ p.reorder_point|format_number }}</td>
+        <td class="text-right">{{ p.order_qty|format_number }}</td>
+        <td>
+          {% if p.mixed_group %}
+            <span class="badge badge-purple">{{ p.mixed_group }}</span>
+            <span style="font-size:11px;color:#9ca3af">（混載{{ p.mixed_lot_cases }}ケース待ち）</span>
+          {% else %}
+            <span style="color:#9ca3af;font-size:12px">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody></table>
+    </div>
+    <div class="submit-actions">
+      <button type="submit" class="btn btn-danger" onclick="return confirmOrder()">📧 チェック商品を発注メール送信</button>
+    </div>
+  </form>
+</div>
+{% else %}
+<div class="card"><p style="color:#16a34a">✅ 発注が必要な商品はありません。</p></div>
+{% endif %}
+
+{% if ordered_list %}
+<div class="card" style="border-left:4px solid #2563eb">
+  <div class="card-title" style="color:#2563eb">📦 発注済み（納品待ち）（{{ ordered_list|length }}件）</div>
+  <div class="table-wrap">
+    <table style="table-layout:fixed;width:100%"><thead><tr>
+      <th style="width:6%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:10%">JAN</th><th style="width:32%">商品名</th><th class="text-right" style="width:7%">在庫</th>
+      <th class="text-right" style="width:9%">発注点</th><th class="text-right" style="width:9%">発注数</th><th style="width:11%">発注日</th>
+    </tr></thead><tbody>
+    {% for p in ordered_list %}
+    <tr style="color:#6b7280">
+      <td style="font-family:monospace;font-size:12px">{{ p.supplier_cd or '-' }}</td>
+      <td>{{ p.supplier_name }}</td>
+      <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '-' }}</td>
+      <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
+      <td>{{ p.product_name }}</td>
+      <td class="text-right"><span class="badge badge-red">{{ p.stock_qty|format_number }}</span></td>
+      <td class="text-right">{{ p.reorder_point|format_number }}</td>
+      <td class="text-right">{{ p.order_qty|format_number }}</td>
+      <td style="font-size:12px">{{ p.ordered_at }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+  <div style="font-size:12px;color:#6b7280;margin-top:8px">※入庫登録すると自動的に一覧から消えます</div>
+</div>
+{% endif %}
+
+<script>
+function confirmOrder() {
+  const checked = document.querySelectorAll('.chk:checked');
+  if (checked.length === 0) {
+    alert('発注する商品にチェックを入れてください。');
+    return false;
+  }
+  return confirm(
+    '【発注確認】\n\n' +
+    'チェックした ' + checked.length + ' 件の商品を\n' +
+    '仕入先にメール送信します。\n\n' +
+    '※この操作は取り消せません。\n' +
+    '本当に発注しますか？'
+  );
+}
+</script>
+{% endblock %}

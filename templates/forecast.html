@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block title %}需要予測
+{% endblock %}
+{% block content %}
+<style>
+.lookup-hint{font-size:12px;color:#6b7280;margin-top:4px}
+.lookup-result{margin-top:6px;font-size:12px;color:#1d4ed8;font-weight:600;min-height:18px}
+.forecast-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.demand-import-box{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media (max-width: 1200px){
+  .promo-grid,.demand-grid{grid-template-columns:1fr !important}
+}
+
+.promo-grid .form-group,
+.demand-grid .form-group{
+  margin-bottom:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+}
+.promo-grid .lookup-result,
+.demand-grid .lookup-result{
+  min-height:18px;
+}
+
+</style>
+
+<div class="page-title"><span>📈 需要予測・曜日指数・販促反映</span><div class="page-title-actions"><a href="/reports/shortage" class="btn btn-outline btn-sm">🚨 欠品予測</a><a href="/reports" class="btn btn-outline btn-sm">← レポートへ</a></div></div>
+
+<div class="card" style="background:#eff6ff;border-left:4px solid #2563eb">
+  直近の売上履歴から曜日別の波と季節性を加味し、さらに登録済み販促の上振れを見込んだ30日需要を算出します。見るだけではなく、そのまま発注設定へ反映できます。
+</div>
+
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/reports/forecast" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/reports/forecast" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b">
+  <form method="post" action="/reports/forecast/apply" class="forecast-apply-row" style="margin:0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="q" value="{{ q or '' }}">
+    <div class="apply-label">予測値を設定へ反映</div>
+    <select name="mode">
+      <option value="reorder_point">発注点のみ更新</option>
+      <option value="order_qty">基準発注数のみ更新</option>
+      <option value="both">発注点 + 基準発注数</option>
+    </select>
+    <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('表示中の商品設定を予測値で更新します。よろしいですか？')">⚙️ 一括反映</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="forecast-tools">
+    <div class="card-title" style="margin-bottom:0">📣 販促予定登録</div>
+    <div class="demand-import-box">
+      <a href="/reports/forecast/promotions/template" class="btn btn-outline btn-sm">📋 テンプレートDL</a>
+      <form method="post" action="/reports/forecast/promotions/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" accept=".csv,.xlsx,.xls" required>
+        <button type="submit" class="btn btn-outline btn-sm">一括インポート</button>
+      </form>
+      <form method="post" action="/reports/forecast/promotions/clear" style="margin:0" onsubmit="return confirm('販促予定を全件削除しますか？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline btn-sm">全件削除</button>
+      </form>
+    </div>
+  </div>
+<form method="post" action="/reports/forecast/promotions" class="promo-grid"
+      style="display:grid;grid-template-columns:1.2fr 2fr 1fr 1.5fr 1fr auto;gap:8px;align-items:start">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label>JAN / 商品CD</label>
+    <input type="text" name="jan" id="promo-code" required placeholder="JAN または 商品CD">
+    <div class="lookup-hint">どちらでも可</div>
+  </div>
+
+  <div class="form-group">
+    <label>商品名</label>
+    <input type="text" id="promo-product-name" value="" readonly placeholder="自動表示">
+    <div id="promo-product-meta" class="lookup-result">&nbsp;</div>
+  </div>
+
+  <div class="form-group">
+    <label>販促日</label>
+    <input type="date" name="promo_date" required>
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group">
+    <label>販促名</label>
+    <input type="text" name="promo_name" placeholder="例: 特売・チラシ">
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group">
+    <label>上振れ係数</label>
+    <input type="number" name="uplift_factor" min="1" step="0.1" value="1.3">
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group" style="padding-top:22px">
+    <button type="submit" class="btn btn-primary btn-sm" style="width:auto">登録</button>
+    <div style="height:18px"></div>
+  </div>
+
+</form>
+<div class="help">上振れ係数 1.3 は通常需要の30%増を意味します。</div>
+  <div style="margin-top:12px">
+  <div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+      <input type="checkbox" id="promo-check-all" onchange="promoCheckAll(this)"> 全選択
+    </label>
+    <button type="button" id="promo-bulk-del-btn" class="btn btn-danger btn-sm" disabled
+            onclick="promoDeleteSelected()">
+      🗑 選択削除 (<span id="promo-sel-count">0</span>件)
+    </button>
+  </div>
+  <form method="post" action="/reports/forecast/promotions/bulk_delete" id="promo-bulk-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-wrap"><table style="table-layout:fixed;width:100%">
+      <thead><tr>
+        <th style="width:4%"></th>
+        <th style="width:10%">販促日</th>
+        <th style="width:12%">仕入先</th>
+        <th style="width:28%">商品</th>
+        <th style="width:18%">販促名</th>
+        <th class="text-right" style="width:10%">係数</th>
+        <th style="width:18%"></th>
+      </tr></thead>
+      <tbody>
+      {% if promo_rows %}
+        {% for p in promo_rows %}
+        <tr>
+          <td><input type="checkbox" name="promo_id" value="{{ p.id }}" class="promo-cb" onchange="promoUpdateCount()"></td>
+          <td>{{ p.promo_date }}</td>
+          <td>{{ p.supplier_name }}</td>
+          <td><div>{{ p.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ p.product_cd }} / {{ p.jan }}</div></td>
+          <td>{{ p.promo_name or '-' }}</td>
+          <td class="text-right">{{ p.uplift_factor }}</td>
+          <td class="table-actions-cell"><button class="btn btn-outline btn-sm" type="button" onclick="singleDelete('/reports/forecast/promotions/{{ p.id }}/delete','この販促予定を削除しますか？')">削除</button></td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af;font-size:13px">
+          販促予定が登録されていません。上のフォームから登録するか、一括インポートをご利用ください。
+        </td></tr>
+      {% endif %}
+      </tbody>
+    </table></div>
+  </form>
+</div>
+</div>
+
+<div class="card">
+  <div class="forecast-tools">
+    <div class="card-title" style="margin-bottom:0">🧾 受注予定登録</div>
+    <div class="demand-import-box">
+      <a href="/reports/forecast/demands/template" class="btn btn-outline btn-sm">📋 テンプレートDL</a>
+      <form method="post" action="/reports/forecast/demands/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" accept=".csv,.xlsx,.xls" required>
+        <button type="submit" class="btn btn-outline btn-sm">一括インポート</button>
+      </form>
+      <form method="post" action="/reports/forecast/demands/clear" style="margin:0" onsubmit="return confirm('受注予定を全件削除しますか？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline btn-sm">全件削除</button>
+      </form>
+    </div>
+  </div>
+  <form method="post" action="/reports/forecast/demands" class="demand-grid"
+      style="display:grid;grid-template-columns:1.2fr 2fr 0.8fr 1.5fr 1fr 1.5fr auto;gap:8px;align-items:start">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label>JAN / 商品CD</label>
+    <input type="text" name="jan" id="demand-code" required placeholder="JAN または 商品CD">
+    <div class="lookup-hint">どちらでも可</div>
+  </div>
+
+  <div class="form-group">
+    <label>商品名</label>
+    <input type="text" id="demand-product-name" value="" readonly placeholder="自動表示">
+    <div id="demand-product-meta" class="lookup-result">&nbsp;</div>
+  </div>
+
+  <div class="form-group">
+    <label>数量</label>
+    <input type="number" name="demand_qty" min="1" required>
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group">
+    <label>得意先</label>
+    <input type="text" name="customer_name" placeholder="任意">
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group">
+    <label>受注日</label>
+    <input type="date" name="demand_date" required>
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group">
+    <label>備考</label>
+    <input type="text" name="note" placeholder="任意">
+    <div style="height:18px"></div>
+  </div>
+
+  <div class="form-group" style="padding-top:22px">
+    <button type="submit" class="btn btn-primary btn-sm" style="width:auto">登録</button>
+    <div style="height:18px"></div>
+  </div>
+
+</form>
+  <div style="margin-top:12px">
+  <div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+      <input type="checkbox" id="demand-check-all" onchange="demandCheckAll(this)"> 全選択
+    </label>
+    <button type="button" id="demand-bulk-del-btn" class="btn btn-danger btn-sm" disabled
+            onclick="demandDeleteSelected()">
+      🗑 選択削除 (<span id="demand-sel-count">0</span>件)
+    </button>
+  </div>
+  <form method="post" action="/reports/forecast/demands/selected_delete" id="demand-bulk-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-wrap"><table style="table-layout:fixed;width:100%">
+      <thead><tr>
+        <th style="width:4%"></th>
+        <th style="width:9%">受注日</th>
+        <th style="width:11%">仕入先</th>
+        <th style="width:18%">商品</th>
+        <th style="width:13%">得意先</th>
+        <th class="text-right" style="width:9%">数量</th>
+        <th style="width:16%">備考</th>
+        <th style="width:20%"></th>
+      </tr></thead>
+      <tbody>
+      {% if demand_rows %}
+        {% for d in demand_rows %}
+        <tr>
+          <td><input type="checkbox" name="demand_id" value="{{ d.id }}" class="demand-cb" onchange="demandUpdateCount()"></td>
+          <td>{{ d.demand_date }}</td>
+          <td>{{ d.supplier_name }}</td>
+          <td><div>{{ d.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ d.product_cd }} / {{ d.jan }}</div></td>
+          <td>{{ d.customer_name or '-' }}</td>
+          <td class="text-right">{{ d.demand_qty }}</td>
+          <td>{{ d.note or '-' }}</td>
+          <td class="table-actions-cell"><button class="btn btn-outline btn-sm" type="button" onclick="singleDelete('/reports/forecast/demands/{{ d.id }}/delete','この受注予定を削除しますか？')">削除</button></td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:20px;color:#9ca3af;font-size:13px">
+          受注予定が登録されていません。上のフォームから登録するか、一括インポートをご利用ください。
+        </td></tr>
+      {% endif %}
+      </tbody>
+    </table></div>
+  </form>
+</div>
+</div>
+
+<div class="card">
+  <div class="card-title">商品別 予測一覧 <span class="badge badge-{% if forecast_mode == 'ai' %}blue{% else %}yellow{% endif %}" style="font-size:11px;vertical-align:middle">{% if forecast_mode == 'ai' %}🤖 AIモード{% else %}📅 前年実績モード{% endif %}</span></div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:17%">仕入先</th><th style="width:7%">商品</th><th class="text-right" style="width:5%">現在庫</th><th class="text-right" style="width:6%">平均日販</th><th class="text-right" style="width:5%">季節指数</th><th class="text-right" style="width:5%">販促日数</th><th class="text-right" style="width:6%">販促上振れ</th><th class="text-right" style="width:6%">受注数量</th><th class="text-right" style="width:7%">30日予測</th><th class="text-right" style="width:7%">推奨発注点</th><th class="text-right" style="width:6%">発注数</th><th class="text-right" style="width:7%">P80/P90</th><th class="text-right" style="width:5%">σ</th><th class="text-right" style="width:5%">補正</th><th class="text-right" style="width:6%">カバー日数</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td class="text-right">{{ r.stock_qty|format_number }}</td>
+    <td class="text-right">{{ r.avg_daily }}</td>
+    <td class="text-right">{{ r.season_idx }}</td>
+    <td class="text-right">{{ r.promo_days }}</td>
+    <td class="text-right">{{ r.promo_uplift_qty }}</td>
+    <td class="text-right">{{ r.direct_demand_qty }}</td>
+    <td class="text-right" style="font-weight:bold">{{ r.next_30d_forecast }}</td>
+    <td class="text-right">
+      {% if r.suggested_reorder_point != r.reorder_point %}
+        <span class="badge badge-yellow">{{ r.suggested_reorder_point }}</span>
+      {% else %}
+        <span class="badge badge-green">{{ r.suggested_reorder_point }}</span>
+      {% endif %}
+      <div style="font-size:11px;color:#6b7280">現行 {{ r.reorder_point }} <span class="badge badge-gray" style="font-size:10px">{{ r.rp_mode_label }}</span></div>
+    </td>
+    <td class="text-right">
+      {% if r.suggested_order_qty != r.order_qty %}
+        <span class="badge badge-yellow">{{ r.suggested_order_qty }}</span>
+      {% else %}
+        <span class="badge badge-green">{{ r.suggested_order_qty }}</span>
+      {% endif %}
+      <div style="font-size:11px;color:#6b7280">現行 {{ r.order_qty }}</div>
+    </td>
+    <td class="text-right" style="font-size:11px">
+      {% if r.p80_daily is not none %}
+        <div>P80: <b>{{ r.p80_daily }}</b></div>
+        <div>P90: <b>{{ r.p90_daily }}</b></div>
+      {% else %}<span style="color:#9ca3af">-</span>{% endif %}
+    </td>
+    <td class="text-right" style="font-size:11px">
+      {% if r.daily_std is not none %}{{ r.daily_std }}{% else %}-{% endif %}
+    </td>
+    <td class="text-right">
+      <a href="/products/{{ r.product_id }}/edit#manual_adj_factor"
+         title="商品編集画面でP3手動調整係数を変更できます"
+         style="text-decoration:none">
+        {% if r.manual_adj_factor and r.manual_adj_factor != 1.0 %}
+          <span class="badge badge-orange">×{{ r.manual_adj_factor }}</span>
+        {% else %}
+          <span style="color:#9ca3af;font-size:11px">✎</span>
+        {% endif %}
+      </a>
+    </td>
+    <td class="text-right">
+      {% if r.cover_days is not none %}
+        {% if r.cover_days > 45 %}<span class="badge badge-yellow">{{ r.cover_days }}日</span>
+        {% elif r.cover_days < 14 %}<span class="badge badge-red">{{ r.cover_days }}日</span>
+        {% else %}<span class="badge badge-green">{{ r.cover_days }}日</span>{% endif %}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+
+
+
+<script>
+async function lookupProduct(code, nameElId, metaElId){
+  const codeVal = (code || '').trim();
+  const nameEl = document.getElementById(nameElId);
+  const metaEl = document.getElementById(metaElId);
+  if (!nameEl || !metaEl) return;
+  if (!codeVal){ nameEl.value=''; metaEl.textContent=''; return; }
+  try{
+    const res = await fetch('/api/products/lookup?q=' + encodeURIComponent(codeVal));
+    const data = await res.json();
+    if (data.ok){
+      nameEl.value = data.product_name || '';
+      metaEl.textContent = (data.supplier_name || '') + ' / ' + (data.product_cd || '-') + ' / ' + (data.jan || '-');
+    }else{
+      nameEl.value = '';
+      metaEl.textContent = '商品が見つかりません';
+    }
+  }catch(e){
+    nameEl.value='';
+    metaEl.textContent='検索エラー';
+  }
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var promoCode = document.getElementById('promo-code');
+  var demandCode = document.getElementById('demand-code');
+  if (promoCode) promoCode.addEventListener('input', function(){ lookupProduct(this.value, 'promo-product-name', 'promo-product-meta'); });
+  if (demandCode) demandCode.addEventListener('input', function(){ lookupProduct(this.value, 'demand-product-name', 'demand-product-meta'); });
+});
+</script>
+<script>
+function promoCheckAll(master) {
+  document.querySelectorAll('.promo-cb').forEach(function(cb){ cb.checked = master.checked; });
+  promoUpdateCount();
+}
+function promoUpdateCount() {
+  var cbs = document.querySelectorAll('.promo-cb');
+  var n = document.querySelectorAll('.promo-cb:checked').length;
+  var cnt = document.getElementById('promo-sel-count');
+  var btn = document.getElementById('promo-bulk-del-btn');
+  var master = document.getElementById('promo-check-all');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.disabled = (n === 0);
+  if (master && cbs.length > 0) {
+    master.indeterminate = (n > 0 && n < cbs.length);
+    master.checked = (n === cbs.length);
+  }
+}
+function promoDeleteSelected() {
+  var n = document.querySelectorAll('.promo-cb:checked').length;
+  if (n === 0) return;
+  if (!confirm(n + '件の販促予定を削除します。よろしいですか？')) return;
+  document.getElementById('promo-bulk-form').submit();
+}
+function demandCheckAll(master) {
+  document.querySelectorAll('.demand-cb').forEach(function(cb){ cb.checked = master.checked; });
+  demandUpdateCount();
+}
+function demandUpdateCount() {
+  var cbs = document.querySelectorAll('.demand-cb');
+  var n = document.querySelectorAll('.demand-cb:checked').length;
+  var cnt = document.getElementById('demand-sel-count');
+  var btn = document.getElementById('demand-bulk-del-btn');
+  var master = document.getElementById('demand-check-all');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.disabled = (n === 0);
+  if (master && cbs.length > 0) {
+    master.indeterminate = (n > 0 && n < cbs.length);
+    master.checked = (n === cbs.length);
+  }
+}
+function demandDeleteSelected() {
+  var n = document.querySelectorAll('.demand-cb:checked').length;
+  if (n === 0) return;
+  if (!confirm(n + '件の受注予定を削除します。よろしいですか？')) return;
+  document.getElementById('demand-bulk-form').submit();
+}
+function singleDelete(url, msg) {
+  if (!confirm(msg)) return;
+  var f = document.createElement('form');
+  f.method = 'post';
+  f.action = url;
+  document.body.appendChild(f);
+  f.submit();
+}
+</script>
+{% endblock %}

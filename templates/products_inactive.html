@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}無効商品一覧{% endblock %}
+{% block content %}
+<div class="page-title"><span>🗄 無効商品一覧</span><div class="page-title-actions"><a href="/products" class="btn btn-outline btn-sm">← 有効商品一覧に戻る</a></div></div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card">
+  <form method="get" action="/products/inactive" class="search-form" style="margin-bottom:12px">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/products/inactive" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:12px">
+    無効化された商品の一覧です。「有効化」ボタンで在庫管理対象に復活させることができます。
+  </div>
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:7%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:12%">JAN</th><th style="width:7%">商品CD</th><th style="width:42%">商品名</th>
+    <th class="text-center" style="width:6%">在庫</th><th class="text-center" style="width:16%">操作</th>
+  </tr></thead><tbody>
+  {% for p in products %}
+  <tr style="color:#9ca3af">
+    <td style="font-family:monospace;font-size:12px">{{ p.supplier_cd or '' }}</td>
+    <td style="font-size:12px">{{ p.supplier_name or '' }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '' }}</td>
+    <td>{{ p.product_name }}</td>
+    <td class="text-center">{{ p.stock_qty|format_number }}</td>
+    <td class="table-actions-cell text-center">
+        <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
+        <form method="post" action="/products/{{ p.id }}/restore" style="display:inline;margin-left:4px"
+              onsubmit="return confirm('「{{ p.product_name }}」を有効化しますか？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success btn-sm">有効化</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:24px">
+    無効化された商品はありません。
+  </td></tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+</div>
+{% endblock %}

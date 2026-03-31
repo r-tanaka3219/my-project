@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ピッキングリスト</title>
+<style>
+body{font-family:Arial,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;margin:18px;color:#111827}
+h1{font-size:20px;margin:0 0 8px}
+.meta{font-size:12px;color:#4b5563;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #d1d5db;padding:6px 8px;vertical-align:top}
+th{background:#f3f4f6;text-align:left}.text-right{text-align:right}
+@media print {.no-print{display:none}}
+</style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:12px"><button onclick="window.print()">印刷</button></div>
+<h1>FIFOピッキングリスト</h1>
+<div class="meta">作成日: {{ today }} / 基準日数: {{ days }}日 / 検索条件: {{ q or 'なし' }}</div>
+<table style="table-layout:fixed;width:100%">
+<thead><tr><th style="width:16%">仕入先</th><th style="width:12%">商品</th><th style="width:12%">ロケーション</th><th style="width:12%">賞味期限</th><th style="width:12%">ロット</th><th class="text-right" style="width:12%">在庫</th><th class="text-right" style="width:12%">必要数</th><th class="text-right" style="width:12%">ピック数</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+<td>{{ r.supplier_name }}<br><span style="font-size:10px">{{ r.supplier_cd }}</span></td>
+<td>{{ r.product_name }}<br><span style="font-size:10px">{{ r.product_cd }} / {{ r.jan }}</span></td>
+<td>{{ r.location_code }}</td>
+<td>{{ r.expiry_date or '期限なし' }}</td>
+<td>{{ r.lot_no or '-' }}</td>
+<td class="text-right">{{ r.quantity|format_number }}</td>
+<td class="text-right">{{ r.need_qty|format_number }}</td>
+<td class="text-right">{{ r.pick_qty|format_number }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</body>
+</html>

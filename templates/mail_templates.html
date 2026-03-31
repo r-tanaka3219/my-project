@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}メールテンプレート設定{% endblock %}
+{% block content %}
+<div class="page-title">📧 メールテンプレート設定
+  <a href="/settings" class="btn btn-outline btn-sm">← 設定に戻る</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<form method="post" action="/settings/mail_templates">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<!-- 発注メール -->
+<div class="card">
+  <div class="card-title">📦 発注メールテンプレート</div>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:12px">
+    使用できる変数：<code>{date}</code> 日付、<code>{count}</code> 件数、<code>{from_name}</code> 送信者名<br>
+    本文（商品行）の変数：<code>{supplier_cd}</code> <code>{supplier_name}</code> <code>{jan}</code> <code>{product_cd}</code> <code>{product_name}</code> <code>{order_qty}</code> <code>{trigger}</code>
+  </div>
+  <div class="form-group">
+    <label>件名</label>
+    <input type="text" name="order_subject" value="{{ templates.order.subject }}" style="width:100%">
+  </div>
+  <div class="form-group">
+    <label>本文ヘッダー（商品一覧の前）</label>
+    <textarea name="order_body_header" rows="4" style="width:100%;font-family:monospace;font-size:13px">{{ templates.order.body_header }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>本文（商品1行分のフォーマット）</label>
+    <input type="text" name="order_body_item" value="{{ templates.order.body_item }}" style="width:100%;font-family:monospace;font-size:13px">
+  </div>
+  <div class="form-group">
+    <label>本文フッター（商品一覧の後）</label>
+    <textarea name="order_body_footer" rows="3" style="width:100%;font-family:monospace;font-size:13px">{{ templates.order.body_footer }}</textarea>
+  </div>
+  <div style="margin-top:8px">
+    <button type="button" class="btn btn-outline btn-sm" onclick="resetDefault('order')">デフォルトに戻す</button>
+  </div>
+  <!-- プレビュー -->
+  <div style="margin-top:12px">
+    <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:6px">📋 プレビュー（サンプルデータ）</div>
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:10px">
+      <div style="font-size:11px;color:#6b7280">件名：</div>
+      <div style="font-family:monospace;font-size:13px;margin-bottom:8px">{{ templates.order.subject.replace('{date}','2026-03-15').replace('{count}','2') }}</div>
+      <div style="font-size:11px;color:#6b7280">本文：</div>
+      <pre style="font-family:monospace;font-size:12px;white-space:pre-wrap;margin:0">{{ templates.order.body_header.replace('{date}','2026-03-15').replace('{count}','2').replace('{from_name}','在庫管理システム') }}{{ templates.order.body_item.replace('{supplier_cd}','SUP001').replace('{supplier_name}','山田食品').replace('{jan}','4901234567890').replace('{product_cd}','P001').replace('{product_name}','りんごジュース 1L').replace('{order_qty}','24').replace('{trigger}','発注点') }}
+{{ templates.order.body_item.replace('{supplier_cd}','SUP002').replace('{supplier_name}','佐藤飲料').replace('{jan}','4909876543210').replace('{product_cd}','P003').replace('{product_name}','緑茶 500ml').replace('{order_qty}','48').replace('{trigger}','混載ロット') }}
+{{ templates.order.body_footer.replace('{date}','2026-03-15').replace('{count}','2').replace('{from_name}','在庫管理システム') }}</pre>
+    </div>
+  </div>
+</div>
+
+<!-- 賞味期限アラートメール -->
+<div class="card">
+  <div class="card-title">⚠️ 賞味期限アラートメールテンプレート</div>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:12px">
+    使用できる変数：<code>{date}</code> 日付、<code>{count}</code> 件数<br>
+    本文（商品行）の変数：<code>{supplier_cd}</code> <code>{supplier_name}</code> <code>{jan}</code> <code>{product_cd}</code> <code>{product_name}</code> <code>{lot_no}</code> <code>{days_left}</code> <code>{expiry_date}</code> <code>{quantity}</code>
+  </div>
+  <div class="form-group">
+    <label>件名</label>
+    <input type="text" name="expiry_subject" value="{{ templates.expiry.subject }}" style="width:100%">
+  </div>
+  <div class="form-group">
+    <label>本文ヘッダー（商品一覧の前）</label>
+    <textarea name="expiry_body_header" rows="4" style="width:100%;font-family:monospace;font-size:13px">{{ templates.expiry.body_header }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>本文（商品1行分のフォーマット）</label>
+    <input type="text" name="expiry_body_item" value="{{ templates.expiry.body_item }}" style="width:100%;font-family:monospace;font-size:13px">
+  </div>
+  <div class="form-group">
+    <label>本文フッター（商品一覧の後）</label>
+    <textarea name="expiry_body_footer" rows="3" style="width:100%;font-family:monospace;font-size:13px">{{ templates.expiry.body_footer }}</textarea>
+  </div>
+  <div style="margin-top:8px">
+    <button type="button" class="btn btn-outline btn-sm" onclick="resetDefault('expiry')">デフォルトに戻す</button>
+  </div>
+  <!-- プレビュー -->
+  <div style="margin-top:12px">
+    <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:6px">📋 プレビュー（サンプルデータ）</div>
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:10px">
+      <div style="font-size:11px;color:#6b7280">件名：</div>
+      <div style="font-family:monospace;font-size:13px;margin-bottom:8px">{{ templates.expiry.subject.replace('{date}','2026-03-15').replace('{count}','2') }}</div>
+      <div style="font-size:11px;color:#6b7280">本文：</div>
+      <pre style="font-family:monospace;font-size:12px;white-space:pre-wrap;margin:0">{{ templates.expiry.body_header.replace('{date}','2026-03-15').replace('{count}','2') }}{{ templates.expiry.body_item.replace('{supplier_cd}','0244').replace('{supplier_name}','イチビキ（株）').replace('{jan}','4901327807555').replace('{product_cd}','2440373').replace('{product_name}','とりごはんの素').replace('{lot_no}','LOT001').replace('{days_left}','3').replace('{expiry_date}','2026-03-18').replace('{quantity}','24') }}
+{{ templates.expiry.body_item.replace('{supplier_cd}','0360').replace('{supplier_name}','フレッシュフーズ').replace('{jan}','4977711243100').replace('{product_cd}','3600397').replace('{product_name}','ふらのメロンゼリー').replace('{lot_no}','-').replace('{days_left}','10').replace('{expiry_date}','2026-03-25').replace('{quantity}','36') }}
+{{ templates.expiry.body_footer.replace('{date}','2026-03-15').replace('{count}','2') }}</pre>
+    </div>
+  </div>
+</div>
+
+<div style="margin-bottom:24px">
+  <button type="submit" class="btn btn-primary">💾 保存</button>
+</div>
+</form>
+
+<script>
+const defaults = {
+  order: {
+    subject:     {{ defaults.order.subject | tojson }},
+    body_header: {{ defaults.order.body_header | tojson }},
+    body_item:   {{ defaults.order.body_item | tojson }},
+    body_footer: {{ defaults.order.body_footer | tojson }},
+  },
+  expiry: {
+    subject:     {{ defaults.expiry.subject | tojson }},
+    body_header: {{ defaults.expiry.body_header | tojson }},
+    body_item:   {{ defaults.expiry.body_item | tojson }},
+    body_footer: {{ defaults.expiry.body_footer | tojson }},
+  }
+};
+function resetDefault(type) {
+  if (!confirm('デフォルトに戻しますか？')) return;
+  document.querySelector(`[name="${type}_subject"]`).value     = defaults[type].subject;
+  document.querySelector(`[name="${type}_body_header"]`).value = defaults[type].body_header;
+  document.querySelector(`[name="${type}_body_item"]`).value   = defaults[type].body_item;
+  document.querySelector(`[name="${type}_body_footer"]`).value = defaults[type].body_footer;
+}
+</script>
+{% endblock %}

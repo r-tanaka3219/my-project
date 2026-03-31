@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}インポート明細確認{% endblock %}
+{% block content %}
+<div class="page-title">
+  <span>📂 インポート明細確認・削除</span>
+  <div class="page-title-actions">
+    <a href="/csv" class="btn btn-outline btn-sm">← CSV取込設定へ</a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div style="display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start">
+
+  <!-- ── 左パネル：ファイル一覧 ── -->
+  <div class="card" style="position:sticky;top:12px">
+    <div class="card-title" style="font-size:13px">
+      📋 インポートファイル一覧
+      <span style="font-size:11px;font-weight:normal;color:#6b7280">（{{ file_total }}ファイル）</span>
+    </div>
+
+    <!-- ファイル検索 -->
+    <form method="get" action="/csv/import_detail" style="display:flex;gap:6px;margin-bottom:10px">
+      <input type="hidden" name="source_file" value="{{ source_file }}">
+      <input type="text" name="file_q" value="{{ file_q }}"
+             placeholder="ファイル名で絞込"
+             style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+      <button type="submit" class="btn btn-outline btn-sm">🔍</button>
+      {% if file_q %}<a href="/csv/import_detail?source_file={{ source_file|urlencode }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
+    </form>
+
+    <!-- ファイルリスト -->
+    <div style="max-height:65vh;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px">
+      {% for f in file_list %}
+      <a href="/csv/import_detail?source_file={{ f.filename|urlencode }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}"
+         style="display:block;padding:8px 10px;border-bottom:1px solid #f3f4f6;text-decoration:none;
+                background:{% if source_file == f.filename %}#eff6ff{% else %}#fff{% endif %};
+                border-left:3px solid {% if source_file == f.filename %}#2563eb{% else %}transparent{% endif %}">
+        <div style="font-size:12px;font-weight:600;color:#111827;word-break:break-all">{{ f.filename }}</div>
+        <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
+          <span style="font-size:11px;color:#6b7280">{{ f.last_imported_at.strftime('%Y-%m-%d %H:%M') if f.last_imported_at else '-' }}</span>
+          <span style="font-size:11px;color:#059669">売上{{ f.sales_count|format_number }}件</span>
+          <span style="font-size:11px;color:#6b7280">取込{{ f.import_count }}回</span>
+          {% if f.setting_name %}<span style="font-size:11px;color:#6b7280">{{ f.setting_name }}</span>{% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">
+        ファイルが見つかりません
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- ファイルリストページネーション -->
+    {% if file_pages > 1 %}
+    <div style="display:flex;gap:4px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+      {% if file_page > 1 %}
+      <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&file_q={{ file_q|urlencode }}&file_page={{ file_page-1 }}" class="btn btn-outline btn-sm">← 前</a>
+      {% endif %}
+      <span style="padding:4px 8px;font-size:12px;color:#6b7280">{{ file_page }}/{{ file_pages }}ページ</span>
+      {% if file_page < file_pages %}
+      <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&file_q={{ file_q|urlencode }}&file_page={{ file_page+1 }}" class="btn btn-outline btn-sm">次 →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── 右パネル：明細 ── -->
+  <div>
+    {% if source_file %}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <div class="card-title" style="margin-bottom:2px">
+            📄 {{ source_file }}
+            <span style="font-size:12px;font-weight:normal;color:#6b7280">（{{ detail_total|format_number }}件）</span>
+          </div>
+        </div>
+        <!-- ファイル全削除 -->
+        <form method="post" action="/csv/import_detail/delete"
+              onsubmit="return confirm('「{{ source_file }}」のインポートデータを全件削除しますか？\nこの操作は元に戻せません。')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="mode" value="file_all">
+          <input type="hidden" name="source_file" value="{{ source_file }}">
+          <input type="hidden" name="file_q" value="{{ file_q }}">
+          <input type="hidden" name="file_page" value="{{ file_page }}">
+          <button type="submit" class="btn btn-danger btn-sm">🗑 このファイルを全削除</button>
+        </form>
+      </div>
+
+      <!-- 明細検索 -->
+      <form method="get" action="/csv/import_detail" style="display:flex;gap:6px;margin-bottom:10px">
+        <input type="hidden" name="source_file" value="{{ source_file }}">
+        <input type="hidden" name="file_q" value="{{ file_q }}">
+        <input type="hidden" name="file_page" value="{{ file_page }}">
+        <input type="text" name="q" value="{{ q }}"
+               placeholder="JAN・商品名・得意先・店舗名で絞込"
+               style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+        <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+        {% if q %}
+        <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}" class="btn btn-outline btn-sm">✕</a>
+        {% endif %}
+      </form>
+
+      <!-- 選択削除フォーム -->
+      {% if detail_rows %}
+      <form method="post" action="/csv/import_detail/delete" id="detail-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="mode" value="selected">
+        <input type="hidden" name="source_file" value="{{ source_file }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="file_q" value="{{ file_q }}">
+        <input type="hidden" name="file_page" value="{{ file_page }}">
+
+        <!-- 選択操作バー -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="detail-check-all" onchange="detailCheckAll(this)"> 全選択
+          </label>
+          <button type="submit" id="detail-del-btn" class="btn btn-danger btn-sm" disabled
+                  onclick="return confirm(document.querySelectorAll('.detail-cb:checked').length + '件のデータを削除します。よろしいですか？')">
+            🗑 選択削除 (<span id="detail-sel-count">0</span>件)
+          </button>
+          <span style="font-size:12px;color:#6b7280;margin-left:auto">
+            {{ (page-1)*per_page+1 }}〜{{ [(page-1)*per_page+detail_rows|length, detail_total]|min }}件 / 全{{ detail_total|format_number }}件
+          </span>
+        </div>
+
+        <!-- 明細テーブル -->
+        <div class="table-wrap">
+          <table style="table-layout:fixed;width:100%">
+            <thead><tr>
+              <th style="width:4%"></th>
+              <th style="width:11%">納品日</th>
+              <th style="width:13%">JAN</th>
+              <th style="width:22%">商品名</th>
+              <th class="text-right" style="width:7%">数量</th>
+              <th style="width:14%">得意先</th>
+              <th style="width:14%">店舗名</th>
+              <th style="width:15%">取込日時</th>
+            </tr></thead>
+            <tbody>
+            {% for r in detail_rows %}
+            <tr>
+              <td><input type="checkbox" name="detail_id" value="{{ r.id }}" class="detail-cb" onchange="detailUpdateCount()"></td>
+              <td style="font-size:12px">{{ r.sale_date }}</td>
+              <td style="font-size:11px;font-family:monospace">{{ r.jan }}</td>
+              <td style="font-size:12px">{{ r.product_name }}</td>
+              <td class="text-right"><b>{{ r.quantity|format_number }}</b></td>
+              <td style="font-size:11px">{{ r.client_name or '-' }}</td>
+              <td style="font-size:11px">{{ r.store_name or '-' }}</td>
+              <td style="font-size:11px;color:#6b7280">{{ r.created_at.strftime('%m/%d %H:%M') if r.created_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+
+      <!-- ページネーション -->
+      {% if detail_pages > 1 %}
+      <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
+        {% if page > 1 %}
+        <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&q={{ q|urlencode }}&page={{ page-1 }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}" class="btn btn-outline btn-sm">← 前</a>
+        {% endif %}
+        {% for p in range([1,page-2]|max, [detail_pages+1,page+3]|min) %}
+          {% if p == page %}
+          <span style="padding:4px 10px;background:#2563eb;color:#fff;border-radius:4px;font-size:13px">{{ p }}</span>
+          {% else %}
+          <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&q={{ q|urlencode }}&page={{ p }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}" class="btn btn-outline btn-sm">{{ p }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if page < detail_pages %}
+        <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&q={{ q|urlencode }}&page={{ page+1 }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}" class="btn btn-outline btn-sm">次 →</a>
+        {% endif %}
+        <span style="font-size:12px;color:#6b7280">{{ page }}/{{ detail_pages }}ページ</span>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <p style="color:#9ca3af;padding:20px 0;text-align:center">このファイルの売上データが見つかりません。</p>
+      {% endif %}
+    </div>
+
+    {% else %}
+    <div class="card" style="text-align:center;padding:40px;color:#9ca3af">
+      <div style="font-size:48px;margin-bottom:12px">📂</div>
+      <div>左のリストからファイルを選択すると<br>インポートした明細データを確認・削除できます。</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function detailCheckAll(master) {
+  document.querySelectorAll('.detail-cb').forEach(function(cb){ cb.checked = master.checked; });
+  detailUpdateCount();
+}
+function detailUpdateCount() {
+  var n = document.querySelectorAll('.detail-cb:checked').length;
+  var cnt = document.getElementById('detail-sel-count');
+  var btn = document.getElementById('detail-del-btn');
+  if (cnt) cnt.textContent = n;
+  if (btn) btn.disabled = (n === 0);
+  var all = document.querySelectorAll('.detail-cb').length;
+  var master = document.getElementById('detail-check-all');
+  if (master) {
+    master.indeterminate = (n > 0 && n < all);
+    master.checked = (all > 0 && n === all);
+  }
+}
+</script>
+{% endblock %}

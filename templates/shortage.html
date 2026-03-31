@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}欠品予測{% endblock %}
+{% block content %}
+<div class="page-title">🚨 入荷予定日ベースの欠品予測
+  <a href="/reports" class="btn btn-outline btn-sm">← レポートへ</a>
+</div>
+<div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b">発注残の入荷予定日と今後30日の予測消化をぶつけて、先に欠品する商品を抽出しています。発注済みだから安全、という甘い見方を潰すための画面です。</div>
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/reports/shortage" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名" >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/reports/shortage" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+<div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b"><form method="post" action="/reports/shortage/create_orders" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="q" value="{{ q or "" }}"><div style="font-weight:700">欠品予測から発注候補を作成</div><button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('選択行、未選択なら表示中の対象から発注候補を作成します。')">⚙️ 発注候補作成</button></form></div>
+<form id="shortage-form" method="post" action="/reports/shortage/create_orders">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+<div class="card">
+  <div class="card-title">欠品リスク一覧</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:3%"><input type="checkbox" onclick="document.querySelectorAll('.js-jan').forEach(x=>x.checked=this.checked)"></th><th class="text-center" style="width:7%">状態</th><th class="text-center" style="width:4%">優先</th><th class="text-center" style="width:4%">ABC</th><th style="width:9%">仕入先</th><th style="width:13%">商品</th><th class="text-right" style="width:6%">現在庫</th><th class="text-right" style="width:7%">日販予測</th><th class="text-center" style="width:10%">次回入荷予定</th><th class="text-right" style="width:4%">入荷数</th><th class="text-center" style="width:10%">欠品予測日</th><th class="text-right" style="width:7%">30日後在庫</th><th class="text-right" style="width:6%">最悪在庫</th><th class="text-center" style="width:10%">推奨対応</th></tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td><input type="checkbox" class="js-jan" name="selected_jan" value="{{ r.jan }}" form="shortage-form"></td>
+    <td class="text-center">{% if r.risk_level == '入荷前欠品' %}<span class="badge badge-red">{{ r.risk_level }}</span>{% elif r.risk_level == '予測欠品' %}<span class="badge badge-yellow">{{ r.risk_level }}</span>{% elif r.risk_level == '要注意' %}<span class="badge badge-orange">{{ r.risk_level }}</span>{% else %}<span class="badge badge-green">{{ r.risk_level }}</span>{% endif %}</td>
+    <td class="text-center"><span class="badge badge-blue">{{ r.priority_score }}</span>{% if r.overdue_order_count > 0 %}<div style="font-size:11px;color:#dc2626">遅延{{ r.overdue_order_count }}件</div>{% endif %}</td>
+    <td class="text-center">{% if r.abc_class == 'A' %}<span class="badge badge-red">A</span>{% elif r.abc_class == 'B' %}<span class="badge badge-yellow">B</span>{% else %}<span class="badge badge-gray">C</span>{% endif %}</td>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td class="text-right">{{ r.stock_qty|format_number }}</td>
+    <td class="text-right">{{ r.daily_forecast }}</td>
+    <td class="text-center">{{ r.expected_receipt_date or '-' }}</td>
+    <td class="text-right">{{ r.expected_receipt_qty|format_number }}</td>
+    <td class="text-center">{% if r.stockout_date %}<span class="badge badge-red">{{ r.stockout_date }}</span>{% else %}-{% endif %}</td>
+    <td class="text-right">{{ r.projected_30d_stock }}</td>
+    <td class="text-right">{{ r.worst_projected_stock }}</td>
+    <td class="text-center">{{ r.recommended_action }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

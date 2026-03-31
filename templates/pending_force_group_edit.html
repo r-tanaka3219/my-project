@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}混載強制発注の手動調整{% endblock %}
+{% block content %}
+<div class="page-title">✍ 混載強制発注の手動調整</div>
+
+<div class="card" style="border-left:4px solid #7c3aed">
+  <div class="card-title" style="color:#7c3aed">グループ：{{ group_name }}</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#374151">
+    <span class="badge badge-purple">現在 {{ total_cases }} ケース</span>
+    <span class="badge badge-red">必要 {{ lot_cases }} ケース</span>
+    <span class="badge badge-orange">不足 {{ shortage }} ケース</span>
+    <span class="badge badge-blue">自動配分後 {{ suggested_total_cases }} ケース</span>
+  </div>
+  <div style="font-size:12px;color:#6b7280;margin-top:10px">
+    初期値は現在の自動配分案です。必要に応じて「追加ケース」を商品ごとに修正してから確定してください。
+  </div>
+</div>
+
+<form method="post" action="/orders/pending_force_group_manual">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="mixed_group" value="{{ group_name }}">
+  <div class="card">
+    <div class="table-wrap">
+      <table style="table-layout:fixed;width:100%">
+        <thead>
+          <tr>
+            <th style="width:10%">商品CD</th>
+            <th style="width:10%">JAN</th>
+            <th style="width:10%">商品名</th>
+            <th class="text-right" style="width:10%">現在庫</th>
+            <th class="text-right" style="width:10%">保留ケース</th>
+            <th class="text-right" style="width:10%">基本発注数</th>
+            <th class="text-right" style="width:10%">自動追加ケース</th>
+            <th class="text-right" style="width:10%">追加ケース</th>
+            <th class="text-right" style="width:10%">最終ケース</th>
+            <th class="text-right" style="width:10%">最終発注数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td style="font-family:monospace;font-size:12px">{{ item.product_cd or '-' }}</td>
+            <td style="font-family:monospace;font-size:12px">{{ item.jan }}</td>
+            <td>{{ item.product_name }}</td>
+            <td class="text-right">{{ item.stock_qty|format_number }}</td>
+            <td class="text-right"><span class="badge badge-purple">{{ item.base_cases }}</span></td>
+            <td class="text-right">{{ item.base_order_qty|format_number }}</td>
+            <td class="text-right"><span class="badge badge-orange">{{ item.auto_extra_cases }}</span></td>
+            <td class="text-right">
+              <input type="number" min="0" step="1"
+                     name="extra_cases_{{ item.id }}"
+                     value="{{ item.auto_extra_cases }}"
+                     data-base-cases="{{ item.base_cases }}"
+                     data-base-order-qty="{{ item.base_order_qty }}"
+                     class="extra-case-input"
+                     style="width:84px;padding:6px;border:1px solid #d1d5db;border-radius:6px;text-align:right">
+            </td>
+            <td class="text-right final-cases">{{ item.suggested_total_cases }}</td>
+            <td class="text-right final-qty">{{ item.suggested_order_qty|format_number }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f9fafb;font-weight:700">
+            <td colspan="8" class="text-right">合計ケース</td>
+            <td class="text-right" id="grand-total-cases">{{ suggested_total_cases }}</td>
+            <td class="text-right">必要 {{ lot_cases }} ケース以上</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="submit" class="btn btn-warning" onclick="return confirmManualForce()">⚡ 手動調整内容で強制発注</button>
+      <a href="/orders" class="btn btn-outline">↩ 戻る</a>
+      <span id="lot-warning" style="font-size:12px;color:#dc2626;display:none">必要ケース数を下回っています。このままでは確定できません。</span>
+    </div>
+  </div>
+</form>
+
+<script>
+function recalcManualForce() {
+  let grand = 0;
+  document.querySelectorAll('.extra-case-input').forEach((input) => {
+    const tr = input.closest('tr');
+    const baseCases = parseInt(input.dataset.baseCases || '0', 10);
+    const baseOrderQty = parseInt(input.dataset.baseOrderQty || '0', 10);
+    const extra = Math.max(0, parseInt(input.value || '0', 10) || 0);
+    const totalCases = baseCases + extra;
+    const totalQty = totalCases * baseOrderQty;
+    tr.querySelector('.final-cases').textContent = totalCases;
+    tr.querySelector('.final-qty').textContent = totalQty.toLocaleString();
+    grand += totalCases;
+  });
+  document.getElementById('grand-total-cases').textContent = grand;
+  const shortage = grand < {{ lot_cases }};
+  document.getElementById('lot-warning').style.display = shortage ? 'inline' : 'none';
+  return !shortage;
+}
+function confirmManualForce() {
+  if (!recalcManualForce()) {
+    alert('合計ケース数が不足しています。追加ケースを見直してください。');
+    return false;
+  }
+  return confirm('手動調整した数量で強制発注します。よろしいですか？');
+}
+document.querySelectorAll('.extra-case-input').forEach((input) => {
+  input.addEventListener('input', recalcManualForce);
+});
+recalcManualForce();
+</script>
+{% endblock %}

@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% block title %}レポート{% endblock %}
+{% block content %}
+<div class="page-title"><span>📊 レポート</span><div class="page-title-actions">
+  <a href="/reports/forecast" class="btn btn-outline btn-sm">📈 需要予測</a>
+  <a href="/reports/shortage" class="btn btn-outline btn-sm">🚨 欠品予測</a>
+  <form method="get" class="filter-form" style="grid-template-columns:minmax(260px,1fr) auto auto;margin:0">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/reports" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+  <form method="post" action="/expiry_check" style="margin:0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-warning btn-sm">⚠️ 期限チェック実行</button>
+  </form>
+</div></div>
+
+{# ── タブ ── #}
+<div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:16px;flex-wrap:wrap">
+  {% for tab_id, tab_label in [
+    ('stock',    '📦 在庫一覧'),
+    ('expiry',   '⚠️ 期限アラート'),
+    ('low',      '🔴 発注点以下'),
+    ('zero',     '❌ 在庫なし'),
+    ('supplier', '🏭 仕入先別集計'),
+    ('order',    '📋 月別発注'),
+    ('loss',     '🗑 廃棄ロス'),
+    ('sales',    '📈 前年実績'),
+    ('order_settings', '⚙️ 発注設定確認'),
+  ] %}
+  <button onclick="switchTab('{{ tab_id }}')" id="tab-{{ tab_id }}"
+    style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;
+           color:{% if loop.first %}#1d4ed8{% else %}#6b7280{% endif %};
+           border-bottom:{% if loop.first %}2px solid #1d4ed8{% else %}2px solid transparent{% endif %};
+           margin-bottom:-2px;white-space:nowrap">
+    {{ tab_label }}
+  </button>
+  {% endfor %}
+</div>
+
+{# ── 在庫総額サマリー ── #}
+{% if stock_total %}
+<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+  <div class="kpi kpi-blue" style="flex:1;min-width:140px">
+    <div class="kpi-value">{{ stock_total.product_cnt or 0 }}</div>
+    <div class="kpi-label">在庫商品数</div>
+  </div>
+  <div class="kpi" style="flex:1;min-width:140px;background:#f0fdf4">
+    <div class="kpi-value" style="color:#16a34a;font-size:20px">{{ "{:,.0f}".format(stock_total.total_cost or 0) }}円</div>
+    <div class="kpi-label">在庫原価総額</div>
+  </div>
+<div class="kpi kpi-yellow" style="flex:1;min-width:140px">
+    <div class="kpi-value">{{ expiry_soon|length }}</div>
+    <div class="kpi-label">期限アラート件数</div>
+  </div>
+  <div class="kpi kpi-red" style="flex:1;min-width:140px">
+    <div class="kpi-value">{{ low_stock|length }}</div>
+    <div class="kpi-label">発注点以下</div>
+  </div>
+</div>
+{% endif %}
+
+{# ══ ①在庫一覧 ══ #}
+<div id="pane-stock" class="card">
+  <div class="card-title">📦 在庫一覧（在庫あり商品：{{ stock_summary|length }}件）</div>
+  {% if stock_summary %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:19%">商品名</th>
+    <th class="text-right" style="width:5%">入数</th><th class="text-right" style="width:6%">在庫数</th>
+    <th class="text-center" style="width:6%">発注点</th>
+    <th class="text-center" style="width:9%">最古期限</th><th class="text-center" style="width:9%">最新期限</th>
+    <th class="text-center" style="width:8%">原価(円)</th><th class="text-center" style="width:11%">在庫原価額</th>
+  </tr></thead><tbody>
+  {% for s in stock_summary %}
+  <tr {% if s.total_qty <= s.reorder_point %}style="background:#fff7ed"{% endif %}>
+    <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
+    <td style="font-size:12px">{{ s.supplier_name }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.product_cd }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.jan }}</td>
+    <td>{{ s.product_name }}</td>
+    <td class="text-right">{{ s.unit_qty|format_number }}</td>
+    <td class="text-right"><b {% if s.total_qty <= s.reorder_point %}style="color:#dc2626"{% endif %}>{{ s.total_qty|format_number }}</b></td>
+    <td class="text-center">{{ s.reorder_point|format_number }}</td>
+    <td class="text-center" style="font-size:12px{% if s.earliest_expiry and s.earliest_expiry < today|string %};color:#dc2626;font-weight:bold{% endif %}">{{ s.earliest_expiry or '-' }}</td>
+    <td class="text-center" style="font-size:12px">{{ s.latest_expiry or '-' }}</td>
+    <td class="text-center">{{ "{:,.0f}".format(s.cost_price or 0) }}</td>
+    <td class="text-center">{{ "{:,.0f}".format((s.total_qty * (s.cost_price or 0))) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#9ca3af;padding:20px 0">在庫データがありません。</p>{% endif %}
+</div>
+
+{# ══ ②期限アラート ══ #}
+<div id="pane-expiry" class="card" style="display:none">
+  <div class="card-title">⚠️ 賞味期限アラート（{{ expiry_soon|length }}件）</div>
+  {% if expiry_soon %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:5%">仕入先CD</th><th style="width:9%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:10%">JAN</th><th style="width:15%">商品名</th>
+    <th class="text-center" style="width:12%">賞味期限</th><th class="text-right" style="width:10%">残日数</th>
+    <th class="text-center" style="width:10%">ロット</th><th class="text-right" style="width:8%">数量</th><th class="text-center" style="width:16%">状態</th>
+  </tr></thead><tbody>
+  {% for s in expiry_soon %}
+  <tr>
+    <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd or '-' }}</td>
+    <td style="font-size:12px">{{ s.supplier_name }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.product_cd or '-' }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.jan }}</td>
+    <td>{{ s.product_name }}</td>
+    <td class="text-center" style="font-size:12px">{{ s.expiry_date }}</td>
+    <td class="text-right">
+      {% if s.days_left < 0 %}<span class="badge badge-red">期限切れ</span>
+      {% elif s.days_left <= 7 %}<span class="badge badge-red">{{ s.days_left|format_number }}日</span>
+      {% elif s.days_left <= 30 %}<span class="badge badge-yellow">{{ s.days_left|format_number }}日</span>
+      {% else %}<span class="badge badge-gray">{{ s.days_left|format_number }}日</span>{% endif %}
+    </td>
+    <td class="text-center" style="font-size:12px">{{ s.lot_no or '-' }}</td>
+    <td class="text-right"><b>{{ s.quantity|format_number }}</b></td>
+    <td class="text-center">{% if s.days_left < 0 %}<span class="badge badge-red">期限切れ</span>
+        {% else %}<span class="badge badge-yellow">期限注意</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#16a34a;padding:20px 0">✅ 期限アラートなし</p>{% endif %}
+</div>
+
+{# ══ ③発注点以下 ══ #}
+<div id="pane-low" class="card" style="display:none">
+  <div class="card-title">🔴 発注点以下（在庫あり）（{{ low_stock|length }}件）</div>
+  {% if low_stock %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:6%">仕入先CD</th><th style="width:11%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:12%">JAN</th><th style="width:18%">商品名</th>
+    <th class="text-right" style="width:10%">在庫数</th><th class="text-center" style="width:10%">発注点</th>
+    <th class="text-right" style="width:10%">発注数</th><th class="text-center" style="width:17%">発注状況</th>
+  </tr></thead>ead><tbody>
+  {% for s in low_stock %}
+  <tr>
+    <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
+    <td style="font-size:12px">{{ s.supplier_name }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.product_cd }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.jan }}</td>
+    <td>{{ s.product_name }}</td>
+    <td class="text-right" style="color:#dc2626;font-weight:bold">{{ s.total_qty|format_number }}</td>
+    <td class="text-center">{{ s.reorder_point|format_number }}</td>
+    <td class="text-right">{{ s.order_qty|format_number }}</td>
+    <td class="text-center">{% if s.ordered_at %}<span class="badge badge-blue">発注済 {{ s.ordered_at }}</span>
+        {% else %}<span class="badge badge-red">未発注</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#16a34a;padding:20px 0">✅ 発注点以下の商品なし</p>{% endif %}
+</div>
+
+{# ══ ④在庫なし ══ #}
+<div id="pane-zero" class="card" style="display:none">
+  <div class="card-title">❌ 在庫なし商品（{{ zero_stock|length }}件）</div>
+  {% if zero_stock %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:9%">仕入先CD</th><th style="width:13%">仕入先名</th><th style="width:9%">商品CD</th><th style="width:14%">JAN</th><th style="width:20%">商品名</th>
+    <th class="text-center" style="width:14%">発注点</th><th class="text-center" style="width:21%">発注状況</th>
+  </tr></thead>></thead><tbody>
+  {% for s in zero_stock %}
+  <tr>
+    <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
+    <td style="font-size:12px">{{ s.supplier_name }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.product_cd }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ s.jan }}</td>
+    <td>{{ s.product_name }}</td>
+    <td class="text-center">{{ s.reorder_point|format_number }}</td>
+    <td class="text-center">{% if s.ordered_at %}<span class="badge badge-blue">発注済 {{ s.ordered_at }}</span>
+        {% else %}<span class="badge badge-red">未発注</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#16a34a;padding:20px 0">✅ 在庫なし商品なし</p>{% endif %}
+</div>
+
+{# ══ ⑤仕入先別集計 ══ #}
+<div id="pane-supplier" class="card" style="display:none">
+  <div class="card-title">🏭 仕入先別在庫集計</div>
+  {% if supplier_stock %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:15%">仕入先CD</th><th style="width:35%">仕入先名</th>
+    <th class="text-right" style="width:15%">商品数</th><th class="text-right" style="width:15%">総在庫数</th>
+    <th class="text-right" style="width:20%">在庫原価額(円)</th>
+  </tr></thead><tbody>
+  {% set total_cost = supplier_stock|sum(attribute='stock_cost') %}
+  {% for s in supplier_stock %}
+  <tr>
+    <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
+    <td>{{ s.supplier_name }}</td>
+    <td class="text-right">{{ s.product_cnt }}</td>
+    <td class="text-right">{{ "{:,.0f}".format(s.total_qty) }}</td>
+    <td class="text-right">{{ "{:,.0f}".format(s.stock_cost or 0) }}</td>
+  </tr>
+  {% endfor %}
+  <tr style="background:#f1f5f9;font-weight:bold">
+    <td colspan="4">合計</td>
+    <td class="text-right">{{ "{:,.0f}".format(total_cost) }}</td>
+  </tr>
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#9ca3af;padding:20px 0">データなし</p>{% endif %}
+</div>
+
+{# ══ ⑥月別発注集計 ══ #}
+<div id="pane-order" class="card" style="display:none">
+  <div class="card-title">📋 月別発注集計（直近12ヶ月）</div>
+  {% if monthly_order %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:20%">月</th><th class="text-right" style="width:25%">発注件数</th>
+    <th class="text-right" style="width:25%">発注商品数</th><th class="text-right" style="width:30%">発注数量合計</th>
+  </tr></thead><tbody>
+  {% for m in monthly_order %}
+  <tr>
+    <td style="font-weight:bold">{{ m.month }}</td>
+    <td class="text-right">{{ m.cnt }}</td>
+    <td class="text-right">{{ m.product_cnt }}</td>
+    <td class="text-right">{{ "{:,.0f}".format(m.total_qty or 0) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#9ca3af;padding:20px 0">発注履歴なし</p>{% endif %}
+</div>
+
+{# ══ ⑦廃棄ロス集計 ══ #}
+<div id="pane-loss" class="card" style="display:none">
+  <div class="card-title">🗑 廃棄・退避ロス集計</div>
+  <div class="form-grid-2">
+    <div>
+      <div style="font-size:13px;font-weight:bold;color:#374151;margin-bottom:8px">月別集計</div>
+      {% if loss_monthly %}
+      <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+        <th style="width:20%">月</th><th class="text-right" style="width:25%">件数</th>
+        <th class="text-right" style="width:25%">数量</th><th class="text-right" style="width:30%">ロス金額(円)</th>
+      </tr></thead><tbody>
+      {% for l in loss_monthly %}
+      <tr>
+        <td>{{ l.month }}</td>
+        <td class="text-right">{{ l.cnt }}</td>
+        <td class="text-right">{{ l.total_qty|format_number }}</td>
+        <td class="text-right" style="color:#dc2626;font-weight:bold">{{ "{:,.0f}".format(l.total_loss or 0) }}</td>
+      </tr>
+      {% endfor %}
+      <tr style="background:#f1f5f9;font-weight:bold">
+        <td>合計</td><td class="text-right">{{ loss_monthly|sum(attribute='cnt') }}</td>
+        <td class="text-right">{{ loss_monthly|sum(attribute='total_qty') }}</td>
+        <td class="text-right" style="color:#dc2626">{{ "{:,.0f}".format(loss_monthly|sum(attribute='total_loss')) }}円</td>
+      </tr>
+      </tbody></table>
+</div><!-- /table-wrap -->
+      {% else %}<p style="color:#9ca3af">廃棄データなし</p>{% endif %}
+    </div>
+    <div>
+      <div style="font-size:13px;font-weight:bold;color:#374151;margin-bottom:8px">仕入先別集計（上位20件）</div>
+      {% if loss_supplier %}
+      <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+        <th style="width:40%">仕入先名</th><th class="text-right" style="width:20%">件数</th>
+        <th class="text-right" style="width:15%">数量</th><th class="text-right" style="width:25%">ロス金額(円)</th>
+      </tr></thead><tbody>
+      {% for l in loss_supplier %}
+      <tr>
+        <td style="font-size:12px">{{ l.supplier_name }}</td>
+        <td class="text-right">{{ l.cnt }}</td>
+        <td class="text-right">{{ l.total_qty|format_number }}</td>
+        <td class="text-right" style="color:#dc2626;font-weight:bold">{{ "{:,.0f}".format(l.total_loss or 0) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody></table>
+</div><!-- /table-wrap -->
+      {% else %}<p style="color:#9ca3af">廃棄データなし</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+{# ══ ⑧前年実績 ══ #}
+<div id="pane-sales" class="card" style="display:none">
+  <div class="card-title">
+  <div class="card-toolbar">
+    <span>📈 前年実績（{{ last_year }}年）月別売上数量</span>
+    <div class="right">
+      <form method="get" class="filter-form" style="grid-template-columns:minmax(220px,1fr) auto auto;margin:0">
+        <input type="hidden" name="tab" value="sales">
+        <input type="hidden" name="sales_mode" value="{{ sales_mode }}">
+        <input type="text" name="sales_q" value="{{ sales_q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
+        <button type="submit" class="btn btn-outline btn-sm">🔍</button>
+        {% if sales_q %}<a href="?tab=sales&sales_mode={{ sales_mode }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
+      </form>
+      <a href="?tab=sales&sales_mode=master{% if sales_q %}&sales_q={{ sales_q }}{% endif %}" onclick="switchTab('sales')" class="btn btn-sm {% if sales_mode=='master' %}btn-primary{% else %}btn-outline{% endif %}">📦 商品マスタのみ</a>
+      <a href="?tab=sales&sales_mode=all{% if sales_q %}&sales_q={{ sales_q }}{% endif %}" onclick="switchTab('sales')" class="btn btn-sm {% if sales_mode=='all' %}btn-primary{% else %}btn-outline{% endif %}">📋 全件表示</a>
+    </div>
+  </div>
+</div>
+  {% if sales_summary %}
+  {% set months = ['01','02','03','04','05','06','07','08','09','10','11','12'] %}
+  <div class="table-wrap">
+<table style="table-layout:auto;width:100%;font-size:12px"><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:100px">仕入先名</th><th style="min-width:65px">商品CD</th><th style="min-width:120px">JAN</th><th style="min-width:160px;max-width:240px;width:180px">商品名</th>
+    {% for m in months %}<th class="text-right" style="min-width:60px">{{ m }}月</th>{% endfor %}
+    <th class="text-right" style="min-width:50px">合計</th>
+  </tr></thead><tbody>
+  {% for jan, rows in sales_grouped.items() %}
+  {% set row_dict = {} %}
+  {% for r in rows %}{% set _ = row_dict.update({r.month: r.total}) %}{% endfor %}
+  {% set first_row = rows|first %}
+  <tr>
+    <td style="font-family:monospace;font-size:11px">{{ first_row.supplier_cd or '-' }}</td>
+    <td style="font-size:11px">{{ first_row.supplier_name or '-' }}</td>
+    <td style="font-family:monospace;font-size:11px">{{ first_row.product_cd or '-' }}</td>
+    <td style="font-family:monospace;font-size:11px">{{ jan }}</td>
+    <td>{{ first_row.product_name }}</td>
+    {% for m in months %}
+    <td class="text-right">{{ '{:,}'.format(row_dict[m]|int) if row_dict.get(m) else '' }}</td>
+    {% endfor %}
+    <td class="text-right" style="font-weight:bold">{{ '{:,}'.format(rows|sum(attribute='total')|int) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% else %}<p style="color:#9ca3af;padding:20px 0">{{ last_year }}年の実績データなし</p>{% endif %}
+</div>
+
+{# ══ ⑨発注設定確認 ══ #}
+<div id="pane-order_settings" class="card" style="display:none">
+  <div class="card-title">⚙️ 発注設定確認（全{{ order_settings|length }}商品）</div>
+  <p style="font-size:12px;color:#6b7280;margin-bottom:8px">
+    リードタイム・安全係数・発注点を確認して発注精度を改善できます。<br>
+    ⚠️マークは確認が推奨される設定です。
+  </p>
+  {% if order_settings %}
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%;font-size:12px"><thead><tr>
+    <th style="width:5%">仕入先CD</th><th style="width:7%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:25%">商品名</th>
+    <th class="text-right" style="width:4%">入数</th>
+    <th class="text-right" style="width:5%">現在庫</th>
+    <th class="text-right" style="width:5%">発注点</th>
+    <th class="text-right" style="width:5%">発注数</th>
+    <th class="text-right" style="width:6%">リードタイム</th>
+    <th class="text-right" style="width:5%">安全係数</th>
+    <th class="text-right" style="width:6%">期限アラート</th>
+    <th class="text-center" style="width:7%">混載グループ</th>
+    <th class="text-center" style="width:5%">自動更新</th>
+    <th class="text-center" style="width:4%">確認</th>
+    <th class="text-center" style="width:6%">操作</th>
+  </tr></thead>r></thead><tbody>
+  {% for s in order_settings %}
+  {% set warn = (s.lead_time_days == 0 or s.lead_time_days is none or s.safety_factor == 0 or s.safety_factor is none or s.reorder_point == 0) %}
+  <tr {% if warn %}style="background:#fffbeb"{% endif %}>
+    <td style="font-family:monospace">{{ s.supplier_cd }}</td>
+    <td style="font-size:11px">{{ s.supplier_name }}</td>
+    <td style="font-family:monospace">{{ s.product_cd }}</td>
+    <td>{{ s.product_name }}</td>
+    <td class="text-right">{{ s.unit_qty|format_number }}</td>
+    <td class="text-right">
+      <b {% if s.current_stock <= s.reorder_point %}style="color:#dc2626"{% endif %}>
+        {{ s.current_stock }}
+      </b>
+    </td>
+    <td class="text-right">
+      {% if s.reorder_point == 0 %}<span class="badge badge-gray">0（未設定）</span>
+      {% else %}<b>{{ s.reorder_point|format_number }}</b>{% endif %}
+    </td>
+    <td class="text-right">{{ s.order_qty|format_number }}</td>
+    <td class="text-right">
+      {% if not s.lead_time_days or s.lead_time_days == 0 %}
+        <span class="badge badge-red">未設定</span>
+      {% else %}
+        {{ s.lead_time_days }}日
+      {% endif %}
+    </td>
+    <td class="text-right">
+      {% if not s.safety_factor or s.safety_factor == 0 %}
+        <span class="badge badge-red">未設定</span>
+      {% else %}
+        {{ s.safety_factor }}
+      {% endif %}
+    </td>
+    <td class="text-right">{{ s.expiry_alert_days }}日前</td>
+    <td class="text-center" style="font-size:11px">{{ s.mixed_group or '-' }}</td>
+    <td class="text-center">
+      {% if s.reorder_auto %}<span class="badge badge-green">自動</span>
+      {% else %}<span class="badge badge-gray">手動</span>{% endif %}
+    </td>
+    <td class="text-center">
+      {% if warn %}<span class="badge badge-yellow">⚠️ 要確認</span>{% endif %}
+    </td>
+    <td class="text-center"><a href="/products/{{ s.id }}/edit" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">✏️ 編集</a></td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  <div style="margin-top:12px;padding:10px;background:#fffbeb;border-radius:6px;font-size:12px;color:#92400e">
+    <b>発注精度を上げるポイント：</b><br>
+    ① <b>リードタイム</b>：発注から納品まで何日かかるか正確に設定（例：翌日納品なら1、翌々日なら2）<br>
+    ② <b>安全係数</b>：1.3〜1.5推奨。売上変動が大きい商品は1.5以上に設定<br>
+    ③ <b>発注点0の商品</b>：発注点が0だと自動発注されません。適切な値を設定してください<br>
+    ④ 設定変更は各商品の「編集」ボタンから行えます
+  </div>
+  {% else %}<p style="color:#9ca3af;padding:20px 0">商品データなし</p>{% endif %}
+</div>
+
+<script>
+function switchTab(tab) {
+  const tabs = ['stock','expiry','low','zero','supplier','order','loss','sales','order_settings'];
+  tabs.forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === tab ? '' : 'none';
+    const btn = document.getElementById('tab-' + t);
+    btn.style.color = t === tab ? '#1d4ed8' : '#6b7280';
+    btn.style.borderBottom = t === tab ? '2px solid #1d4ed8' : '2px solid transparent';
+  });
+}
+// URLパラメータでタブを自動切替
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab) switchTab(tab);
+})();
+</script>
+{% endblock %}

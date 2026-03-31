@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}チェーン・店舗管理</div>
+{% endblock %}
+{% block content %}
+<div style="max-width:900px">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- タブ -->
+<div style="display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #e5e7eb">
+  <button onclick="switchTab('chain')" id="tab-chain"
+          style="padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#1d4ed8;border-bottom:2px solid #1d4ed8;margin-bottom:-2px">
+    🏪 チェーンCD管理
+  </button>
+  <button onclick="switchTab('store')" id="tab-store"
+          style="padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#6b7280">
+    🏬 店舗CD管理
+  </button>
+</div>
+
+<!-- チェーンCD管理 -->
+<div id="pane-chain" class="card" style="border-radius:0 8px 8px 8px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div>
+      <div class="card-title" style="margin-bottom:4px">チェーンCD管理</div>
+      <div style="font-size:12px;color:#6b7280">「在庫引き当て除外」をONにするとそのチェーンの売上は在庫から引き算されません。</div>
+    </div>
+    <button onclick="document.getElementById('new-chain-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  </div>
+
+  <!-- 新規追加行 -->
+  <form method="post" action="/chains/chain/add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div id="new-chain-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:8px">新規チェーン追加</div>
+    <div class="search-form">
+      <input type="text" name="chain_cd" placeholder="チェーンCD" required
+             style="width:120px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <input type="text" name="chain_name" placeholder="取引先名"
+             style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:13px">
+        <input type="checkbox" name="exclude_deduct" value="1"> 引き当て除外
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm">追加</button>
+      <button type="button" onclick="document.getElementById('new-chain-row').style.display='none'" class="btn btn-outline btn-sm">キャンセル</button>
+    </div>
+  </div>
+  </form>
+
+  <table style="table-layout:fixed;width:100%" class="table">
+    <thead>
+      <tr>
+        <th style="width:15%">チェーンCD</th>
+        <th style="width:45%">取引先名</th>
+        <th style="width:20%">在庫引き当て除外</th>
+        <th style="width:20%">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in chains %}
+      <tr {% if c.exclude_deduct %}style="background:#fff7ed"{% endif %}>
+        <td><code>{{ c.chain_cd }}</code></td>
+        <td>
+          <form method="post" action="/chains/chain/{{ c.id }}/update" class="search-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="chain_name" value="{{ c.chain_name }}"
+                   style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+        </td>
+        <td style="text-align:center">
+            <input type="hidden" name="exclude_deduct" value="0">
+            <input type="checkbox" name="exclude_deduct" value="1"
+                   {% if c.exclude_deduct %}checked{% endif %}
+                   style="width:16px;height:16px;cursor:pointer">
+        </td>
+        <td style="text-align:center">
+            <button type="submit" class="btn btn-primary btn-sm">保存</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="text-align:center;color:#9ca3af;padding:24px">
+        データがありません。CSVインポートで自動登録されるか、「新規追加」で手動登録してください。
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 店舗CD管理 -->
+<div id="pane-store" class="card" style="display:none;border-radius:0 8px 8px 8px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div>
+      <div class="card-title" style="margin-bottom:4px">店舗CD管理</div>
+      <div style="font-size:12px;color:#6b7280">特定店舗のみ在庫引き当てから除外できます。チェーンCDが除外済みの場合は店舗設定より優先されます。</div>
+    </div>
+    <button onclick="document.getElementById('new-store-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  </div>
+
+  <!-- 新規追加行 -->
+  <form method="post" action="/chains/store/add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div id="new-store-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:8px">新規店舗追加</div>
+    <div class="search-form">
+      <input type="text" name="store_cd" placeholder="店舗CD（得意先CD）" required
+             style="width:140px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <input type="text" name="store_name" placeholder="店舗名"
+             style="width:160px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <input type="text" name="chain_cd" placeholder="チェーンCD"
+             style="width:100px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <input type="text" name="client_name" placeholder="取引先名"
+             style="width:140px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:13px">
+        <input type="checkbox" name="exclude_deduct" value="1"> 引き当て除外
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm">追加</button>
+      <button type="button" onclick="document.getElementById('new-store-row').style.display='none'" class="btn btn-outline btn-sm">キャンセル</button>
+    </div>
+  </div>
+  </form>
+
+  <!-- 検索 -->
+  <div style="margin-bottom:10px">
+    <input type="text" id="store-search" placeholder="店舗CD・店舗名・チェーンCDで絞り込み"
+           oninput="filterStores(this.value)"
+           style="width:300px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+  </div>
+
+  <table style="table-layout:fixed;width:100%" class="table" id="store-table">
+    <thead>
+      <tr>
+        <th style="width:12%">チェーンCD</th>
+        <th style="width:28%">取引先名</th>
+        <th style="width:12%">店舗CD</th>
+        <th style="width:20%">店舗名</th>
+        <th style="width:14%">引き当て除外</th>
+        <th style="width:14%">操作</th>
+      </tr>
+    </thead>
+    <tbody id="store-tbody">
+      {% for s in stores %}
+      <tr {% if s.exclude_deduct %}style="background:#fff7ed"{% endif %}
+          data-search="{{ s.store_cd }}|{{ s.store_name }}|{{ s.chain_cd }}|{{ s.client_name }}">
+        <td>
+          <form method="post" action="/chains/store/{{ s.id }}/update" style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <code style="white-space:nowrap">{{ s.chain_cd }}</code></td>
+        <td>
+            <input type="text" name="client_name" value="{{ s.client_name }}"
+                   style="width:150px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;color:#2563eb;font-weight:bold">
+        </td>
+        <td><code style="white-space:nowrap">{{ s.store_cd }}</code></td>
+        <td>
+            <input type="text" name="store_name" value="{{ s.store_name }}"
+                   style="width:170px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+        <td style="text-align:center">
+            <input type="hidden" name="exclude_deduct" value="0">
+            <input type="checkbox" name="exclude_deduct" value="1"
+                   {% if s.exclude_deduct %}checked{% endif %}
+                   style="width:16px;height:16px;cursor:pointer">
+        </td>
+        <td style="text-align:center">
+            <button type="submit" class="btn btn-primary btn-sm">保存</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr id="store-empty"><td colspan="6" style="text-align:center;color:#9ca3af;padding:24px">
+        データがありません。CSVインポートで自動登録されるか、「新規追加」で手動登録してください。
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function switchTab(tab) {
+  document.getElementById('pane-chain').style.display = tab === 'chain' ? '' : 'none';
+  document.getElementById('pane-store').style.display = tab === 'store' ? '' : 'none';
+  document.getElementById('tab-chain').style.cssText = tab === 'chain'
+    ? 'padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#1d4ed8;border-bottom:2px solid #1d4ed8;margin-bottom:-2px'
+    : 'padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#6b7280';
+  document.getElementById('tab-store').style.cssText = tab === 'store'
+    ? 'padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#1d4ed8;border-bottom:2px solid #1d4ed8;margin-bottom:-2px'
+    : 'padding:8px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#6b7280';
+}
+
+function filterStores(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#store-tbody tr').forEach(tr => {
+    if (!tr.dataset.search) return;
+    tr.style.display = tr.dataset.search.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+</div>
+{% endblock %}

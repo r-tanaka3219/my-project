@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}需要予測{% endblock %}
+{% block content %}
+<style>
+  .page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .page-head-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .info-card{background:#eff6ff;border-left:4px solid #2563eb}
+  .action-card{background:#fff7ed;border-left:4px solid #f59e0b}
+  .compact-form{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px 14px;align-items:end}
+  .compact-form .span-12{grid-column:span 12}
+  .compact-form .span-6{grid-column:span 6}
+  .compact-form .span-4{grid-column:span 4}
+  .compact-form .span-3{grid-column:span 3}
+  .compact-form .span-2{grid-column:span 2}
+  .compact-form .span-actions{grid-column:span 12;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .compact-form .form-group{margin:0}
+  .compact-form .form-group label{display:block;font-weight:700;margin-bottom:6px}
+  .compact-form .form-group input,
+  .compact-form .form-group select{width:100%}
+  .toolbar-form{display:grid;grid-template-columns:minmax(280px,1fr) auto auto;gap:8px;align-items:center}
+  .toolbar-form input{width:100%}
+  .card-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .card-toolbar-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .table-wrap form{margin:0}
+  .inline-delete{text-align:right}
+  @media (max-width: 960px){
+    .compact-form{grid-template-columns:repeat(6,minmax(0,1fr))}
+    .compact-form .span-6,.compact-form .span-4,.compact-form .span-3,.compact-form .span-2{grid-column:span 6}
+    .toolbar-form{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="page-head">
+  <div class="page-title">📈 需要予測・曜日指数・販促反映</div>
+  <div class="page-head-actions">
+    <a href="/reports/shortage" class="btn btn-outline btn-sm">🚨 欠品予測</a>
+    <a href="/reports" class="btn btn-outline btn-sm">← レポートへ</a>
+  </div>
+</div>
+
+<div class="card info-card">
+  直近の売上履歴から曜日別の波と季節性を加味し、さらに登録済み販促の上振れを見込んだ30日需要を算出します。見るだけではなく、そのまま発注設定へ反映できます。
+</div>
+
+<div class="card" style="padding:14px 16px">
+  <form method="get" action="/reports/forecast" class="toolbar-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/reports/forecast" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card action-card" style="padding:14px 16px">
+  <form method="post" action="/reports/forecast/apply" class="compact-form" style="margin:0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="q" value="{{ q or '' }}">
+    <div class="span-6" style="font-weight:700;align-self:center">予測値を設定へ反映</div>
+    <div class="form-group span-3">
+      <label>更新対象</label>
+      <select name="mode">
+        <option value="reorder_point">発注点のみ更新</option>
+        <option value="order_qty">基準発注数のみ更新</option>
+        <option value="both">発注点 + 基準発注数</option>
+      </select>
+    </div>
+    <div class="span-3" style="display:flex;justify-content:flex-end;align-items:end">
+      <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('表示中の商品設定を予測値で更新します。よろしいですか？')">⚙️ 一括反映</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">商品別 予測一覧</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:8%">仕入先</th><th style="width:8%">商品</th><th class="text-right" style="width:7%">現在庫</th><th class="text-right" style="width:7%">平均日販</th><th class="text-right" style="width:7%">季節指数</th><th class="text-right" style="width:7%">販促日数</th><th class="text-right" style="width:7%">販促上振れ</th><th class="text-right" style="width:8%">受注予定日数</th><th class="text-right" style="width:8%">受注予定数量</th><th class="text-right" style="width:8%">30日予測</th><th class="text-right" style="width:8%">推奨発注点</th><th class="text-right" style="width:8%">推奨発注数</th><th class="text-right" style="width:9%">在庫カバー日数</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td class="text-right">{{ r.stock_qty|format_number }}</td>
+    <td class="text-right">{{ r.avg_daily }}</td>
+    <td class="text-right">{{ r.season_idx }}</td>
+    <td class="text-right">{{ r.promo_days }}</td>
+    <td class="text-right">{{ r.promo_uplift_qty }}</td>
+    <td class="text-right">{{ r.direct_demand_days }}</td>
+    <td class="text-right">{{ r.direct_demand_qty }}</td>
+    <td class="text-right" style="font-weight:bold">{{ r.next_30d_forecast }}</td>
+    <td class="text-right">
+      {% if r.suggested_reorder_point != r.reorder_point %}
+        <span class="badge badge-yellow">{{ r.suggested_reorder_point }}</span>
+      {% else %}
+        <span class="badge badge-green">{{ r.suggested_reorder_point }}</span>
+      {% endif %}
+      <div style="font-size:11px;color:#6b7280">現行 {{ r.reorder_point }}</div>
+    </td>
+    <td class="text-right">
+      {% if r.suggested_order_qty != r.order_qty %}
+        <span class="badge badge-yellow">{{ r.suggested_order_qty }}</span>
+      {% else %}
+        <span class="badge badge-green">{{ r.suggested_order_qty }}</span>
+      {% endif %}
+      <div style="font-size:11px;color:#6b7280">現行 {{ r.order_qty }}</div>
+    </td>
+    <td class="text-right">
+      {% if r.cover_days is not none %}
+        {% if r.cover_days > 45 %}<span class="badge badge-yellow">{{ r.cover_days }}日</span>
+        {% elif r.cover_days < 14 %}<span class="badge badge-red">{{ r.cover_days }}日</span>
+        {% else %}<span class="badge badge-green">{{ r.cover_days }}日</span>{% endif %}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+
+<div class="card">
+  <div class="card-toolbar">
+    <div class="card-title" style="margin:0">📣 販促予定登録</div>
+  </div>
+  <form method="post" action="/reports/forecast/promotions" class="compact-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group span-3"><label>JAN</label><input type="text" name="jan" required placeholder="対象商品のJAN"></div>
+    <div class="form-group span-3"><label>販促日</label><input type="date" name="promo_date" required></div>
+    <div class="form-group span-3"><label>販促名</label><input type="text" name="promo_name" placeholder="例: 特売・チラシ"></div>
+    <div class="form-group span-2"><label>上振れ係数</label><input type="number" name="uplift_factor" min="1" step="0.1" value="1.3"></div>
+    <div class="form-group span-1" style="display:flex;justify-content:flex-end;align-items:end"><button type="submit" class="btn btn-primary">登録</button></div>
+  </form>
+  <div class="help">上振れ係数 1.3 は通常需要の30%増を意味します。</div>
+  {% if promo_rows %}
+  <div class="table-wrap" style="margin-top:12px"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:11%">販促日</th><th style="width:12%">仕入先</th><th style="width:32%">商品</th><th style="width:20%">販促名</th><th class="text-right" style="width:10%">係数</th><th class="text-right" style="width:15%">操作</th></tr></thead><tbody>
+  {% for p in promo_rows %}
+  <tr>
+    <td>{{ p.promo_date }}</td>
+    <td>{{ p.supplier_name }}</td>
+    <td><div>{{ p.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ p.product_cd }} / {{ p.jan }}</div></td>
+    <td>{{ p.promo_name or '-' }}</td>
+    <td class="text-right">{{ p.uplift_factor }}</td>
+    <td class="inline-delete"><form method="post" action="/reports/forecast/promotions/{{ p.id }}/delete" onsubmit="return confirm('削除しますか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline btn-sm">削除</button></form></td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-toolbar">
+    <div class="card-title" style="margin:0">🧾 受注予定登録</div>
+  </div>
+  <form method="post" action="/reports/forecast/demands" class="compact-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group span-3"><label>JAN</label><input type="text" name="jan" required placeholder="対象商品のJAN"></div>
+    <div class="form-group span-2"><label>受注日</label><input type="date" name="demand_date" required></div>
+    <div class="form-group span-2"><label>数量</label><input type="number" name="demand_qty" min="1" required></div>
+    <div class="form-group span-2"><label>得意先</label><input type="text" name="customer_name" placeholder="任意"></div>
+    <div class="form-group span-2"><label>備考</label><input type="text" name="note" placeholder="任意"></div>
+    <div class="form-group span-1" style="display:flex;justify-content:flex-end;align-items:end"><button type="submit" class="btn btn-primary">登録</button></div>
+  </form>
+  {% if demand_rows %}
+  <div class="table-wrap" style="margin-top:12px"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:10%">受注日</th><th style="width:12%">仕入先</th><th style="width:20%">商品</th><th style="width:15%">得意先</th><th class="text-right" style="width:10%">数量</th><th style="width:18%">備考</th><th class="text-right" style="width:15%">操作</th></tr></thead><tbody>
+  {% for d in demand_rows %}
+  <tr>
+    <td>{{ d.demand_date }}</td>
+    <td>{{ d.supplier_name }}</td>
+    <td><div>{{ d.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ d.product_cd }} / {{ d.jan }}</div></td>
+    <td>{{ d.customer_name or '-' }}</td>
+    <td class="text-right">{{ d.demand_qty }}</td>
+    <td>{{ d.note or '-' }}</td>
+    <td class="inline-delete"><form method="post" action="/reports/forecast/demands/{{ d.id }}/delete" onsubmit="return confirm('削除しますか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline btn-sm">削除</button></form></td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% endif %}
+</div>
+{% endblock %}

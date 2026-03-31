@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}ピッキング候補{% endblock %}
+{% block content %}
+<div class="page-title"><span>🧾 FIFOピッキング候補</span><div class="page-title-actions"><a href="/inventory/picking/export_csv?days={{ days }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline btn-sm">CSV出力</a><a href="/inventory/picking/export_excel?days={{ days }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline btn-sm">Excel出力</a><a href="/inventory/picking/print?days={{ days }}{% if q %}&q={{ q|urlencode }}{% endif %}" target="_blank" class="btn btn-outline btn-sm">印刷用</a><a href="/inventory" class="btn btn-outline btn-sm">← 在庫一覧へ</a></div></div>
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/inventory/picking" class="search-form">
+    <input type="number" name="days" value="{{ days }}" min="1" max="30" style="width:90px">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="商品名・JAN・ロケーション" >
+    <button type="submit" class="btn btn-outline btn-sm">再計算</button>
+  </form>
+  <div class="help">直近{{ days }}日を基準に必要数量を見積もり、期限の古い順・ロケーション順でピック候補を出しています。</div>
+</div>
+<div class="card">
+  <div class="card-title">ピッキング明細</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:12%">仕入先</th><th style="width:11%">商品</th><th style="width:11%">ロケーション</th><th style="width:11%">賞味期限</th><th style="width:11%">ロット</th><th class="text-right" style="width:11%">在庫</th><th class="text-right" style="width:11%">必要数</th><th class="text-right" style="width:11%">ピック数</th><th class="text-right" style="width:11%">残必要数</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr {% if r.remaining_after == 0 %}style="background:#f0fdf4"{% endif %}>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td style="font-family:monospace">{{ r.location_code }}</td>
+    <td>{{ r.expiry_date or '期限なし' }}</td>
+    <td>{{ r.lot_no or '-' }}</td>
+    <td class="text-right">{{ r.quantity|format_number }}</td>
+    <td class="text-right">{{ r.need_qty|format_number }}</td>
+    <td class="text-right" style="font-weight:bold">{{ r.pick_qty|format_number }}</td>
+    <td class="text-right">{{ r.remaining_after|format_number }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

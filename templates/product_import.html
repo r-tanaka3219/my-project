@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}商品マスタ インポート{% endblock %}
+{% block content %}
+<div class="page-title">📥 商品マスタ インポート
+  <div style="display:flex;gap:8px">
+    <a href="/products/template" class="btn btn-outline btn-sm">📋 テンプレートDL</a>
+    <a href="/products" class="btn btn-outline btn-sm">← 商品一覧</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+
+<div class="card">
+  <div class="card-title">ファイルをアップロード</div>
+  <form method="post" enctype="multipart/form-data" action="/products/import">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>ファイル選択（Excel または CSV）</label>
+      <input type="file" name="file" accept=".xlsx,.csv" required
+             style="padding:8px;border:2px dashed #d1d5db;border-radius:8px;width:100%;cursor:pointer">
+      <div class="help">xlsx / csv に対応。ヘッダー行は日本語列名を使用してください。</div>
+    </div>
+    <div class="form-group">
+      <label>インポートモード</label>
+      <select name="mode">
+        <option value="upsert">追加＋更新（既存JAN・商品CDは上書き更新）</option>
+        <option value="add_only">追加のみ（既存JAN・商品CDはスキップ）</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%">
+      📥 インポート実行
+    </button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">📋 インポートの仕様</div>
+  <table style="table-layout:fixed;width:100%;font-size:12px"><thead>
+    <tr><th style="width:34%">列名</th><th style="width:33%">必須</th><th style="width:33%">説明</th></tr>
+  </thead><tbody>
+  {% for name, req, note in [
+    ('JANコード',        '必須', 'UNIQUEキー・数値で入力'),
+    ('商品コード',       '必須', '商品を識別するコード'),
+    ('商品名',           '必須', '商品の正式名称'),
+    ('仕入先コード',     '必須', '仕入先を識別するコード'),
+    ('仕入先名',         '必須', '仕入先の正式名称'),
+    ('入数',             '必須', '1ケースあたりの個数（例: 12）'),
+    ('発注単位',         '必須', '何ケース単位で発注するか（例: 1）'),
+    ('発注数量',         '必須', '1回の発注ケース数（例: 24）'),
+    ('発注点',           '必須', '在庫がこの数以下で自動発注（例: 48）'),
+    ('発注点自動更新',   '',     '1=する / 0=しない（省略時=1）'),
+    ('リードタイム日数', '',     '仕入先から納品までの日数（省略時=3）'),
+    ('安全係数',         '',     '発注点計算の余裕率（例: 1.3 = 30%増）'),
+    ('メーカーロット数', '',     '0=未使用（省略時=0）'),
+    ('賞味期限日数',     '',     '製造から賞味期限までの日数（省略時=365）'),
+    ('期限アラート日数', '',     '期限X日前にアラートメール（省略時=30）'),
+    ('混載グループ名',   '',     '同グループ商品を混載発注（省略可）'),
+    ('混載ロットルール', '',     'gte=合計がロット以上 / unit=ロット単位（省略時=gte）'),
+    ('混載ケース数',     '',     '混載の基準ケース数（省略時=3）'),
+    ('強制発注日数',     '',     'ロット未達でもX日後に強制発注（省略時=3）'),
+    ('原価',             '必須', '仕入原価・円（例: 150.00）'),
+    ('売価',             '必須', '販売価格・円（例: 200.00）'),
+  ] %}
+  <tr>
+    <td style="font-family:monospace;font-size:11px;white-space:nowrap">{{ name }}</td>
+    <td style="text-align:center">{% if req %}<span class="badge badge-red">{{ req }}</span>{% else %}<span style="color:#9ca3af;font-size:11px">任意</span>{% endif %}</td>
+    <td style="color:#6b7280;font-size:11px">{{ note }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  <div style="margin-top:12px;font-size:12px;color:#6b7280;line-height:1.8">
+    ・JANコードまたは商品CDがキーです。既存は更新、新規は追加されます。<br>
+    ・テンプレートExcelをダウンロードして編集するのが確実です。<br>
+    ・CSVの文字コードは <b>UTF-8</b> または <b>Shift-JIS</b> に対応しています。
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}入庫登録{% endblock %}
+{% block content %}
+<div class="page-title"><span>📥 入庫登録</span><div class="page-title-actions"><a href="/receipt/import" class="btn btn-outline btn-sm">📄 一括インポート</a><a href="/receipt/history" class="btn btn-outline btn-sm">📋 入庫履歴</a></div></div>
+
+<div class="card" style="max-width:560px">
+
+  {# ── 入力モード切替タブ ── #}
+  <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;max-width:420px">
+    <button type="button" id="tab-jan" onclick="switchMode('jan')"
+            style="flex:1;padding:7px;font-size:13px;font-weight:bold;border:none;cursor:pointer;
+                   background:#1d4ed8;color:white">
+      🔍 JAN / 商品CD入力
+    </button>
+    <button type="button" id="tab-sel" onclick="switchMode('sel')"
+            style="flex:1;padding:7px;font-size:13px;font-weight:bold;border:none;cursor:pointer;
+                   background:#f1f5f9;color:#475569">
+      📋 商品リストから選択
+    </button>
+  </div>
+
+  <form method="post" id="receipt-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ── モード①：JANコード直接入力 ── #}
+    <div id="mode-jan">
+      <div class="form-group">
+        <label>JANコード または 商品CD *</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="jan-input" placeholder="JANコードまたは商品CDを入力"
+                 style="flex:1;font-size:14px" oninput="lookupJan(this.value)">
+          <button type="button" onclick="clearJan()"
+                  style="padding:0 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;cursor:pointer">✕</button>
+        </div>
+      </div>
+
+      {# 商品情報プレビュー #}
+      <div id="jan-result" style="display:none;background:#f0fdf4;border:1px solid #86efac;
+            border-radius:6px;padding:10px;margin-bottom:12px;font-size:13px">
+        <div style="font-weight:bold;color:#15803d" id="jan-name">-</div>
+        <div style="color:#6b7280;margin-top:2px" id="jan-info">-</div>
+      </div>
+      <div id="jan-notfound" style="display:none;background:#fef2f2;border:1px solid #fca5a5;
+            border-radius:6px;padding:8px;margin-bottom:12px;font-size:12px;color:#dc2626">
+        ⚠️ この JANコードは商品マスタに登録されていません
+      </div>
+      <input type="hidden" name="jan" id="jan-hidden">
+    </div>
+
+    {# ── モード②：リスト選択 ── #}
+    <div id="mode-sel" style="display:none">
+      <div class="form-group">
+        <label>商品 *</label>
+        <select id="sel-product" onchange="onSelectProduct(this.value)">
+          <option value="">-- 選択してください --</option>
+          {% for p in products %}
+          <option value="{{ p.jan }}"
+                  data-name="{{ p.product_name }}"
+                  data-unit="{{ p.unit_qty|format_number }}"
+                  data-supplier="{{ p.supplier_name }}">
+            {{ p.product_name }}（商品CD: {{ p.product_cd or '-' }} / JAN: {{ p.jan }}）
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    {# ── 数量入力（共通・モード切替あり）── #}
+    <div id="qty-section" style="display:none">
+      <hr style="margin:12px 0;border-color:#e2e8f0">
+
+      {# 数量入力モードのサブ切替 #}
+      <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid #e2e8f0;
+                  border-radius:6px;overflow:hidden;max-width:300px">
+        <button type="button" id="qtab-pieces" onclick="switchQtyMode('pieces')"
+                style="flex:1;padding:5px;font-size:12px;border:none;cursor:pointer;
+                       background:#1d4ed8;color:white">
+          個数で入力
+        </button>
+        <button type="button" id="qtab-cases" onclick="switchQtyMode('cases')"
+                style="flex:1;padding:5px;font-size:12px;border:none;cursor:pointer;
+                       background:#f1f5f9;color:#475569">
+          ケース・ピースで入力
+        </button>
+      </div>
+
+      {# 個数入力 #}
+      <div id="qmode-pieces">
+        <div class="form-group">
+          <label>数量（個）*</label>
+          <input type="number" name="quantity" id="qty-direct" min="1" placeholder="例: 24"
+                 oninput="updateCaseCalc()">
+        </div>
+      </div>
+
+      {# ケース・ピース入力 #}
+      <div id="qmode-cases" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>ケース数</label>
+            <input type="number" id="cases-input" min="0" value="0" placeholder="0"
+                   oninput="calcFromCases()">
+          </div>
+          <div class="form-group">
+            <label>ピース（端数）</label>
+            <input type="number" id="pieces-input" min="0" value="0" placeholder="0"
+                   oninput="calcFromCases()">
+          </div>
+          <div class="form-group">
+            <label>入数（1ケース）</label>
+            <input type="number" id="unit-input" min="1" value="1" placeholder="12"
+                   oninput="calcFromCases()">
+            <div class="help">商品マスタから自動取得</div>
+          </div>
+        </div>
+        <div id="case-calc-result"
+             style="background:#eff6ff;border-radius:6px;padding:8px;margin-bottom:8px;
+                    font-size:13px;font-weight:bold;color:#1d4ed8">
+          合計: 0 個
+        </div>
+        {# hiddenで quantity に反映 #}
+        <input type="hidden" name="quantity" id="qty-from-cases" value="0">
+      </div>
+
+      {# 共通フィールド #}
+      <div class="form-group">
+        <label>賞味期限</label>
+        <input type="date" name="expiry_date" required>
+      </div>
+      <div class="form-group">
+        <label>ロット番号</label>
+        <input type="text" name="lot_no" placeholder="任意">
+      </div>
+      <div class="form-group">
+        <label>ロケーション</label>
+        <input type="text" name="location_code" placeholder="例: A-01-03（空欄なら商品マスタ初期値）">
+      </div>
+
+      <div class="form-actions"><button type="submit" class="btn btn-primary" id="submit-btn">入庫登録</button></div>
+    </div>
+
+  </form>
+</div>
+
+<script>
+// 商品データ（JANコード検索用）
+const products = {
+  {% for p in products %}
+  "{{ p.jan }}": {
+    name: "{{ p.product_name }}",
+    unit: {{ p.unit_qty }},
+    supplier: "{{ p.supplier_name }}",
+    jan: "{{ p.jan }}",
+    product_cd: "{{ p.product_cd or '' }}"
+  },
+  {% if p.product_cd %}"{{ p.product_cd }}": {
+    name: "{{ p.product_name }}",
+    unit: {{ p.unit_qty }},
+    supplier: "{{ p.supplier_name }}",
+    jan: "{{ p.jan }}",
+    product_cd: "{{ p.product_cd or '' }}"
+  },{% endif %}
+  {% endfor %}
+};
+
+let currentMode = 'jan';
+let currentQtyMode = 'pieces';
+
+// ── モード切替 ──────────────────────────────────────────────────
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-jan').style.display = mode === 'jan' ? 'block' : 'none';
+  document.getElementById('mode-sel').style.display = mode === 'sel' ? 'block' : 'none';
+  document.getElementById('tab-jan').style.background = mode === 'jan' ? '#1d4ed8' : '#f1f5f9';
+  document.getElementById('tab-jan').style.color      = mode === 'jan' ? 'white'   : '#475569';
+  document.getElementById('tab-sel').style.background = mode === 'sel' ? '#1d4ed8' : '#f1f5f9';
+  document.getElementById('tab-sel').style.color      = mode === 'sel' ? 'white'   : '#475569';
+  document.getElementById('qty-section').style.display = 'none';
+  document.getElementById('jan-hidden').value = '';
+}
+
+// ── JANコード検索 ────────────────────────────────────────────────
+let lookupTimer = null;
+function lookupJan(val) {
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(() => {
+    const v = val.trim();
+    if (!v) { hideJanResult(); return; }
+    const p = products[v];
+    if (p) {
+      document.getElementById('jan-result').style.display = 'block';
+      document.getElementById('jan-notfound').style.display = 'none';
+      document.getElementById('jan-name').textContent = '✅ ' + p.name;
+      document.getElementById('jan-info').textContent =
+        `商品CD: ${p.product_cd}　JAN: ${p.jan}　仕入先: ${p.supplier}　入数: ${p.unit}個/ケース`;
+      document.getElementById('jan-hidden').value = v;
+      document.getElementById('unit-input').value = p.unit;
+      showQtySection();
+    } else {
+      document.getElementById('jan-result').style.display = 'none';
+      document.getElementById('jan-notfound').style.display = 'block';
+      document.getElementById('jan-hidden').value = '';
+      document.getElementById('qty-section').style.display = 'none';
+    }
+  }, 300);
+}
+
+function hideJanResult() {
+  document.getElementById('jan-result').style.display = 'none';
+  document.getElementById('jan-notfound').style.display = 'none';
+  document.getElementById('qty-section').style.display = 'none';
+  document.getElementById('jan-hidden').value = '';
+}
+
+function clearJan() {
+  document.getElementById('jan-input').value = '';
+  hideJanResult();
+}
+
+// ── リスト選択 ───────────────────────────────────────────────────
+function onSelectProduct(jan) {
+  if (!jan) { document.getElementById('qty-section').style.display='none'; return; }
+  document.getElementById('jan-hidden').value = jan;
+  const opt = document.querySelector(`#sel-product option[value="${jan}"]`);
+  if (opt) {
+    const unit = parseInt(opt.dataset.unit) || 1;
+    document.getElementById('unit-input').value = unit;
+  }
+  showQtySection();
+}
+
+// ── 数量セクション表示 ────────────────────────────────────────────
+function showQtySection() {
+  document.getElementById('qty-section').style.display = 'block';
+}
+
+// ── 数量入力モード切替 ────────────────────────────────────────────
+function switchQtyMode(mode) {
+  currentQtyMode = mode;
+  const isPieces = mode === 'pieces';
+  document.getElementById('qmode-pieces').style.display = isPieces ? 'block' : 'none';
+  document.getElementById('qmode-cases').style.display  = isPieces ? 'none'  : 'block';
+  document.getElementById('qtab-pieces').style.background = isPieces ? '#1d4ed8' : '#f1f5f9';
+  document.getElementById('qtab-pieces').style.color      = isPieces ? 'white'   : '#475569';
+  document.getElementById('qtab-cases').style.background  = isPieces ? '#f1f5f9' : '#1d4ed8';
+  document.getElementById('qtab-cases').style.color       = isPieces ? '#475569' : 'white';
+
+  // name属性を切替（サーバーへ送る quantity を1つにする）
+  const direct = document.getElementById('qty-direct');
+  const fromCases = document.getElementById('qty-from-cases');
+  if (isPieces) {
+    direct.name = 'quantity';
+    fromCases.name = '';
+  } else {
+    direct.name = '';
+    fromCases.name = 'quantity';
+    calcFromCases();
+  }
+}
+
+// ── ケース×入数＋ピース計算 ──────────────────────────────────────
+function calcFromCases() {
+  const cases  = parseInt(document.getElementById('cases-input').value)  || 0;
+  const pieces = parseInt(document.getElementById('pieces-input').value) || 0;
+  const unit   = parseInt(document.getElementById('unit-input').value)   || 1;
+  const total  = cases * unit + pieces;
+  document.getElementById('qty-from-cases').value = total;
+  document.getElementById('case-calc-result').textContent =
+    `合計: ${cases}ケース × ${unit}個 ＋ ${pieces}ピース ＝ ${total} 個`;
+}
+
+function updateCaseCalc() { /* 個数モード時は何もしない */ }
+
+// ── フォーム送信前バリデーション ─────────────────────────────────
+document.getElementById('receipt-form').addEventListener('submit', function(e) {
+  const jan = document.getElementById('jan-hidden').value;
+  if (!jan) {
+    e.preventDefault();
+    alert('商品を選択またはJANコードを入力してください。');
+    return;
+  }
+  if (currentQtyMode === 'cases') {
+    const total = parseInt(document.getElementById('qty-from-cases').value) || 0;
+    if (total <= 0) {
+      e.preventDefault();
+      alert('数量が0です。ケース数またはピース数を入力してください。');
+      return;
+    }
+  } else {
+    const qty = parseInt(document.getElementById('qty-direct').value) || 0;
+    if (qty <= 0) {
+      e.preventDefault();
+      alert('数量を入力してください。');
+      return;
+    }
+  }
+});
+</script>
+{% endblock %}

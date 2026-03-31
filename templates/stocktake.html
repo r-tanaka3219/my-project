@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}棚卸{% endblock %}
+{% block content %}
+<div class="page-title">📋 棚卸管理
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    {% if rows %}
+    <form method="get" style="display:flex;gap:6px;align-items:center">
+      <input type="hidden" name="date" value="{{ count_date }}">
+      <input type="text" name="q" value="{{ q or '' }}"
+             placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+             style="width:220px;padding:4px 8px;font-size:12px;border:1px solid #d1d5db;border-radius:6px">
+      <button type="submit" class="btn btn-outline btn-sm">🔍</button>
+      {% if q %}<a href="/stocktake?date={{ count_date }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
+    </form>
+    <button onclick="printStocktake()" class="btn btn-outline btn-sm">🖨️ 印刷</button>
+    <a href="/stocktake/export_excel?date={{ count_date }}" class="btn btn-success btn-sm">📊 Excel出力</a>
+    {% endif %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;margin-bottom:16px">
+<div>
+<div class="card">
+  <div class="card-title">棚卸リスト作成</div>
+  <form method="post" action="/stocktake/create">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>棚卸日</label>
+      <input type="date" name="count_date" value="{{ month_end }}" required></div>
+    <button type="submit" class="btn btn-primary" style="width:100%">棚卸リスト作成</button>
+  </form>
+</div>
+<div class="card">
+  <div class="card-title">過去の棚卸</div>
+  {% for d in dates %}
+  <div style="margin-bottom:4px">
+    <a href="/stocktake?date={{ d.count_date }}"
+       class="btn btn-sm {% if d.count_date == count_date %}btn-primary{% else %}btn-outline{% endif %}"
+       style="width:100%;text-align:left">
+      {{ d.count_date }}
+    </a>
+  </div>
+  {% else %}
+  <p style="color:#9ca3af;font-size:12px">棚卸履歴なし</p>
+  {% endfor %}
+</div>
+</div>
+
+<div>
+{% if rows %}
+<div class="card" id="print-area">
+  <div class="card-title" style="color:#7c3aed">
+    📋 棚卸リスト：{{ count_date }}
+    {% set diff_count = rows|selectattr("diff_qty")|list|length %}
+    {% if diff_count > 0 %}
+    <span class="badge badge-orange" style="margin-left:8px">差異 {{ diff_count }}件</span>
+    {% endif %}
+    <span style="font-size:11px;color:#9ca3af;font-weight:normal;margin-left:8px">
+      全{{ rows|length }}商品
+    </span>
+  </div>
+
+  <!-- 印刷用ヘッダー（画面では非表示） -->
+  <div class="print-only" style="display:none;text-align:center;margin-bottom:16px">
+    <div style="font-size:20px;font-weight:bold">棚卸リスト</div>
+    <div style="font-size:14px;color:#374151;margin-top:4px">棚卸日：{{ count_date }}</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:2px">出力日時：<span id="print-datetime"></span></div>
+  </div>
+
+  <form method="post" action="/stocktake/save">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="count_date" value="{{ count_date }}">
+    {% for r in rows %}
+    <input type="hidden" name="jan" value="{{ r.jan }}">
+    {% endfor %}
+    <table style="table-layout:fixed;width:100%" id="stocktake-table">
+<colgroup>
+  <col><col><col><col><col><col><col><col><col><col>
+</colgroup>
+<thead><tr>
+      <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th>
+      <th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:18%">商品名</th>
+      <th class="text-right" style="width:6%">入数</th>
+      <th class="text-right" style="width:8%">理論在庫</th>
+      <th class="text-right" style="width:9%">実棚数</th>
+      <th class="text-right" style="width:6%">差異</th>
+      <th class="text-right print-hide" style="width:8%">原価(円)</th>
+      <th class="print-hide" style="width:6%">調整</th>
+      <th style="width:12%">備考</th>
+    </tr></thead><tbody>
+    {% for r in rows %}
+    <tr id="row_{{ loop.index }}"
+        style="{% if r.adjusted and r.diff_qty < 0 %}background:#fff7f7
+               {% elif r.adjusted and r.diff_qty > 0 %}background:#f0fdf4
+               {% endif %}">
+      <td style="font-family:monospace;font-size:12px">{{ r.supplier_cd or '-' }}</td>
+      <td style="font-size:12px">{{ r.supplier_name or '-' }}</td>
+      <td style="font-family:monospace;font-size:12px">{{ r.product_cd or '-' }}</td>
+      <td style="font-family:monospace;font-size:12px">{{ r.jan }}</td>
+      <td>{{ r.product_name }}</td>
+      <td class="text-right">{{ r.unit_qty or '-' }}</td>
+      <td class="text-right">
+        <b>{{ r.system_qty|format_number }}</b>
+        {% if expiry_detail.get(r.jan) %}
+        <div style="margin-top:4px;font-size:10px;color:#6b7280;text-align:left;
+                    background:#f8fafc;border-radius:4px;padding:2px 4px;
+                    border-left:2px solid #e2e8f0">
+          {% for ed in expiry_detail[r.jan] %}
+          <div style="display:flex;justify-content:space-between;gap:6px;white-space:nowrap">
+            <span style="color:#9ca3af">{{ ed.expiry_date }}</span>
+            <span style="font-weight:bold;color:#374151">{{ ed.qty|format_number }}個</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </td>
+      <td class="text-right">
+        {% if expiry_detail.get(r.jan) and expiry_detail[r.jan]|length > 1 %}
+        {# 賞味期限複数：賞味期限ごとに入力 #}
+        <div class="print-hide">
+          {% for ed in expiry_detail[r.jan] %}
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;white-space:nowrap">
+            <span style="font-size:10px;color:#9ca3af;min-width:80px">{{ ed.expiry_date }}</span>
+            <input type="number" name="actual_{{ r.jan }}_{{ ed.stock_id }}"
+                   id="actual_{{ r.jan }}_{{ ed.stock_id }}"
+                   value="{{ ed.actual if ed.actual is not none else '' }}"
+                   placeholder="{{ ed.qty|format_number }}"
+                   style="width:70px;text-align:right;font-size:12px"
+                   oninput="calcDiffExpiry('{{ r.jan }}')">
+          </div>
+          {% endfor %}
+          <div style="font-size:10px;color:#6b7280;margin-top:2px">
+            合計: <span id="total_{{ r.jan }}">-</span>個
+          </div>
+        </div>
+        <span class="print-only" style="display:none">&nbsp;</span>
+        {% else %}
+        {# 賞味期限1種類または賞味期限なし：合計入力 #}
+        <span class="print-hide">
+          <input type="number" name="actual_{{ r.jan }}"
+                 id="actual_{{ r.jan }}"
+                 value="{{ r.actual_qty if r.adjusted else '' }}"
+                 placeholder="{{ r.system_qty|format_number }}"
+                 style="width:90px;text-align:right"
+                 oninput="calcDiff('{{ r.jan }}', {{ r.system_qty|format_number }})">
+        </span>
+        <span class="print-only" style="display:none">&nbsp;</span>
+        {% endif %}
+      </td>
+      <td class="text-right" id="diff_{{ r.jan }}" data-sysqty="{{ r.system_qty|format_number }}">
+        <span class="print-hide">
+          {% if r.adjusted %}
+            {% if r.diff_qty < 0 %}<span class="badge badge-red">{{ r.diff_qty|format_number }}</span>
+            {% elif r.diff_qty > 0 %}<span class="badge badge-green">+{{ r.diff_qty|format_number }}</span>
+            {% else %}<span class="badge badge-gray">±0</span>{% endif %}
+          {% else %}<span style="color:#d1d5db">-</span>{% endif %}
+        </span>
+        <span class="print-only" style="display:none">&nbsp;</span>
+      </td>
+      <td class="text-right print-hide" style="font-size:12px;color:#6b7280">{{ "{:,.0f}".format(r.cost_price or 0) if r.cost_price else '-' }}</td>
+      <td class="print-hide">
+        {% if r.adjusted %}<span class="badge badge-green">済</span>{% endif %}
+      </td>
+      <td>
+        <span class="print-hide">
+          <input type="text" name="note_{{ r.jan }}"
+                 value="{{ r.note or '' }}" placeholder="メモ"
+                 style="font-size:12px">
+        </span>
+        <span class="print-only" style="display:none">&nbsp;</span>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+
+    <div class="print-hide" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      <button type="submit" class="btn btn-primary">💾 実棚数を保存</button>
+      <form method="post" action="/stocktake/apply" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="count_date" value="{{ count_date }}">
+        <button type="submit" class="btn btn-danger"
+                onclick="return confirm('差異を在庫に反映しますか？\n※この操作は取り消せません。')">
+          ⚡ 差異を在庫に反映
+        </button>
+      </form>
+    </div>
+  </form>
+
+  <!-- 印刷用サマリー -->
+  <div class="print-only" style="display:none;margin-top:20px;border-top:2px solid #374151;padding-top:10px">
+    <table style="table-layout:fixed;width:100%;width:auto">
+      <tr><td style="padding:3px 16px 3px 0;font-weight:bold">総商品数：</td><td>{{ rows|length }}品目</td></tr>
+    </table>
+    <div style="margin-top:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:30px;font-size:13px">
+      <div>担当者：<span style="border-bottom:1px solid #374151;display:inline-block;width:120px">&nbsp;</span></div>
+      <div>確認者：<span style="border-bottom:1px solid #374151;display:inline-block;width:120px">&nbsp;</span></div>
+      <div>承認者：<span style="border-bottom:1px solid #374151;display:inline-block;width:120px">&nbsp;</span></div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p style="color:#6b7280;padding:20px 0;line-height:2">
+    左の「棚卸リスト作成」で日付を指定してリストを作成してください。<br>
+    <span style="font-size:12px;color:#9ca3af">月末日付での作成が標準的です。作成後は実棚数を入力してExcelや印刷で活用できます。</span>
+  </p>
+</div>
+{% endif %}
+</div>
+</div>
+
+<style>
+@media print {
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: white;
+    font-size: 8pt; font-family: 'Meiryo', 'MS Gothic', sans-serif; }
+
+  nav, .print-hide, .page-title,
+  div[style*="grid-template-columns:260px"] > div:first-child,
+  .card:not(#print-area) { display: none !important; }
+
+  .print-only { display: inline !important; }
+  .print-hide { display: none !important; }
+  .main { margin: 0 !important; padding: 5mm 6mm !important; }
+  #print-area { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; }
+  div[style*="grid-template-columns:260px"] { display: block !important; }
+  div[style*="display:grid"] { display: block !important; }
+
+  #stocktake-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 7pt !important;
+    table-layout: fixed !important;
+    margin-top: 3mm;
+    word-break: break-all;
+  }
+  #stocktake-table colgroup col:nth-child(1)  { width: 6%; }
+  #stocktake-table colgroup col:nth-child(2)  { width: 12%; }
+  #stocktake-table colgroup col:nth-child(3)  { width: 6%; }
+  #stocktake-table colgroup col:nth-child(4)  { width: 10%; }
+  #stocktake-table colgroup col:nth-child(5)  { width: 20%; }
+  #stocktake-table colgroup col:nth-child(6)  { width: 4%; }
+  #stocktake-table colgroup col:nth-child(7)  { width: 18%; }
+  #stocktake-table colgroup col:nth-child(8)  { width: 5%; }
+  #stocktake-table colgroup col:nth-child(9)  { width: 5%; }
+  #stocktake-table colgroup col:nth-child(10) { width: 14%; }
+
+  #stocktake-table th {
+    background: #1a2744 !important; color: white !important;
+    font-size: 7pt !important; font-weight: bold !important;
+    padding: 3px 3px !important; border: 0.5pt solid #555 !important;
+    text-align: center !important; white-space: nowrap !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+  #stocktake-table td {
+    font-size: 7pt !important; padding: 2px 3px !important;
+    border: 0.5pt solid #bbb !important; vertical-align: middle !important;
+    overflow: hidden !important; white-space: nowrap !important;
+  }
+  #stocktake-table td:nth-child(7) {
+    white-space: normal !important;
+    font-size: 6pt !important;
+  }
+  #stocktake-table tbody tr:nth-child(even) td {
+    background: #f7f7f7 !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+  /* 実棚数・差異・備考は完全空白 */
+  #stocktake-table td span.print-only {
+    display: inline-block !important;
+    width: 100%;
+    min-height: 12px;
+  }
+  .badge-red   { background:#fee2e2 !important; color:#dc2626 !important; padding:0 2px; font-size:6.5pt; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  .badge-green { background:#dcfce7 !important; color:#16a34a !important; padding:0 2px; font-size:6.5pt; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  .badge-gray  { color:#9ca3af !important; font-size:6.5pt; }
+
+  thead { display: table-header-group !important; }
+  #stocktake-table tbody tr { page-break-inside: avoid !important; }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm 8mm 8mm 8mm;
+  }
+}
+</style>
+
+<script>
+function calcDiff(jan, sysQty) {
+  const input = document.getElementById('actual_' + jan);
+  const el = document.getElementById('diff_' + jan);
+  const val = input.value;
+  if (val === '') { el.innerHTML = '<span style="color:#d1d5db">-</span>'; return; }
+  const actual = parseInt(val) || 0;
+  const diff = actual - sysQty;
+  if (diff < 0)      el.innerHTML = '<span class="badge badge-red">'  + diff + '</span>';
+  else if (diff > 0) el.innerHTML = '<span class="badge badge-green">+' + diff + '</span>';
+  else               el.innerHTML = '<span class="badge badge-gray">±0</span>';
+}
+
+function calcDiffExpiry(jan) {
+  // 賞味期限別入力の合計を計算して差異を表示
+  let total = 0;
+  let hasInput = false;
+  document.querySelectorAll('[name^="actual_' + jan + '_"]').forEach(inp => {
+    if (inp.value !== '') {
+      total += parseInt(inp.value) || 0;
+      hasInput = true;
+    }
+  });
+  const totalEl = document.getElementById('total_' + jan);
+  if (totalEl) totalEl.textContent = hasInput ? total : '-';
+  const el = document.getElementById('diff_' + jan);
+  if (!el) return;
+  const sysQty = parseInt(el.dataset.sysqty || 0);
+  if (!hasInput) { el.innerHTML = '<span style="color:#d1d5db">-</span>'; return; }
+  const diff = total - sysQty;
+  if (diff < 0)      el.innerHTML = '<span class="badge badge-red">'  + diff + '</span>';
+  else if (diff > 0) el.innerHTML = '<span class="badge badge-green">+' + diff + '</span>';
+  else               el.innerHTML = '<span class="badge badge-gray">±0</span>';
+}
+
+function printStocktake() {
+  // 印刷前に日時をセット
+  const el = document.getElementById('print-datetime');
+  if (el) el.textContent = new Date().toLocaleString('ja-JP');
+  document.querySelectorAll('.print-only').forEach(e => e.style.display = 'block');
+
+  // 実棚数・差異・備考セルを空白に置き換え
+  const savedActual = [];
+  const savedDiff = [];
+  const savedNote = [];
+
+  document.querySelectorAll('#stocktake-table input[type="number"]').forEach((inp, i) => {
+    savedActual.push({ el: inp.parentElement, html: inp.parentElement.innerHTML });
+    inp.parentElement.innerHTML = '';
+  });
+  document.querySelectorAll('#stocktake-table td[id^="diff_"]').forEach((td, i) => {
+    savedDiff.push({ el: td, html: td.innerHTML });
+    td.innerHTML = '';
+  });
+  document.querySelectorAll('#stocktake-table input[type="text"]').forEach((inp, i) => {
+    savedNote.push({ el: inp.parentElement, html: inp.parentElement.innerHTML });
+    inp.parentElement.innerHTML = '';
+  });
+
+  window.print();
+
+  // 印刷後に元に戻す
+  setTimeout(() => {
+    savedActual.forEach(s => s.el.innerHTML = s.html);
+    savedDiff.forEach(s => s.el.innerHTML = s.html);
+    savedNote.forEach(s => s.el.innerHTML = s.html);
+    document.querySelectorAll('.print-only').forEach(e => e.style.display = 'none');
+  }, 1000);
+}
+</script>
+{% endblock %}

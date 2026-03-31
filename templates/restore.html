@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}データ復元{% endblock %}
+{% block content %}
+<div class="page-title">♻️ データ復元</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card" style="border-left:4px solid #f59e0b;margin-bottom:16px">
+  <div class="card-title" style="color:#d97706">⚠️ 注意事項</div>
+  <ul style="font-size:13px;color:#374151;line-height:2;margin:0;padding-left:20px">
+    <li>バックアップExcelファイル（<b>在庫管理システム_バックアップ_YYYY-MM-DD.xlsx</b>）を使用してください。</li>
+    <li>「在庫一覧」「発注履歴」「廃棄退避在庫」「入庫履歴」「棚卸データ」は<b>既存データを全削除</b>してから復元します。</li>
+    <li>「商品マスタ」はJANコードまたは商品CDをキーに<b>追加・更新</b>します（削除はしません）。</li>
+    <li>復元前に現在のデータをバックアップすることを推奨します。</li>
+  </ul>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+
+<div class="card">
+  <div class="card-title">復元ファイルを選択</div>
+  <form method="post" action="/admin/restore" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>バックアップファイル（.xlsx）*</label>
+      <input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required
+             style="padding:8px;border:2px dashed #d1d5db;border-radius:8px;width:100%;cursor:pointer">
+      <div class="help">在庫管理システム_バックアップ_YYYY-MM-DD.xlsx</div>
+    </div>
+
+    <div class="form-group">
+      <label>復元対象を選択 *</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer">
+          <input type="checkbox" name="targets" value="商品マスタ" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📦 商品マスタ</div>
+            <div style="font-size:11px;color:#6b7280">JANコード・商品CDをキーに追加・更新（既存削除なし）</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="在庫一覧" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">🏷️ 在庫一覧</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の在庫データを全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="発注履歴" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📋 発注履歴</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の発注履歴を全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="廃棄退避在庫" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">🗑 廃棄退避在庫</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の廃棄退避データを全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="入庫履歴" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📥 入庫履歴</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の入庫履歴を全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="棚卸データ" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📋 棚卸データ</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の棚卸データを全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="CSV取込ログ" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📄 CSV取込ログ</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存のCSV取込ログを全削除してから復元</div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;background:#fff8f8">
+          <input type="checkbox" name="targets" value="CSVインポートデータ" style="margin-top:2px;transform:scale(1.2)">
+          <div>
+            <div style="font-weight:bold;font-size:13px">📊 CSVインポートデータ（売上実績）</div>
+            <div style="font-size:11px;color:#dc2626">⚠️ 既存の売上実績データを全削除してから復元</div>
+          </div>
+        </label>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-warning" style="width:100%"
+            onclick="return confirm('選択した対象を復元しますか？\n\n商品マスタ以外は既存データが全削除されます。')">
+      ♻️ 復元実行
+    </button>
+  </form>
+</div>
+
+<div>
+  <div class="card">
+    <div class="card-title">復元できるデータ</div>
+    <table style="table-layout:fixed;width:100%;font-size:12px"><thead>
+      <tr><th style="width:50%">対象</th><th style="width:50%">復元方式</th></tr>
+    </thead><tbody>
+      <tr><td>📦 商品マスタ</td><td><span class="badge badge-blue">JAN・商品CDで追加・更新</span></td></tr>
+      <tr><td>🏷️ 在庫一覧</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+      <tr><td>📋 発注履歴</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+      <tr><td>🗑 廃棄退避在庫</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+      <tr><td>📥 入庫履歴</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+      <tr><td>📋 棚卸データ</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+      <tr><td>📄 CSV取込ログ</td><td><span class="badge badge-red">全削除→復元</span></td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💾 バックアップを取得</div>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">復元前に現在のデータをバックアップしてください。</p>
+    <a href="/admin/backup" class="btn btn-success btn-sm">💾 バックアップをダウンロード</a>
+    <div style="margin-top:10px">
+      <a href="/admin/bulk_delete" class="btn btn-outline btn-sm">← 一括削除画面</a>
+    </div>
+  </div>
+</div>
+
+</div>
+{% endblock %}

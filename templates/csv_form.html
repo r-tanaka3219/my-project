@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% block title %}CSV取込設定{% endblock %}
+{% block content %}
+<div class="page-title">{% if setting %}✏️ CSV設定編集{% else %}➕ CSV取込設定 新規作成{% endif %}</div>
+<div class="card" style="max-width:720px">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group"><label>設定名 *</label>
+    <input type="text" name="name" value="{{ setting.name if setting else '' }}" placeholder="例: 日次売上CSV" required></div>
+  <div class="form-group"><label>取込種別</label>
+    <select name="import_type" id="import_type" onchange="onImportTypeChange(this)">
+      <option value="sales"       {% if not setting or setting.import_type=='sales'       %}selected{% endif %}>販売データ（在庫から引き算・自動引当）</option>
+      <option value="receipt"     {% if setting and  setting.import_type=='receipt'       %}selected{% endif %}>入庫データ（在庫に加算）</option>
+      <option value="record_only" {% if setting and  setting.import_type=='record_only'   %}selected{% endif %}>記録のみ（引き当てなし・過去データ用）</option>
+    </select>
+    <div id="warning-sales" style="display:{% if not setting or setting.import_type=='sales' %}flex{% else %}none{% endif %};
+         margin-top:8px;padding:12px 14px;background:#fee2e2;border:2px solid #dc2626;
+         border-radius:8px;gap:10px;align-items:flex-start">
+      <span style="font-size:24px">🚨</span>
+      <div style="font-size:12px;color:#7f1d1d">
+        <div style="font-size:14px;font-weight:bold;color:#dc2626;margin-bottom:6px">
+          ⛔ 在庫引き当てモード（通常運用専用）
+        </div>
+        このモードでCSVを取込むと<b style="color:#dc2626">在庫数が自動的に減算されます。</b><br><br>
+        <div style="background:#fecaca;border-radius:4px;padding:6px 10px;margin:4px 0">
+          ❌ <b>過去データ・前年実績のインポートには絶対に使用しないでください</b><br>
+          　　在庫数が大幅にマイナスになり、システムが正常に動作しなくなります。
+        </div>
+        <div style="margin-top:6px">
+          ✅ 過去実績を取込む場合は必ず下記を選択してください：<br>
+          　　→ <b>「記録のみ（引き当てなし・過去データ用）」</b>
+        </div>
+      </div>
+    </div>
+    <div id="warning-record" style="display:{% if setting and setting.import_type=='record_only' %}flex{% else %}none{% endif %};
+         margin-top:8px;padding:12px 14px;background:#dbeafe;border:2px solid #3b82f6;
+         border-radius:8px;gap:10px;align-items:flex-start">
+      <span style="font-size:24px">📋</span>
+      <div style="font-size:12px;color:#1e3a8a">
+        <div style="font-size:14px;font-weight:bold;color:#1d4ed8;margin-bottom:6px">
+          ✅ 記録のみモード（過去データ取込中）
+        </div>
+        在庫の引き当ては<b>一切行いません。</b>前年実績データの蓄積専用モードです。<br><br>
+        <div style="background:#bfdbfe;border-radius:4px;padding:6px 10px;margin:4px 0">
+          ⚠️ 過去データの取込が<b>完全に完了したら</b>、必ず元に戻してください：<br>
+          　　→ <b>「販売データ（在庫から引き算・自動引当）」</b><br>
+          　　戻すと自動取込が自動的に有効になります。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="form-group"><label>監視フォルダパス</label>
+    <div class="search-form">
+      <input type="text" name="folder_path" id="folder_path"
+             value="{{ setting.folder_path if setting else '' }}"
+             placeholder="\\192.168.201.165\csvout\sato_jiseki\day"
+             autocomplete="off" >
+      <button type="button" class="btn btn-outline btn-sm" onclick="openFolderBrowser()"
+              style="white-space:nowrap">📁 参照...</button>
+    </div>
+    <div class="help" style="margin-top:4px">
+      ネットワーク例: <code>\\192.168.201.165\csvout</code>　
+      ローカル例: <code>C:\Users\sato-mzk-002\csv_in</code>
+    </div>
+  </div>
+  </div>
+  <div class="card" style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px;margin-bottom:12px">
+    <div class="card-title" style="font-size:13px;margin-bottom:8px">🔐 ネットワーク認証（ネット共有フォルダのみ）</div>
+    <div class="help" style="margin-bottom:8px">UNCパス（\\サーバー名\共有名）の場合のみ入力してください。ローカルフォルダは不要です。</div>
+    <div class="form-row">
+      <div class="form-group"><label>ユーザー名</label>
+        <input type="text" name="net_user"
+               value="{{ setting.net_user if setting else '' }}"
+               placeholder="例: DOMAIN\yamada または yamada" autocomplete="off"></div>
+      <div class="form-group"><label>パスワード</label>
+        <input type="password" name="net_pass"
+               value="{{ setting.net_pass if setting else '' }}"
+               placeholder="ネットワーク共有パスワード" autocomplete="new-password"></div>
+    </div>
+  </div>
+  <div class="form-group"><label>ファイル名パターン</label>
+    <input type="text" name="filename_pattern"
+           value="{{ setting.filename_pattern if setting else '*{yyyymmdd}.csv' }}"
+           placeholder="例: *{yyyymmdd}.csv">
+    <div class="help">
+      <b style="color:#1d4ed8">{yyyymm}</b>=年月6桁（月次・推奨）　
+      <b>{yyyymmdd}</b>=年月日8桁（日次）　
+      {yyyy}=年4桁　{mm}=月2桁　{dd}=日2桁　*=ワイルドカード<br>
+      <span style="color:#1d4ed8">月次例: <code>{yyyymm}_売上実績.csv</code> → 3月: <b>202603_売上実績.csv</b> / 4月: <b>202604_売上実績.csv</b>（毎月自動更新）</span>
+    </div></div>
+  <div class="form-row" style="align-items:start">
+    <div class="form-group" style="flex:2">
+      <label>自動実行時刻（複数可）</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="time-slots">
+        {# 既存設定から時刻リストを生成 #}
+        {% set times = (setting.run_times if setting and setting.run_times else '06:00').split(',') %}
+        {% for t in times %}
+        <div class="time-slot" style="display:flex;align-items:center;gap:4px;background:#f1f5f9;padding:4px 8px;border-radius:6px">
+          <input type="time" name="run_times_list" value="{{ t.strip() }}"
+                 style="border:none;background:transparent;font-size:13px;font-weight:bold;color:#1d4ed8;cursor:pointer;width:90px">
+          <button type="button" onclick="removeSlot(this)" title="削除"
+                  style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px;padding:0 2px">✕</button>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px;align-items:center">
+        <button type="button" onclick="addSlot()" class="btn btn-outline btn-sm"
+                style="font-size:11px">＋ 時刻を追加</button>
+        <span style="font-size:11px;color:#9ca3af">例: 06:00, 12:00, 18:00 → 1日3回実行</span>
+      </div>
+      <input type="hidden" name="run_times" id="run_times_hidden"
+             value="{{ setting.run_times if setting else '06:00' }}">
+    </div>
+    <div class="form-group"><label>文字コード</label>
+      <select name="encoding">
+        <option value="utf-8-sig" {% if not setting or setting.encoding=='utf-8-sig' %}selected{% endif %}>UTF-8 BOM付き（推奨）</option>
+        <option value="utf-8"     {% if setting and setting.encoding=='utf-8'     %}selected{% endif %}>UTF-8</option>
+        <option value="shift_jis" {% if setting and setting.encoding=='shift_jis' %}selected{% endif %}>Shift-JIS</option>
+        <option value="cp932"     {% if setting and setting.encoding=='cp932'     %}selected{% endif %}>CP932（Windows）</option>
+      </select></div>
+  </div>
+
+  <hr>
+
+  {# ── フィルター設定 ── #}
+  <div style="background:#eff6ff;border-radius:8px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:bold;color:#1d4ed8;margin-bottom:10px">🔍 インポートフィルター</div>
+    <div class="form-row">
+      <div class="form-group"><label>フィルター列名</label>
+        <input type="text" name="col_filter_cd" id="col_filter_cd"
+               value="{{ setting.col_filter_cd if setting else '担当CD' }}"
+               placeholder="担当CD">
+        <div class="help">絞り込みに使う列名。空欄=フィルターなし（全行取込）</div>
+        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
+          よく使う列：
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px"
+                  onclick="setFilter('担当CD')">担当CD</button>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px"
+                  onclick="setFilter('仕入先CD')">仕入先CD</button>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px"
+                  onclick="setFilter('売上区分')">売上区分</button>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px"
+                  onclick="setFilter('部門')">部門</button>
+        </div>
+      </div>
+      <div class="form-group" style="flex:2"><label>フィルター値（複数はカンマ区切り）</label>
+        <input type="text" name="filter_cd_values" id="filter_cd_values"
+               value="{{ setting.filter_cd_values if setting else '' }}"
+               placeholder="例: 6　または　6, 7, 10">
+        <div class="help">
+          担当CD=6のみ取込 → <code>6</code>　　担当CD=6または7 → <code>6, 7</code>　　空欄=全行取込
+        </div></div>
+    </div>
+  </div>
+
+  {# ── CSV列名マッピング ── #}
+  <div class="card-title" style="margin-bottom:6px">CSV列名マッピング</div>
+  <div style="font-size:11px;color:#6b7280;margin-bottom:10px">
+    CSVのヘッダー行の列名を正確に入力してください。
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>JANコード列名</label>
+      <input type="text" name="col_jan"
+             value="{{ setting.col_jan if setting else 'JANコード' }}" placeholder="JANコード"></div>
+    <div class="form-group"><label>納品日列名</label>
+      <input type="text" name="col_date"
+             value="{{ setting.col_date if setting else '納品日' }}" placeholder="納品日"></div>
+    <div class="form-group"><label>伝票番号列名</label>
+      <input type="text" name="col_slip_no"
+             value="{{ setting.col_slip_no if setting else '伝票番号' }}" placeholder="伝票番号"></div>
+    <div class="form-group"><label>チェーンCD列名</label>
+      <input type="text" name="col_chain_cd"
+             value="{{ setting.col_chain_cd if setting else 'チェーンCD' }}" placeholder="チェーンCD"></div>
+    <div class="form-group"><label>行番号列名</label>
+      <input type="text" name="col_row_no"
+             value="{{ setting.col_row_no if setting else '行番号' }}" placeholder="行番号">
+      <div class="help">重複取込防止のキー：納品日＋チェーンCD＋伝票番号＋行番号</div></div>
+    <div class="form-group"><label>数量列名</label>
+      <input type="text" name="col_qty"
+             value="{{ setting.col_qty if setting else '数量' }}" placeholder="数量">
+      <div class="help">ケース・ピース列があれば自動計算優先</div></div>
+    <div class="form-group"><label>賞味期限列名</label>
+      <input type="text" name="col_expiry"
+             value="{{ setting.col_expiry if setting else '賞味期限' }}" placeholder="なければ空欄"></div>
+  </div>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:14px;font-size:11px;color:#475569">
+    <b>以下の列は列名固定で自動使用します：</b>
+    <span class="badge badge-gray" style="margin:2px 1px">ケース</span>
+    <span class="badge badge-gray" style="margin:2px 1px">ピース</span>
+    <span class="badge badge-gray" style="margin:2px 1px">入数</span>
+    <span class="badge badge-gray" style="margin:2px 1px">仕入先CD</span>
+    <span class="badge badge-gray" style="margin:2px 1px">商品名</span>
+    <span class="badge badge-gray" style="margin:2px 1px">商品CD</span>
+    <div style="margin-top:4px;color:#94a3b8">
+      数量計算：ケース × 入数 ＋ ピース（ケース・ピースが空の場合は「数量」列を使用）
+    </div>
+  </div>
+
+  <hr>
+
+  {# ══ 月末月次CSV設定 ══ #}
+  <div style="background:#fdf4ff;border:1.5px solid #d8b4fe;border-radius:10px;padding:16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <input type="checkbox" name="month_end_enabled" value="1" id="month_end_enabled"
+          {% if setting and setting.month_end_enabled %}checked{% endif %}
+          onchange="toggleMonthEnd(this.checked)"
+          style="width:16px;height:16px;accent-color:#7c3aed">
+        <span style="font-size:14px;font-weight:bold;color:#7c3aed">月末月次CSV取込を使用する</span>
+      </label>
+      <span style="font-size:11px;color:#9ca3af">月末日のみ別フォルダの月次CSVから当月末日データをインポート</span>
+    </div>
+
+    <div id="month-end-body" style="{% if not setting or not setting.month_end_enabled %}display:none{% endif %}">
+
+      <div class="form-group">
+        <label>月次CSVフォルダパス <span style="color:#dc2626">*</span></label>
+        <input type="text" name="month_end_folder"
+               value="{{ setting.month_end_folder if setting else '' }}"
+               placeholder="\\192.168.201.165\csvout\sato_jiseki\month">
+        <div class="help">
+          月次CSVが置かれるフォルダ。日次CSVと別のフォルダを指定します。<br>
+          実績パス: <code>\\192.168.201.165\csvout\sato_jiseki\month</code>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>月次ファイル名パターン</label>
+        <input type="text" name="month_end_pattern"
+               value="{{ setting.month_end_pattern if setting else '{yyyymm}_売上実績.csv' }}"
+               placeholder="{yyyymm}_売上実績.csv">
+        <div class="help">
+          <b style="color:#7c3aed">{yyyymm}</b> が年月6桁に自動置換されます。<br>
+          例: <code>{yyyymm}_売上実績.csv</code> → 2月末なら <b>202602_売上実績.csv</b> / 3月末なら <b>202603_売上実績.csv</b>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>月末日を判定する列名</label>
+        <input type="text" name="month_end_date_col"
+               value="{{ setting.month_end_date_col if setting else '納品日' }}"
+               placeholder="納品日">
+        <div class="help">
+          この列の値が「当月末日」のデータだけを取込みます。<br>
+          例: 列名=<code>納品日</code>、値=<code>2026/2/28</code> → 2月末日分のみ取込
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>📅 月末月次の自動取込時刻（毎月1日に実行）</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select name="MONTH_END_IMPORT_HOUR" style="width:100px">
+            {% for h in range(24) %}
+            <option value="{{ h }}" {% if (env.get('MONTH_END_IMPORT_HOUR','5'))|int == h %}selected{% endif %}>
+              {{ '%02d'|format(h) }}時
+            </option>
+            {% endfor %}
+          </select>
+          <select name="MONTH_END_IMPORT_MINUTE" style="width:100px">
+            {% for m in [0,5,10,15,20,25,30,35,40,45,50,55] %}
+            <option value="{{ m }}" {% if (env.get('MONTH_END_IMPORT_MINUTE','0'))|int == m %}selected{% endif %}>
+              {{ '%02d'|format(m) }}分
+            </option>
+            {% endfor %}
+          </select>
+          <span style="font-size:12px;color:#6b7280">現在: 毎月1日 {{ env.get('MONTH_END_IMPORT_HOUR','5') }}時{{ '%02d'|format((env.get('MONTH_END_IMPORT_MINUTE','0'))|int) }}分</span>
+        </div>
+        <div class="help">毎月1日の設定時刻にmonthフォルダから前月分（月末日データ）を自動取込します。</div>
+      </div>
+
+      <div style="background:#ede9fe;border-radius:6px;padding:10px 14px;font-size:12px;color:#5b21b6">
+        <b>動作タイミング</b><br>
+        ① <b>自動</b>: 毎月1日の設定時刻（上記）にmonthフォルダから前月分を自動取込<br>
+        ② <b>手動</b>: 設定一覧の「月末月次実行」ボタンで任意の年月を指定して実行
+      </div>
+    </div>
+  </div>
+
+  <div class="form-group" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px">
+    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+      <input type="checkbox" name="is_active" value="1"
+        {% if not setting or setting.is_active %}checked{% endif %}
+        style="margin-top:3px;transform:scale(1.3)">
+      <div>
+        <div style="font-weight:bold;font-size:14px;color:#166534">🕐 自動取込を有効にする</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:4px">
+          ✅ チェックあり：設定した時刻に毎日自動でCSVを取込みます<br>
+          ❌ チェックなし：自動取込は行いません（手動実行は引き続き可能）
+        </div>
+      </div>
+    </label>
+  </div>
+  <div style="margin-top:14px;display:flex;gap:8px">
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="/csv" class="btn btn-outline">キャンセル</a>
+  </div>
+</form>
+</div>
+
+<script>
+// 時刻スロット管理
+function addSlot() {
+  const wrap = document.getElementById('time-slots');
+  const div = document.createElement('div');
+  div.className = 'time-slot';
+  div.style.cssText = 'display:flex;align-items:center;gap:4px;background:#f1f5f9;padding:4px 8px;border-radius:6px';
+  div.innerHTML = `<input type="time" name="run_times_list" value="09:00"
+    style="border:none;background:transparent;font-size:13px;font-weight:bold;color:#1d4ed8;cursor:pointer;width:90px">
+    <button type="button" onclick="removeSlot(this)" title="削除"
+      style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px;padding:0 2px">✕</button>`;
+  wrap.appendChild(div);
+}
+
+function removeSlot(btn) {
+  const slots = document.querySelectorAll('.time-slot');
+  if (slots.length <= 1) { alert('最低1つの時刻が必要です'); return; }
+  btn.closest('.time-slot').remove();
+}
+
+// フォーム送信前に時刻リストをhidden fieldに集約
+document.querySelector('form').addEventListener('submit', function() {
+  const vals = [...document.querySelectorAll('[name=run_times_list]')]
+    .map(i => i.value).filter(Boolean)
+    .sort()
+    .join(',');
+  document.getElementById('run_times_hidden').value = vals;
+  // run_hour/run_minute を先頭時刻から逆算（後方互換）
+  const first = vals.split(',')[0] || '06:00';
+  const [h, m] = first.split(':').map(Number);
+  const form = this;
+  let rh = form.querySelector('[name=run_hour]');
+  let rm = form.querySelector('[name=run_minute]');
+  if (rh) rh.value = h;
+  if (rm) rm.value = m;
+});
+
+function setFilter(col) {
+  document.querySelector('[name=col_filter_cd]').value = col;
+}
+
+// 登録済みフォルダパスをdatalistに読み込む
+(async function loadFolderCandidates() {
+  try {
+    const res = await fetch('/api/folder_candidates');
+    const data = await res.json();
+    const dl = document.getElementById('folder-candidates');
+    const hint = document.getElementById('candidate-hint');
+    if (data.paths && data.paths.length) {
+      data.paths.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        dl.appendChild(opt);
+      });
+      hint.textContent = '↑ 入力欄をクリックすると過去の登録フォルダが候補に表示されます';
+    }
+  } catch(e) {}
+})();
+
+function toggleMonthEnd(enabled) {
+  document.getElementById('month-end-body').style.display = enabled ? '' : 'none';
+}
+
+</script>
+
+<!-- フォルダ参照ダイアログ -->
+<div id="folder-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:520px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">&#x1F4C1;</span>
+      <strong >フォルダを選択</strong>
+      <button type="button" onclick="closeFolderBrowser()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280">&#x00D7;</button>
+    </div>
+    <div id="unc-auth-area" style="padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e5e7eb;display:none">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:8px">&#x1F510; ネットワーク共有の認証情報</div>
+      <div style="display:flex;gap:8px">
+        <input type="text"     id="fb-user" placeholder="ユーザー名" style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <input type="password" id="fb-pass" placeholder="パスワード" style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <button type="button" onclick="fbLoadDispatch(document.getElementById('fb-path-bar').value)" class="btn btn-primary btn-sm">接続</button>
+      </div>
+    </div>
+    <div style="padding:10px 20px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #f3f4f6">
+      <input type="text" id="fb-path-bar" placeholder="パスを直接入力してEnter"
+             
+             onkeydown="if(event.key==='Enter'){fbLoadDispatch(this.value)}">
+      <button type="button" onclick="fbLoadDispatch(document.getElementById('fb-path-bar').value)" class="btn btn-outline btn-sm">移動</button>
+    </div>
+    <div id="fb-list" style="flex:1;overflow-y:auto;padding:8px 12px;min-height:200px"></div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;gap:10px;align-items:center">
+      <div style="flex:1;font-size:13px;color:#374151">
+        選択中: <span id="fb-selected" style="font-weight:600;color:#1d4ed8">（未選択）</span>
+      </div>
+      <button type="button" class="btn btn-outline" onclick="closeFolderBrowser()">キャンセル</button>
+      <button type="button" class="btn btn-primary" id="fb-ok" disabled onclick="confirmFolderSelect()">このフォルダを選択</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var fbSelectedPath = '';
+function openFolderBrowser() {
+  document.getElementById('folder-modal').style.display = 'flex';
+  var existing = document.getElementById('folder_path').value.trim();
+  var nu = document.getElementById('net_user');
+  var np = document.getElementById('net_pass');
+  if (nu) document.getElementById('fb-user').value = nu.value || '';
+  if (np) document.getElementById('fb-pass').value = np.value || '';
+  fbLoadDispatch(existing || '');
+}
+function closeFolderBrowser() { document.getElementById('folder-modal').style.display = 'none'; }
+function confirmFolderSelect() {
+  if (!fbSelectedPath) return;
+  document.getElementById('folder_path').value = fbSelectedPath;
+  var nu = document.getElementById('net_user');
+  var np = document.getElementById('net_pass');
+  if (nu) nu.value = document.getElementById('fb-user').value;
+  if (np) np.value = document.getElementById('fb-pass').value;
+  closeFolderBrowser();
+}
+function isUNC(p) { return p && (p.slice(0,2) === '\\\\' || p.slice(0,2) === '//'); }
+function fbLoadDispatch(path) {
+  document.getElementById('fb-path-bar').value = path || '';
+  if (isUNC(path)) {
+    document.getElementById('unc-auth-area').style.display = 'block';
+    var user = document.getElementById('fb-user').value;
+    var pass = document.getElementById('fb-pass').value;
+    fbSetLoading();
+    fetch('/api/net_use_browse', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path: path, net_user: user, net_pass: pass})
+    }).then(function(r){return r.json();}).then(fbRender).catch(function(e){fbError(e.message);});
+  } else {
+    document.getElementById('unc-auth-area').style.display = 'none';
+    fbSetLoading();
+    fetch('/api/browse_folders' + (path ? '?path='+encodeURIComponent(path) : ''))
+      .then(function(r){return r.json();}).then(fbRender).catch(function(e){fbError(e.message);});
+  }
+}
+function fbSetLoading() {
+  document.getElementById('fb-list').innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af">読み込み中...</div>';
+}
+function fbRender(data) {
+  var list = document.getElementById('fb-list');
+  if (data.error && !data.items) {
+    list.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:13px">&#x26A0; ' + escHtml(data.error) + '</div>'; return;
+  }
+  if (data.current) document.getElementById('fb-path-bar').value = data.current;
+  var html = '';
+  if (data.error) html += '<div style="padding:8px 12px;color:#dc2626;font-size:12px">&#x26A0; ' + escHtml(data.error) + '</div>';
+  if (data.parent !== null && data.parent !== undefined) {
+    html += '<div class="fb-item" data-path="'+escAttr(data.parent)+'" data-nav="1" style="padding:8px 12px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;color:#6b7280;font-size:13px"><span>&#x2B06;&#xFE0F;</span><span>.. （上へ）</span></div>';
+  }
+  (data.items || []).forEach(function(item) {
+    var icon = item.type === 'drive' ? '&#x1F4BE;' : '&#x1F4C1;';
+    html += '<div class="fb-item" data-path="'+escAttr(item.path)+'" style="padding:8px 12px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:13px"><span>'+icon+'</span><span>'+escHtml(item.name)+'</span></div>';
+  });
+  if (!data.error && !(data.items && data.items.length) && data.parent === null)
+    html += '<div style="padding:16px;color:#9ca3af;text-align:center;font-size:13px">（サブフォルダなし）</div>';
+  list.innerHTML = html;
+  list.querySelectorAll('.fb-item').forEach(function(el) {
+    el.addEventListener('mouseenter', function(){ if (!el.dataset.sel) el.style.background='#f3f4f6'; });
+    el.addEventListener('mouseleave', function(){ if (!el.dataset.sel) el.style.background=''; });
+    el.addEventListener('click', function() {
+      if (el.dataset.nav) { fbLoadDispatch(el.dataset.path); return; }
+      fbSelectedPath = el.dataset.path;
+      document.getElementById('fb-selected').textContent = el.dataset.path;
+      document.getElementById('fb-ok').disabled = false;
+      document.querySelectorAll('.fb-item').forEach(function(e){ e.style.background=''; e.dataset.sel=''; });
+      el.style.background='#dbeafe'; el.dataset.sel='1';
+    });
+    el.addEventListener('dblclick', function(){ fbLoadDispatch(el.dataset.path); });
+  });
+}
+function fbError(msg) { document.getElementById('fb-list').innerHTML = '<div style="padding:16px;color:#dc2626">エラー: ' + escHtml(msg) + '</div>'; }
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+document.getElementById('folder-modal').addEventListener('click', function(e){ if (e.target===this) closeFolderBrowser(); });
+
+function onImportTypeChange(sel) {
+  var val = sel.value;
+  var prev = sel.dataset.prev || '';
+  var warnSales  = document.getElementById('warning-sales');
+  var warnRecord = document.getElementById('warning-record');
+  warnSales.style.display  = (val === 'sales')       ? 'flex' : 'none';
+  warnRecord.style.display = (val === 'record_only') ? 'flex' : 'none';
+
+  // record_only → sales に変更しようとした場合：強い警告
+  if (val === 'sales' && prev === 'record_only') {
+    var ok = confirm(
+      '【重要】取込種別を変更しようとしています\n\n' +
+      '「在庫引き当てモード」に変更すると：\n' +
+      '・CSVを取込むたびに在庫が自動で減算されます\n' +
+      '・自動取込が有効になります\n\n' +
+      '⚠️ 過去データの取込が完全に完了している場合のみ\n' +
+      '　変更してください。\n\n' +
+      '過去データ取込は完了していますか？\n' +
+      '（OK = 完了済み、変更する / キャンセル = まだ取込中）'
+    );
+    if (!ok) {
+      sel.value = prev;
+      warnSales.style.display  = 'none';
+      warnRecord.style.display = 'flex';
+      return;
+    }
+  }
+
+  // sales → record_only に変更：自動取込を無効化を案内
+  if (val === 'record_only') {
+    var isActiveChk = document.querySelector('[name=is_active]');
+    if (isActiveChk && isActiveChk.checked) {
+      var ok2 = confirm(
+        '「記録のみ（過去データ用）」モードに変更します。\n\n' +
+        '過去データ取込中は自動取込を無効にすることを\nお勧めします。\n\n' +
+        '自動取込を無効にしますか？\n' +
+        '（OK = 無効にする / キャンセル = 有効のまま）'
+      );
+      if (ok2 && isActiveChk) isActiveChk.checked = false;
+    }
+  }
+  sel.dataset.prev = val;
+}
+
+// フォーム送信時にも最終確認
+document.addEventListener('DOMContentLoaded', function() {
+  var sel = document.getElementById('import_type');
+  if (sel) sel.dataset.prev = sel.value;
+
+  var form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      var importType = document.getElementById('import_type').value;
+      if (importType === 'sales') {
+        var ok = confirm(
+          '【最終確認】保存前に確認してください\n\n' +
+          '取込種別：販売データ（在庫引き当て）\n\n' +
+          '🚨 このまま保存すると、CSVを取込む際に\n' +
+          '　在庫が自動で減算されます。\n\n' +
+          '過去データ・前年実績のインポートには\n' +
+          '使用しないでください。\n\n' +
+          '通常運用（日次自動取込）用として\n正しく設定されていますか？\n\n' +
+          '（OK = 正しい、保存する / キャンセル = 設定を見直す）'
+        );
+        if (!ok) {
+          e.preventDefault();
+          return false;
+        }
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

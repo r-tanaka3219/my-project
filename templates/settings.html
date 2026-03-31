@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+{% block title %}設定{% endblock %}
+{% block content %}
+<div class="page-title">⚙️ システム設定</div>
+
+<form method="post" action="/settings/save">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">🐘 PostgreSQL 接続設定</div>
+  <div class="form-group"><label>サーバーアドレス (PG_HOST)</label>
+    <input type="text" name="PG_HOST" value="{{ env.get('PG_HOST','localhost') }}"
+           placeholder="localhost または 192.168.1.5">
+    <div class="help">PostgreSQLが動いているサーバーのIPアドレスまたはホスト名</div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>ポート (PG_PORT)</label>
+      <input type="number" name="PG_PORT" value="{{ env.get('PG_PORT','5432') }}" placeholder="5432">
+    </div>
+    <div class="form-group"><label>データベース名 (PG_DBNAME)</label>
+      <input type="text" name="PG_DBNAME" value="{{ env.get('PG_DBNAME','inventory') }}" placeholder="inventory">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>ユーザー名 (PG_USER)</label>
+      <input type="text" name="PG_USER" value="{{ env.get('PG_USER','inventory_user') }}" placeholder="inventory_user">
+    </div>
+    <div class="form-group"><label>パスワード (PG_PASSWORD)</label>
+      <input type="password" name="PG_PASSWORD" value="{{ env.get('PG_PASSWORD','') }}">
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button type="submit" class="btn btn-primary">💾 設定保存</button>
+    <button type="button" class="btn btn-outline" onclick="testPG()">🐘 接続テスト</button>
+  </div>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">📧 メールサーバー設定（社内SMTP）</div>
+
+  {# プリセット選択 #}
+  <div class="form-group">
+    <label>SMTPプリセット</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-outline btn-sm"
+              onclick="setPreset('inhouse25')">🏢 社内メール（認証なし・25番）</button>
+      <button type="button" class="btn btn-outline btn-sm"
+              onclick="setPreset('inhouse587')">🏢 社内メール（SMTP AUTH・587番）</button>
+      <button type="button" class="btn btn-outline btn-sm"
+              onclick="setPreset('gmail')">📧 Gmail（アプリパスワード）</button>
+      <button type="button" class="btn btn-outline btn-sm"
+              onclick="setPreset('office365')">☁️ Microsoft 365</button>
+    </div>
+    <div class="help">プリセットを選ぶと各項目が自動入力されます（後から変更できます）</div>
+  </div>
+
+  <hr>
+
+  <div class="form-group"><label>SMTPサーバー *</label>
+    <input type="text" name="MAIL_SERVER" id="MAIL_SERVER"
+           value="{{ env.get('MAIL_SERVER','') }}"
+           placeholder="例: mail.example.local　または smtp.gmail.com">
+    <div class="help">社内メールサーバーのホスト名またはIPアドレス</div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group"><label>ポート番号</label>
+      <input type="number" name="MAIL_PORT" id="MAIL_PORT"
+             value="{{ env.get('MAIL_PORT','25') }}" placeholder="25">
+      <div class="help">25（認証なし） / 587（STARTTLS） / 465（SSL）</div>
+    </div>
+    <div class="form-group"><label>セキュリティ</label>
+      <select name="MAIL_SECURITY" id="MAIL_SECURITY" onchange="onSecurityChange(this.value)">
+        <option value="none"
+          {% if env.get('MAIL_USE_TLS','False')=='False' and env.get('MAIL_USE_SSL','False')=='False' %}selected{% endif %}>
+          なし（社内メール・25番）</option>
+        <option value="starttls"
+          {% if env.get('MAIL_USE_TLS','False')=='True' %}selected{% endif %}>
+          STARTTLS（587番）</option>
+        <option value="ssl"
+          {% if env.get('MAIL_USE_SSL','False')=='True' %}selected{% endif %}>
+          SSL/TLS（465番）</option>
+      </select>
+    </div>
+  </div>
+  {# hiddenでTLS/SSLフラグを保存 #}
+  <input type="hidden" name="MAIL_USE_TLS" id="MAIL_USE_TLS" value="{{ env.get('MAIL_USE_TLS','False') }}">
+  <input type="hidden" name="MAIL_USE_SSL" id="MAIL_USE_SSL" value="{{ env.get('MAIL_USE_SSL','False') }}">
+
+  <div class="form-group">
+    <label>
+      <input type="checkbox" name="MAIL_AUTH" id="MAIL_AUTH" value="True"
+             onchange="onAuthChange(this.checked)"
+             {% if env.get('MAIL_AUTH','False')=='True' %}checked{% endif %}>
+      SMTP認証を使用する（ユーザー名・パスワードが必要なサーバー）
+    </label>
+    <div class="help">社内メールで認証なしの場合はチェック不要</div>
+  </div>
+
+  <div id="auth-fields" style="{% if env.get('MAIL_AUTH','False')!='True' %}display:none{% endif %}">
+    <div class="form-group"><label>ユーザー名（メールアドレス）</label>
+      <input type="text" name="MAIL_USERNAME" id="MAIL_USERNAME"
+             value="{{ env.get('MAIL_USERNAME','') }}"
+             placeholder="system@example.com">
+    </div>
+    <div class="form-group"><label>パスワード</label>
+      <input type="password" name="MAIL_PASSWORD" id="MAIL_PASSWORD"
+             value="{{ env.get('MAIL_PASSWORD','') }}"
+             placeholder="パスワード / Gmailアプリパスワード">
+    </div>
+  </div>
+
+  <div class="form-group"><label>送信元メールアドレス（From）</label>
+    <input type="text" name="MAIL_FROM" id="MAIL_FROM"
+           value="{{ env.get('MAIL_FROM','') }}"
+           placeholder="inventory@example.com　（空欄=ユーザー名と同じ）">
+  </div>
+  <div class="form-group"><label>送信者名</label>
+    <input type="text" name="MAIL_FROM_NAME"
+           value="{{ env.get('MAIL_FROM_NAME','在庫管理システム') }}"
+           placeholder="在庫管理システム">
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:14px">
+    <button type="submit" class="btn btn-primary">💾 設定保存</button>
+    <button type="button" class="btn btn-outline"
+            onclick="testMail()">📧 接続テスト</button>
+  </div>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">⏰ 自動送信スケジュール</div>
+  <p style="font-size:12px;color:#6b7280;margin-bottom:12px">
+    毎日この時刻に発注チェック・期限アラートを自動実行してメール送信します。<br>
+    設定変更後はシステムを再起動してください。
+  </p>
+  <div class="form-row" style="align-items:flex-end">
+    <div class="form-group">
+      <label>発注チェック・期限アラートの送信時刻</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select name="DAILY_MAIL_HOUR" style="width:100px">
+          {% for h in range(24) %}
+          <option value="{{ h }}" {% if env.get('DAILY_MAIL_HOUR','8')|int == h %}selected{% endif %}>
+            {{ '%02d'|format(h) }}時
+          </option>
+          {% endfor %}
+        </select>
+        <select name="DAILY_MAIL_MINUTE" style="width:100px">
+          {% for m in [0,5,10,15,20,25,30,35,40,45,50,55] %}
+          <option value="{{ m }}" {% if env.get('DAILY_MAIL_MINUTE','0')|int == m %}selected{% endif %}>
+            {{ '%02d'|format(m) }}分
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="help">現在の設定: 毎日 {{ env.get('DAILY_MAIL_HOUR','8') }}時{{ '%02d'|format(env.get('DAILY_MAIL_MINUTE','0')|int) }}分</div>
+    </div>
+  </div>
+
+  <div class="form-row" style="align-items:flex-end">
+    <div class="form-group">
+      <label>📅 月末月次CSVの自動取込時刻（毎月1日に実行）</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select name="MONTH_END_IMPORT_HOUR" style="width:100px">
+          {% for h in range(24) %}
+          <option value="{{ h }}" {% if env.get('MONTH_END_IMPORT_HOUR','5')|int == h %}selected{% endif %}>
+            {{ '%02d'|format(h) }}時
+          </option>
+          {% endfor %}
+        </select>
+        <select name="MONTH_END_IMPORT_MINUTE" style="width:100px">
+          {% for m in [0,5,10,15,20,25,30,35,40,45,50,55] %}
+          <option value="{{ m }}" {% if env.get('MONTH_END_IMPORT_MINUTE','0')|int == m %}selected{% endif %}>
+            {{ '%02d'|format(m) }}分
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="help">毎月1日の設定時刻にmonthフォルダから前月分を自動取込します。現在の設定: 毎月1日 {{ env.get('MONTH_END_IMPORT_HOUR','5') }}時{{ '%02d'|format(env.get('MONTH_END_IMPORT_MINUTE','0')|int) }}分</div>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary">💾 設定保存</button>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">📄 テンプレートファイル名設定</div>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:8px">拡張子（.xlsx / .csv）は自動で付加されます。</div>
+  <div style="display:flex;gap:10px;align-items:flex-start">
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ テンプレート名</label>
+      <input type="text" name="product_template_name" value="{{ retention.product_template_name }}" placeholder="商品マスタ_テンプレート" style="width:200px">
+      <div class="help">.xlsx</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ エクスポート名</label>
+      <input type="text" name="product_export_name" value="{{ retention.product_export_name }}" placeholder="商品マスタ" style="width:180px">
+      <div class="help">.xlsx / .csv</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">入庫インポート テンプレート名</label>
+      <input type="text" name="receipt_template_name" value="{{ retention.receipt_template_name }}" placeholder="入庫一括インポート_テンプレート" style="width:210px">
+      <div class="help">.csv</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">棚卸エクスポート名</label>
+      <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト" style="width:180px">
+      <div class="help">.xlsx</div>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px">💾 設定保存</button>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">🗓 データ保持期間設定</div>
+  <div style="font-size:12px;color:#6b7280;margin-bottom:8px">毎月1日深夜に自動削除。0=削除しない。</div>
+  <div style="display:flex;gap:16px;align-items:flex-start">
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">発注履歴</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" name="order_history_months" value="{{ retention.order_history_months }}" min="0" max="120" style="width:65px">
+        <span style="font-size:12px;white-space:nowrap">ヶ月</span>
+      </div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">廃棄・退避</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" name="disposed_months" value="{{ retention.disposed_months }}" min="0" max="120" style="width:65px">
+        <span style="font-size:12px;white-space:nowrap">ヶ月</span>
+      </div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">CSVインポート</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" name="sales_history_months" value="{{ retention.sales_history_months }}" min="0" max="120" style="width:65px">
+        <span style="font-size:12px;white-space:nowrap">ヶ月</span>
+      </div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">CSV取込ログ</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" name="csv_log_months" value="{{ retention.csv_log_months }}" min="0" max="120" style="width:65px">
+        <span style="font-size:12px;white-space:nowrap">ヶ月</span>
+      </div>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px">💾 設定保存</button>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #16a34a">
+  <div class="card-title" style="color:#16a34a">💾 バックアップ</div>
+  <p style="font-size:13px;color:#6b7280;margin-bottom:12px">全データ（商品マスタ・在庫・発注履歴・廃棄退避・入庫履歴・棚卸）をExcelでダウンロードします。</p>
+  <a href="/admin/backup" class="btn btn-success btn-sm">💾 バックアップをダウンロード</a>
+  <a href="/admin/restore" class="btn btn-warning btn-sm" style="margin-left:8px">♻️ 復元</a>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #dc2626">
+  <div class="card-title" style="color:#dc2626">🗑 データ一括削除</div>
+  <p style="font-size:13px;color:#6b7280;margin-bottom:12px">商品マスタ・在庫・発注履歴などのデータを一括で削除できます。</p>
+  <a href="/admin/bulk_delete" class="btn btn-danger btn-sm">⚠️ 一括削除画面へ</a>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">📨 メール内容プレビュー</div>
+  <a href="/settings/mail_templates" class="btn btn-outline btn-sm" style="margin-bottom:12px;display:inline-block">✏️ メールテンプレートを編集</a>
+  <div style="display:flex;gap:10px;margin-bottom:12px">
+    <button type="button" class="btn btn-primary btn-sm" onclick="showPreview('order')">📦 発注メール</button>
+    <button type="button" class="btn btn-warning btn-sm" onclick="showPreview('expiry')">⚠️ 賞味期限アラート</button>
+  </div>
+
+  <div id="preview-order" style="display:none">
+    <div style="font-size:12px;color:#6b7280;margin-bottom:6px">■ 件名</div>
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:8px;font-family:monospace;font-size:13px;margin-bottom:10px">
+      【発注一覧】2026-03-15 (2件)
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:6px">■ 本文</div>
+    <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;line-height:1.7">発注日: 2026-03-15
+件数: 2件
+
+仕入先CD     仕入先名             JAN            商品CD       商品名                           数量   トリガー
+--------------------------------------------------------------------------------------------------------------
+SUP001       山田食品             4901234567890  P001         りんごジュース 1L                  24個 発注点
+SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml                         48個 混載ロット
+
+--
+在庫管理システム</pre>
+  </div>
+
+  <div id="preview-expiry" style="display:none">
+    <div style="font-size:12px;color:#6b7280;margin-bottom:6px">■ 件名</div>
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:8px;font-family:monospace;font-size:13px;margin-bottom:10px">
+      【賞味期限アラート】期限切れ間近の在庫があります - 2026-03-15
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:6px">■ 本文</div>
+    <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;line-height:1.7">以下の商品の賞味期限が近づいています。早めの対応をお願いします。
+
+確認日: 2026-03-15
+
+  ・りんごジュース 1L　LOT:LOT001　残り3日 (期限: 2026-03-18)　在庫24個
+  ・オレンジジュース 1L　LOT:LOT002　残り7日 (期限: 2026-03-22)　在庫12個</pre>
+  </div>
+</div>
+
+{# テスト送信フォーム（別フォーム） #}
+<form method="post" action="/settings/test_mail" id="test-form" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="test_to" id="test-to">
+</form>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">📈 需要予測ロジック設定</div>
+
+  <div class="form-group">
+    <label style="font-weight:500;font-size:14px;display:block;margin-bottom:10px">予測モード切替</label>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('forecast_ai_mode',1) in [1,'1',True,'True','true'] %}var(--color-border-info){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('forecast_ai_mode',1) in [1,'1',True,'True','true'] %}var(--color-background-info){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:260px">
+        <input type="radio" name="forecast_ai_mode" value="1"
+               {% if forecast_flags.get('forecast_ai_mode',1) in [1,'1',True,'True','true'] %}checked{% endif %}
+               style="margin-top:3px;flex-shrink:0">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--color-text-info)">🤖 AIモード（推奨）</div>
+          <div style="font-size:12px;margin-top:4px;line-height:1.7;color:var(--color-text-secondary)">
+            WMA-30日・季節指数・曜日指数・<br>
+            販促上振れ・受注予定・手動調整係数<br>
+            を複合的に適用した高精度予測
+          </div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('forecast_ai_mode',1) not in [1,'1',True,'True','true'] %}var(--color-border-warning){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('forecast_ai_mode',1) not in [1,'1',True,'True','true'] %}var(--color-background-warning){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:260px">
+        <input type="radio" name="forecast_ai_mode" value="0"
+               {% if forecast_flags.get('forecast_ai_mode',1) not in [1,'1',True,'True','true'] %}checked{% endif %}
+               style="margin-top:3px;flex-shrink:0">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--color-text-warning)">📅 前年実績モード</div>
+          <div style="font-size:12px;margin-top:4px;line-height:1.7;color:var(--color-text-secondary)">
+            前年同月の実績のみを使用<br>
+            計算式: 前年同月合計 ÷ 月日数 × LT × 安全係数<br>
+            シンプルで予測根拠が明確
+          </div>
+        </div>
+      </label>
+    </div>
+    <div class="help" style="margin-top:8px">
+      AIモードON時は P1(WMA)/P2(分位点)/P3(手動調整係数)/季節指数/曜日指数/販促上振れ/受注予定 が全て有効になります。<br>
+      前年実績モードでは上記の全機能がOFFになり、前年同月の日次平均のみで発注点を計算します。
+    </div>
+  </div>
+
+  <div class="form-group" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
+    <label style="font-weight:500;font-size:13px;display:block;margin-bottom:8px">推奨発注点の算出モード（P2）</label>
+    <div style="margin-bottom:4px;font-size:12px;color:var(--color-text-secondary)">
+      ※ AIモード・前年実績モード 両方で有効です
+    </div>
+    <select name="forecast_reorder_mode" class="form-control" style="max-width:400px">
+      <option value="sf"  {% if forecast_flags.get('forecast_reorder_mode','sf') == 'sf'  %}selected{% endif %}>
+        安全係数モード（標準）
+      </option>
+      <option value="p80" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p80' %}selected{% endif %}>
+        P80モード（欠品確率20%以下）
+      </option>
+      <option value="p90" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p90' %}selected{% endif %}>
+        P90モード（欠品確率10%以下）
+      </option>
+    </select>
+    <div style="margin-top:12px;border:1px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;font-size:12px">
+      <table style="table-layout:fixed;width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--color-background-secondary)">
+            <th style="width:25%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">モード</th>
+            <th style="width:40%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">計算式</th>
+            <th style="width:35%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">推奨用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
+              <span class="badge badge-green">安全係数（標準）</span>
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace">
+              日次予測 × LT × 安全係数
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
+              大多数の通常商品。安全係数でバッファ確保。
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
+              <span class="badge badge-yellow">P80モード</span>
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace">
+              P80日次 × LT（AIモード時）<br>前年日次 × LT（前年実績時）
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
+              80%の日で欠品なし。やや重要な商品向け。
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 10px">
+              <span class="badge badge-red">P90モード</span>
+            </td>
+            <td style="padding:8px 10px;font-family:monospace">
+              P90日次 × LT（AIモード時）<br>前年日次 × LT（前年実績時）
+            </td>
+            <td style="padding:8px 10px">
+              90%の日で欠品なし。欠品が許されない主力品向け。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help" style="margin-top:6px">
+      ※ AIモード時: P80/P90は過去30日の分布（5件以上）から算出。不足時は安全係数モードへ自動切替。<br>
+      ※ 前年実績モード時: P80/P90は前年同月の実績から算出。前年データなしの商品は安全係数モードへ自動切替。<br>
+      ※ 前日売上データ取込運用のため、当日の実績は翌朝反映されます。当日の急増・急減は <a href="/products" style="color:inherit;text-decoration:underline">商品管理 → 商品編集画面の「手動調整係数」</a> で補正してください。
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <button type="submit" class="btn btn-primary">💾 設定保存</button>
+  </div>
+</div>
+
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">🔑 その他</div>
+  <div class="form-group"><label>SECRET_KEY</label>
+    <input type="text" name="SECRET_KEY" value="{{ env.get('SECRET_KEY','') }}"
+           placeholder="自動生成されます">
+  </div>
+  <button type="submit" class="btn btn-primary">💾 設定保存</button>
+</div>
+</form>
+
+<script>
+function showPreview(type) {
+  document.getElementById('preview-order').style.display = type === 'order' ? '' : 'none';
+  document.getElementById('preview-expiry').style.display = type === 'expiry' ? '' : 'none';
+}
+
+function onSecurityChange(val) {
+  document.getElementById('MAIL_USE_TLS').value = val === 'starttls' ? 'True' : 'False';
+  document.getElementById('MAIL_USE_SSL').value = val === 'ssl'      ? 'True' : 'False';
+  if (val === 'starttls') document.getElementById('MAIL_PORT').value = 587;
+  if (val === 'ssl')      document.getElementById('MAIL_PORT').value = 465;
+  if (val === 'none')     document.getElementById('MAIL_PORT').value = 25;
+}
+function onAuthChange(checked) {
+  document.getElementById('auth-fields').style.display = checked ? 'block' : 'none';
+  if (checked) document.getElementById('MAIL_AUTH').value = 'True';
+}
+
+function setPreset(p) {
+  const presets = {
+    'inhouse25':  { server:'mail.example.local', port:'25',  sec:'none',    auth:false, user:'', note:'社内メールサーバー（認証なし・25番ポート）' },
+    'inhouse587': { server:'mail.example.local', port:'587', sec:'starttls', auth:true,  user:'system@example.com', note:'社内メールサーバー（SMTP AUTH・587番）' },
+    'gmail':      { server:'smtp.gmail.com',     port:'587', sec:'starttls', auth:true,  user:'', note:'Gmail（Googleアカウントのアプリパスワードを使用）' },
+    'office365':  { server:'smtp.office365.com', port:'587', sec:'starttls', auth:true,  user:'', note:'Microsoft 365（組織アカウントのパスワード）' },
+  };
+  const pr = presets[p];
+  if (!pr) return;
+  document.getElementById('MAIL_SERVER').value = pr.server;
+  document.getElementById('MAIL_PORT').value   = pr.port;
+  document.getElementById('MAIL_SECURITY').value = pr.sec;
+  onSecurityChange(pr.sec);
+  document.getElementById('MAIL_AUTH').checked  = pr.auth;
+  document.getElementById('auth-fields').style.display = pr.auth ? 'block' : 'none';
+  if (pr.user) document.getElementById('MAIL_USERNAME').value = pr.user;
+  alert(`✅ ${pr.note}\nサーバー名・ユーザー名を実際の値に変更してから保存してください。`);
+}
+
+function testPG() {
+  fetch('/settings/test_pg', {method:'POST'})
+    .then(r=>r.json())
+    .then(d=>alert(d.ok ? '✅ PostgreSQL接続成功！\n' + d.msg : '❌ 接続エラー:\n' + d.msg));
+}
+function testMail() {
+  const to = prompt('テストメールの送信先アドレスを入力してください：');
+  if (!to) return;
+  document.getElementById('test-to').value = to;
+  document.getElementById('test-form').submit();
+}
+</script>
+{% endblock %}

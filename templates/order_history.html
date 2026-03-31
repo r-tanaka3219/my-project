@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}発注履歴{% if pages > 1 %}
+<div style="display:flex;gap:6px;justify-content:center;margin:12px 0">
+  {% if page > 1 %}<a href="?q={{ q or '' }}&page={{ page-1 }}" class="btn btn-outline btn-sm">← 前へ</a>{% endif %}
+  <span style="padding:6px 12px;font-size:13px">{{ page }} / {{ pages }}ページ（{{ total }}件）</span>
+  {% if page < pages %}<a href="?q={{ q or '' }}&page={{ page+1 }}" class="btn btn-outline btn-sm">次へ →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-title">📜 発注履歴</div>
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/order_history" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/order_history" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+<div class="card">
+<div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+  <th style="width:10%">発注日</th><th style="width:7%">仕入先CD</th><th style="width:11%">仕入先名</th><th style="width:7%">商品CD</th><th style="width:11%">JAN</th><th style="width:27%">商品名</th>
+  <th class="text-right" style="width:9%">数量</th><th class="text-center" style="width:9%">区分</th><th style="width:9%">メール</th>
+</tr></thead><tbody>
+{% for o in orders %}
+<tr>
+  <td>{{ o.order_date }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ o.supplier_cd or '-' }}</td>
+  <td>{{ o.supplier_name }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ o.product_cd or '-' }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ o.jan }}</td>
+  <td>{{ o.product_name }}</td>
+  <td class="text-right">{{ o.order_qty|format_number }}</td>
+  <td class="text-center">{% if o.trigger_type=='reorder' %}<span class="badge badge-red">発注点</span>
+      {% elif o.trigger_type=='lot' %}<span class="badge badge-purple">ロット</span>
+      {% elif o.trigger_type=='mixed' %}<span class="badge badge-blue">混載</span>
+      {% elif o.trigger_type=='forced' %}<span class="badge badge-orange">強制</span>
+      {% elif o.trigger_type=='manual' %}<span class="badge badge-gray">手動</span>
+      {% else %}<span class="badge badge-gray">{{ o.trigger_type }}</span>{% endif %}</td>
+  <td>{% if o.mail_sent %}<span class="badge badge-green">送信済</span>
+      {% else %}<span class="badge badge-gray">未送信</span>{% endif %}</td>
+</tr>
+{% else %}
+<tr><td colspan="9" class="text-center" style="padding:20px;color:#9ca3af">発注履歴なし</td></tr>
+{% endfor %}
+</tbody></table>
+</div><!-- /table-wrap -->
+</div>
+{% if pages > 1 %}
+<div style="display:flex;gap:6px;justify-content:center;margin:12px 0">
+  {% if page > 1 %}<a href="?q={{ q or '' }}&page={{ page-1 }}" class="btn btn-outline btn-sm">← 前へ</a>{% endif %}
+  <span style="padding:6px 12px;font-size:13px">{{ page }} / {{ pages }}ページ（{{ total }}件）</span>
+  {% if page < pages %}<a href="?q={{ q or '' }}&page={{ page+1 }}" class="btn btn-outline btn-sm">次へ →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

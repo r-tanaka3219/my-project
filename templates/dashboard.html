@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block content %}
+<div class="page-title">ダッシュボード <small style="font-size:12px;color:#6b7280;font-weight:normal">{{ today }}</small></div>
+
+<!-- KPIカード -->
+<div class="kpi-grid">
+  <div class="kpi kpi-blue">
+    <div class="kpi-value">{{ total_products }}</div>
+    <div class="kpi-label">登録商品数</div>
+  </div>
+  <div class="kpi {% if low_stock>0 %}kpi-red{% else %}kpi-green{% endif %}">
+    <div class="kpi-value">{{ low_stock }}</div>
+    <div class="kpi-label">発注点以下</div>
+  </div>
+  <div class="kpi {% if expiry_alert>0 %}kpi-yellow{% else %}kpi-green{% endif %}">
+    <div class="kpi-value">{{ expiry_alert }}</div>
+    <div class="kpi-label">期限アラート</div>
+  </div>
+</div>
+
+<!-- 警告バナー -->
+{% if low_stock>0 %}
+<div class="card" style="border-left:4px solid #dc2626;padding:10px 16px">
+  <b style="color:#dc2626">発注が必要な商品があります（{{ low_stock }}件）</b>
+  <a href="/orders" class="btn btn-danger btn-sm" style="margin-left:12px">発注チェックへ →</a>
+</div>
+{% endif %}
+{% if expiry_alert>0 %}
+<div class="card" style="border-left:4px solid #d97706;padding:10px 16px">
+  <b style="color:#ca8a04">賞味期限アラートがあります（{{ expiry_alert }}件）</b>
+  <a href="/reports" class="btn btn-warning btn-sm" style="margin-left:12px">レポートへ →</a>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+<div>
+
+  <!-- 発注点以下テーブル（JAN・入数を含む） -->
+  <div class="card">
+    <div class="card-title" style="color:#dc2626">発注が必要な商品一覧</div>
+    {% if low_stock_rows %}
+    <div class="table-wrap">
+<table style="table-layout:fixed;width:100%">
+      <thead>
+        <tr>
+          <th style="width:10%">仕入先CD</th>
+          <th style="width:10%">仕入先名</th>
+          <th style="width:10%">商品CD</th>
+          <th style="width:10%">JANコード</th>
+          <th style="width:10%">商品名</th>
+          <th style="width:10%">入数</th>
+          <th class="text-right" style="width:10%">現在庫</th>
+          <th class="text-right" style="width:10%">発注点</th>
+          <th class="text-right" style="width:10%">発注数</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in low_stock_rows %}
+      <tr>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ r.supplier_cd }}</td>
+        <td>{{ r.supplier_name }}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ r.product_cd }}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ r.jan }}</td>
+        <td><b>{{ r.product_name }}</b></td>
+        <td class="text-right">{{ r.unit_qty|format_number }}個/ケース</td>
+        <td class="text-right" style="color:#dc2626;font-weight:bold">{{ r.total_qty|format_number }}</td>
+        <td class="text-right">{{ r.reorder_point|format_number }}</td>
+        <td class="text-right">{{ r.order_qty|format_number }}</td>
+        <td><a href="/orders" class="btn btn-danger btn-sm">発注</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+</div><!-- /table-wrap -->
+    {% else %}
+    <p style="color:#16a34a;font-weight:bold">発注が必要な商品はありません。</p>
+    {% endif %}
+  </div>
+
+  <!-- 最近の発注履歴 -->
+  <div class="card">
+    <div class="card-title">最近の発注履歴</div>
+    {% if recent_orders %}
+    <div class="table-wrap">
+<table style="table-layout:fixed;width:100%">
+      <thead>
+        <tr>
+          <th style="width:12%">日付</th>
+          <th style="width:11%">仕入先CD</th>
+          <th style="width:11%">仕入先名</th>
+          <th style="width:11%">商品CD</th>
+          <th style="width:11%">JANコード</th>
+          <th style="width:11%">商品名</th>
+          <th class="text-right" style="width:11%">数量</th>
+          <th style="width:11%">区分</th>
+          <th style="width:11%">メール</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for o in recent_orders %}
+      <tr>
+        <td>{{ o.order_date }}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ o.supplier_cd or '-' }}</td>
+        <td>{{ o.supplier_name }}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ o.product_cd or '-' }}</td>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280">{{ o.jan }}</td>
+        <td>{{ o.product_name }}</td>
+        <td class="text-right">{{ o.order_qty|format_number }}</td>
+        <td>
+          {% if o.trigger_type=='reorder' %}<span class="badge badge-red">発注点</span>
+          {% elif o.trigger_type=='lot' %}<span class="badge badge-purple">ロット</span>
+          {% elif o.trigger_type=='mixed' %}<span class="badge badge-blue">混載</span>
+          {% elif o.trigger_type=='forced' %}<span class="badge badge-orange">強制</span>
+          {% elif o.trigger_type=='manual' %}<span class="badge badge-gray">手動</span>
+          {% else %}<span class="badge badge-gray">{{ o.trigger_type }}</span>{% endif %}
+        </td>
+        <td>
+          {% if o.mail_sent %}<span class="badge badge-green">送信済</span>
+          {% else %}<span class="badge badge-gray">未送信</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+</div><!-- /table-wrap -->
+    {% if dash_pages > 1 %}
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:8px">
+      {% if dash_page > 1 %}<a href="/?dash_page={{ dash_page-1 }}" class="btn btn-outline btn-sm">← 前へ</a>{% endif %}
+      <span style="padding:6px 10px;font-size:12px;color:#6b7280">{{ dash_page }}/{{ dash_pages }}ページ</span>
+      {% if dash_page < dash_pages %}<a href="/?dash_page={{ dash_page+1 }}" class="btn btn-outline btn-sm">次へ →</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p style="color:#9ca3af">発注履歴はありません。</p>
+    {% endif %}
+  </div>
+
+</div>
+<div>
+
+  <!-- クイック操作 -->
+  <div class="card">
+    <div class="card-title">クイック操作</div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <a href="/receipt" class="btn btn-primary" style="text-align:center">入庫登録</a>
+      <a href="/orders" class="btn btn-success" style="text-align:center">発注チェック</a>
+      <a href="/stocktake" class="btn btn-purple" style="text-align:center">棚卸リスト</a>
+      <form method="post" action="/expiry_check" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-warning" style="width:100%;text-align:center">期限チェック実行</button>
+      </form>
+      <form method="post" action="/orders/auto_check" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline" style="width:100%;text-align:center">発注自動チェック</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 最近のアラート -->
+  <div class="card">
+    <div class="card-title">最近のアラート</div>
+    {% for a in recent_alerts %}
+    <div style="padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
+      <span class="badge badge-yellow">{{ a.alert_type }}</span>
+      <span style="font-family:monospace;font-size:11px;color:#9ca3af">{{ a.jan }}</span>
+      {{ a.product_name }}
+      <div style="color:#9ca3af;font-size:11px">{{ a.created_at.strftime('%Y-%m-%d %H:%M') if a.created_at else '' }}</div>
+    </div>
+    {% else %}
+    <p style="color:#9ca3af;font-size:12px">アラートなし</p>
+    {% endfor %}
+  </div>
+
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+/* ================================================================
+   ui_layout_patch.css — レイアウトパッチ（最終版）
+   ================================================================ */
+
+/* ── テーブル共通 ── */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+.table-wrap table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* ── セル共通 ── */
+.table-wrap table th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* tdは overflow hidden をやめる → バッジ・ボタンが確実に表示される */
+.table-wrap table td {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+/* ── 行ホバー ── */
+.table-wrap table tbody tr:hover td {
+  background: #ffedd5 !important;
+}
+
+/* ── KPIカード横並び ── */
+.kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ── ページ余白（解像度別） ── */
+@media (min-width: 1600px) {
+  .main { padding: 16px 40px !important; }
+}
+@media (min-width: 1920px) {
+  .main { padding: 16px 60px !important; }
+}
+
+/* ── カード余白 ── */
+.card {
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}

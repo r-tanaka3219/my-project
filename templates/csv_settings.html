@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}CSV自動取込設定{% endblock %}
+{% block content %}
+<div class="page-title"><span>📂 CSV自動取込設定</span>
+  <div class="page-title-actions">
+    <a href="/csv/new" class="btn btn-primary btn-sm">＋ 新規設定</a>
+    <form method="post" action="/csv/run_all" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success btn-sm">▶ 全設定を今すぐ実行</button>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">取込設定一覧</div>
+  <table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:12%">設定名</th><th style="width:11%">種別</th><th style="width:11%">フォルダ</th><th style="width:11%">ファイル名パターン</th>
+    <th style="width:11%">実行時刻</th><th style="width:11%">月末月次</th><th style="width:11%">最終実行</th><th style="width:11%">状態</th><th style="width:11%">操作</th>
+  </tr></thead><tbody>
+  {% for s in settings %}
+  <tr>
+    <td><b>{{ s.name }}</b></td>
+    <td>{% if s.import_type=='sales' %}<span class="badge badge-blue">販売(引当)</span>
+        {% elif s.import_type=='receipt' %}<span class="badge badge-green">入庫(加算)</span>
+        {% elif s.import_type=='record_only' %}<span class="badge badge-gray">記録のみ</span>
+        {% else %}<span class="badge badge-gray">{{ s.import_type }}</span>{% endif %}</td>
+    <td style="font-size:12px;font-family:monospace;max-width:200px;overflow:hidden">{{ s.folder_path }}</td>
+    <td style="font-size:12px;font-family:monospace">{{ s.filename_pattern }}</td>
+    <td class="text-center">
+      {% if s.run_times %}
+        {% for t in s.run_times.split(',') %}
+          <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;
+                       font-weight:bold;padding:1px 6px;border-radius:4px;margin:1px">{{ t.strip() }}</span>
+        {% endfor %}
+      {% else %}
+        <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;
+                     font-weight:bold;padding:1px 6px;border-radius:4px">
+          {{ "%02d:%02d"|format(s.run_hour or 6, s.run_minute or 0) }}
+        </span>
+      {% endif %}
+    </td>
+    <td style="font-size:12px">{{ s.last_run_at or '未実行' }}</td>
+    <td>
+      {% if s.month_end_enabled %}
+        <span style="display:inline-block;background:#ede9fe;color:#7c3aed;font-size:11px;
+                     font-weight:bold;padding:2px 7px;border-radius:4px">有効</span>
+        <div style="font-size:10px;color:#9ca3af;margin-top:2px">{{ s.month_end_pattern or '' }}</div>
+      {% else %}
+        <span style="color:#d1d5db;font-size:11px">—</span>
+      {% endif %}
+    </td>
+    <td>{% if s.is_active %}<span class="badge badge-green">有効</span>
+        {% else %}<span class="badge badge-gray">無効</span>{% endif %}</td>
+    <td>
+      <a href="/csv/{{ s.id }}/edit" class="btn btn-outline btn-sm">編集</a>
+      <button type="button" class="btn btn-success btn-sm"
+              onclick="{% if s.import_type == 'sales' %}confirmRunSales({{ s.id }}, '{{ s.filename_pattern }}'){% else %}openRunDialog({{ s.id }}, '{{ s.filename_pattern }}'){% endif %}">▶ 実行</button>
+      {% if s.import_type == 'sales' %}
+      <span style="font-size:10px;color:#dc2626;font-weight:bold;display:block;margin-top:2px">🚨 在庫引当モード</span>
+      {% elif s.import_type == 'record_only' %}
+      <span style="font-size:10px;color:#1d4ed8;font-weight:bold;display:block;margin-top:2px">📋 記録のみ</span>
+      {% endif %}
+      {% if s.month_end_enabled %}
+      <button type="button" class="btn btn-purple btn-sm"
+              onclick="openMonthEndDialog({{ s.id }}, '{{ s.month_end_pattern or '' }}')">月末月次</button>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="text-center" style="padding:20px;color:#9ca3af">
+    設定がありません。「新規設定」から追加してください。
+  </td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+
+{# ── 手動実行ダイアログ ── #}
+<div id="run-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:bold;margin-bottom:16px">▶ 手動実行</div>
+    <div id="run-pattern-info"
+         style="background:#eff6ff;border-radius:6px;padding:8px 12px;margin-bottom:12px;
+                font-size:12px;color:#1d4ed8;font-family:monospace"></div>
+    <form id="run-form" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label style="font-weight:bold;color:#1d4ed8">
+          対象年月 <span style="font-weight:normal;color:#6b7280;font-size:11px">（月次ファイル用 · {yyyymm} / {yymm}）</span>
+        </label>
+        <input type="month" name="target_ym_raw" id="target_ym_raw"
+               value="{{ today_ym }}" style="width:100%">
+        <div class="help">例: 2026-03 → {yyyymm} が <b>202603</b> に置換されます。毎月自動で当月を使用。</div>
+      </div>
+      <div class="form-group">
+        <label style="font-weight:bold;color:#374151">
+          対象日付 <span style="font-weight:normal;color:#6b7280;font-size:11px">（日次ファイル用 · {yyyymmdd} / {yymmdd}）</span>
+        </label>
+        <input type="date" name="target_date" id="target_date_input"
+               value="{{ today }}" style="width:100%">
+        <div class="help">日次パターン({yyyymmdd})を使う場合に指定。月次パターンの場合は上の年月が優先されます。</div>
+      </div>
+      <div id="run-pattern-preview"
+           style="margin:8px 0;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;
+                  border-radius:6px;font-size:12px;color:#166534;font-family:monospace"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="submit" class="btn btn-success" >▶ 実行</button>
+        <button type="button" class="btn btn-outline" onclick="closeRunDialog()">キャンセル</button>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:6px">
+          📂 フォルダ内の未取込CSV全てを取込む場合：
+        </div>
+        <button type="button" class="btn btn-warning btn-sm" style="width:100%"
+                onclick="runAllFiles()"
+                title="フォルダ内の全CSVを日付に関係なく取込みます（取込済みは除外）">
+          📂 フォルダ内の全CSVを取込む
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="background:#f0f9ff;border:1px solid #bae6fd">
+  <div class="card-title" style="color:#0369a1">📋 ファイル名パターンの書き方</div>
+  <table style="table-layout:fixed;width:100%;font-size:12px">
+    <tr><th style="background:#e0f2fe">パターン例</th><th style="background:#e0f2fe">2026年3月の場合</th><th style="background:#e0f2fe">用途</th></tr>
+    <tr><td style="font-family:monospace">{yyyymm}_売上実績.csv</td><td style="font-family:monospace;color:#1d4ed8"><b>202603_売上実績.csv</b></td><td>月次ファイル（推奨）</td></tr>
+    <tr><td style="font-family:monospace">{yymm}_売上実績.csv</td><td style="font-family:monospace">2603_売上実績.csv</td><td>月次（2桁年）</td></tr>
+    <tr><td style="font-family:monospace">*{yyyymmdd}.csv</td><td style="font-family:monospace">*20260309.csv</td><td>日次ファイル</td></tr>
+    <tr><td style="font-family:monospace">sales_{yyyymmdd}.csv</td><td style="font-family:monospace">sales_20260309.csv</td><td>日次ファイル</td></tr>
+    <tr><td style="font-family:monospace">order_{yymmdd}.csv</td><td style="font-family:monospace">order_260309.csv</td><td>日次（2桁年）</td></tr>
+  </table>
+  <p style="font-size:12px;margin-top:8px;color:#0369a1">
+    ※ <b>日次フォルダ</b>: <code>\\192.168.201.165\csvout\sato_jiseki\day</code><br>
+    ※ <b>月末月次フォルダ</b>: <code>\\192.168.201.165\csvout\sato_jiseki\month</code>（月末のみ自動切替）<br>
+    ※ 月末日（例: 2/28）を検知すると月次フォルダの <code>{yyyymm}_売上実績.csv</code> から当日データのみ取込みます。<br>
+    ※ 取込み済みファイルは再取込みしません（ログに記録）。
+  </p>
+</div>
+
+<script>
+const TODAY_YM = "{{ today_ym }}";
+const TODAY    = "{{ today }}";
+
+function isMonthlyPattern(pattern) {
+  return pattern && (pattern.includes('{yyyymm}') || pattern.includes('{yymm}'));
+}
+
+function previewFilename(pattern, ym, dt) {
+  let name = pattern || '';
+  if (ym) {
+    const y = ym.replace('-','').slice(0,4), m = ym.replace('-','').slice(4,6);
+    const yy = y.slice(2);
+    name = name.replace('{yyyymm}', y+m).replace('{yymm}', yy+m);
+  }
+  if (dt) {
+    const p = dt.replace(/-/g,'');
+    const y=p.slice(0,4), m=p.slice(4,6), d=p.slice(6,8), yy=y.slice(2);
+    name = name.replace('{yyyymmdd}', y+m+d)
+               .replace('{yymmdd}',   yy+m+d)
+               .replace('{yyyy}', y).replace('{mm}', m).replace('{dd}', d);
+  }
+  return name;
+}
+
+function confirmRunSales(sid, pattern) {
+  var ok = confirm(
+    '【警告】在庫引き当てモードで実行します\n\n' +
+    '🚨 このモードでCSVを取込むと在庫が減算されます。\n\n' +
+    '過去データ・前年実績のインポートには\n' +
+    '絶対に使用しないでください！\n\n' +
+    '通常の日次取込として実行しますか？\n\n' +
+    '過去実績を取込む場合は「キャンセル」を押して\n' +
+    '設定を「記録のみ」に変更してから実行してください。\n\n' +
+    '（OK = 通常取込として実行 / キャンセル = 中止）'
+  );
+  if (ok) openRunDialog(sid, pattern);
+}
+
+function openRunDialog(sid, pattern) {
+  const dialog  = document.getElementById('run-dialog');
+  const form    = document.getElementById('run-form');
+  const preview = document.getElementById('run-pattern-preview');
+  const info    = document.getElementById('run-pattern-info');
+
+  form.action = '/csv/' + sid + '/run';
+
+  // パターン種別の案内
+  const monthly = isMonthlyPattern(pattern);
+  info.textContent = '設定パターン: ' + pattern
+    + (monthly ? '  →  月次ファイル（年月を指定）' : '  →  日次ファイル（日付を指定）');
+
+  function updatePreview() {
+    const ym = document.getElementById('target_ym_raw').value;
+    const dt = document.getElementById('target_date_input').value;
+    const fname = previewFilename(pattern, ym, dt);
+    preview.textContent = '対象ファイル名: ' + fname;
+  }
+  document.getElementById('target_ym_raw').oninput    = updatePreview;
+  document.getElementById('target_date_input').oninput = updatePreview;
+  updatePreview();
+
+  dialog.style.display = 'flex';
+}
+
+function closeRunDialog() {
+  document.getElementById('run-dialog').style.display = 'none';
+}
+
+function runAllFiles() {
+  if (!confirm('フォルダ内の全CSVファイルを取込みます。\n取込済みのファイルは除外されます。\n実行しますか？')) return;
+  const form = document.getElementById('run-form');
+  // hidden inputを追加してrun_all=1を送信
+  let inp = document.getElementById('run_all_input');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.id = 'run_all_input';
+    inp.name = 'run_all';
+    form.appendChild(inp);
+  }
+  inp.value = '1';
+  form.submit();
+  inp.value = '';
+}
+
+// target_ym_raw (2026-03) を target_ym (202603) に変換してsubmit
+document.getElementById('run-form').addEventListener('submit', function(e) {
+  const raw = document.getElementById('target_ym_raw').value;
+  if (raw) {
+    let inp = this.querySelector('[name=target_ym]');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'target_ym';
+      this.appendChild(inp);
+    }
+    inp.value = raw.replace('-','');
+  }
+});
+function openMonthEndDialog(sid, pattern) {
+  // DOMが確実に存在する関数呼び出し時に取得
+  var dialog = document.getElementById('me-dialog');
+  var form   = document.getElementById('me-form');
+  if (!dialog || !form) {
+    // フォールバック：直接年月入力して送信
+    var ym = prompt('取込む年月を入力してください（例：202602）');
+    if (ym && ym.length === 6) {
+      var allDates = confirm('全日付取込みますか？\nOK = 全日付取込み\nキャンセル = 月末日のみ');
+      var f = document.createElement('form');
+      f.method = 'post';
+      f.action = '/csv/' + sid + '/run_month_end';
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'target_ym'; inp.value = ym;
+      f.appendChild(inp);
+      if (allDates) {
+        var inp2 = document.createElement('input');
+        inp2.type = 'hidden'; inp2.name = 'all_dates'; inp2.value = '1';
+        f.appendChild(inp2);
+      }
+      document.body.appendChild(f);
+      f.submit();
+    }
+    return;
+  }
+  form.action = '/csv/' + sid + '/run_month_end';
+  document.getElementById('me-pattern-info').textContent = '月次パターン: ' + pattern;
+  window._mePattern = pattern;
+  meUpdatePreview();
+  dialog.style.display = 'flex';
+}
+
+function meUpdatePreview() {
+  const raw = document.getElementById('me_ym_raw').value;
+  if (!raw) return;
+  const ym = raw.replace('-', '');
+  const yr = parseInt(ym.slice(0,4)), mo = parseInt(ym.slice(4,6));
+  const lastDay = new Date(yr, mo, 0).getDate();
+  const pattern = window._mePattern || '';
+  let fname = pattern.replace('{yyyymm}', ym).replace('{yymm}', ym.slice(2));
+  document.getElementById('me-preview').textContent =
+    '取込ファイル: ' + fname + '  /  月末日: ' + yr + '/' + mo + '/' + lastDay;
+}
+
+function meFormSubmit(form) {
+  const raw = document.getElementById('me_ym_raw').value;
+  if (!raw) { alert('対象年月を選択してください'); return false; }
+  document.getElementById('me_ym_hidden').value = raw.replace('-', '');
+  return true;
+}
+
+function closeMonthEndDialog() {
+  document.getElementById('me-dialog').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const meForm = document.getElementById('me-form');
+  if (meForm) {
+    meForm.addEventListener('submit', function(e) {
+      const raw = document.getElementById('me_ym_raw').value;
+      if (raw) {
+        document.getElementById('me_ym_hidden').value = raw.replace('-', '');
+      }
+    });
+  }
+});
+</script>
+
+{# ── 月末月次実行ダイアログ ── #}
+<div id="me-dialog" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2);position:relative">
+    <div style="font-size:15px;font-weight:bold;margin-bottom:16px">📅 月末月次取込（過去データ対応）</div>
+    <div id="me-pattern-info"
+         style="background:#eff6ff;border-radius:6px;padding:8px 12px;margin-bottom:12px;
+                font-size:12px;color:#1d4ed8;font-family:monospace"></div>
+    <form id="me-form" method="post" onsubmit="return meFormSubmit(this)">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label style="font-weight:bold;color:#374151">対象年月</label>
+        <input type="month" id="me_ym_raw" value="{{ today_ym }}" style="width:100%" oninput="meUpdatePreview()">
+        <input type="hidden" name="target_ym" id="me_ym_hidden">
+        <div class="help">取込みたい月を選択してください（例：2026-02 → 202602_売上実績.csv）</div>
+      </div>
+      <div style="margin:8px 0;padding:10px;background:#fef3c7;border-radius:6px;border:1px solid #f59e0b">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" name="all_dates" value="1" id="me_all_dates">
+          <span><b>全日付取込む</b>（月末日以外も含めて全データ取込み）</span>
+        </label>
+        <div style="font-size:11px;color:#92400e;margin-top:4px;margin-left:24px">
+          ※チェックなし：月末日のデータのみ取込み<br>
+          ※チェックあり：指定月の全日付データを取込み（過去データ遡及取込に使用）
+        </div>
+      </div>
+      <div id="me-preview"
+           style="margin:8px 0;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;
+                  border-radius:6px;font-size:12px;color:#166534;font-family:monospace">
+        年月を選択してください
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="submit" class="btn btn-success" >▶ 取込実行</button>
+        <button type="button" class="btn btn-outline" onclick="closeMonthEndDialog()">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>取込ログ（{{ logs|length }}件）</span>
+    <div class="search-form">
+      <!-- 期間削除 -->
+      <form method="post" action="/csv/logs/delete"
+            onsubmit="return confirm('指定期間より古いCSV取込ログを削除しますか？')"
+            class="search-form" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="mode" value="months">
+        <input type="number" name="months" value="3" min="1" max="120"
+               style="width:55px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+        <span style="font-size:12px;color:#6b7280">ヶ月以前を削除</span>
+        <button type="submit" class="btn btn-danger btn-sm">削除</button>
+      </form>
+      <!-- 全削除 -->
+      <form method="post" action="/csv/logs/delete"
+            onsubmit="return confirm('CSV取込ログをすべて削除しますか？\nこの操作は元に戻せません。')"
+            style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="mode" value="all">
+        <button type="submit" class="btn btn-danger btn-sm">全削除</button>
+      </form>
+    </div>
+  </div>
+  <table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:18%">実行日時</th><th style="width:7%">種別</th><th style="width:11%">設定名</th><th style="width:14%">ファイル名</th>
+    <th class="text-right" style="width:6%">成功</th><th class="text-right" style="width:7%">エラー</th><th class="text-center" style="width:10%">状態</th><th style="width:12%">詳細</th><th style="width:15%"></th>
+  </tr></thead><tbody>
+  {% for l in logs %}
+  <tr>
+    <td style="font-size:12px;white-space:nowrap">{{ l.imported_at.strftime('%Y-%m-%d %H:%M:%S') if l.imported_at else '' }}</td>
+    <td>{% if l.trigger_type=='manual' %}<span class="badge badge-blue">手動</span>
+        {% else %}<span class="badge badge-gray">自動</span>{% endif %}</td>
+    <td>{{ l.setting_name }}</td>
+    <td style="font-size:12px;font-family:monospace">{{ l.filename }}</td>
+    <td class="text-right">{{ l.rows_ok|format_number }}</td>
+    <td class="text-right">{{ l.rows_err|format_number }}</td>
+    <td class="text-center">{% if l.status=='ok' %}<span class="badge badge-green">成功</span>
+        {% elif l.status=='partial' %}<span class="badge badge-yellow">一部エラー</span>
+        {% elif l.status=='skip' %}<span class="badge badge-gray">スキップ</span>
+        {% else %}<span class="badge badge-red">エラー</span>{% endif %}</td>
+    <td style="font-size:11px;color:#6b7280">{{ l.detail }}</td>
+    <td style="text-align:center">
+      {% if l.filename %}
+      <a href="/csv/import_detail?source_file={{ l.filename|urlencode }}" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">📄 明細確認</a>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="text-center" style="padding:20px;color:#9ca3af">ログなし</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

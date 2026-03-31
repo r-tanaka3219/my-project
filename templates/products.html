@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}商品管理{% endblock %}
+{% block content %}
+<div class="page-title"><span>🏷 商品管理</span>
+  <div class="page-title-actions">
+    <a href="/products/new" class="btn btn-primary btn-sm">＋ 新規登録</a>
+    <a href="/products/import" class="btn btn-success btn-sm">📥 インポート</a>
+    <a href="/products/export?fmt=xlsx" class="btn btn-outline btn-sm">📤 Excel出力</a>
+    <a href="/products/export?fmt=csv" class="btn btn-outline btn-sm">📤 CSV出力</a>
+    <a href="/products/inactive" class="btn btn-outline btn-sm">🗄 無効商品</a>
+    <form method="post" action="/reorder_update" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-purple btn-sm" onclick="return confirm('発注点を前年実績ベースで自動更新しますか？')">
+        📈 発注点を前年実績で更新
+      </button>
+    </form>
+  </div>
+</div>
+<div class="card" style="padding:10px 16px;margin-bottom:0">
+  <form method="get" action="/products" class="search-form">
+    <input type="text" name="q" value="{{ request.args.get('q','') }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if request.args.get('q') %}<a href="/products" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+<div class="card">
+<div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+  <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th><th style="width:9%">JAN</th><th style="width:5%">商品CD</th><th style="width:19%">商品名</th>
+  <th class="text-right" style="width:5%">在庫</th><th class="text-right" style="width:5%">入数</th>
+  <th class="text-right" style="width:5%">発注点</th><th class="text-right" style="width:5%">ロット</th>
+  <th class="text-right" style="width:5%">発注数</th><th class="text-center" style="width:4%">LT</th><th class="text-center" style="width:6%">安全係数</th><th class="text-center" style="width:5%">自動</th><th class="text-center" style="width:14%">操作</th>
+</tr></thead><tbody>
+{% for p in products %}
+<tr>
+  <td style="font-family:monospace;font-size:12px">{{ p.supplier_cd or '' }}</td>
+  <td style="font-size:12px">{{ p.supplier_name or '' }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
+  <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '' }}</td>
+  <td>{{ p.product_name }}</td>
+  <td class="text-right">
+    {% if p.stock_qty <= p.reorder_point %}<span class="badge badge-red">{{ p.stock_qty|format_number }}</span>
+    {% else %}{{ p.stock_qty|format_number }}{% endif %}
+  </td>
+  <td class="text-right">{{ p.unit_qty or '-' }}</td>
+  <td class="text-right">{{ p.reorder_point|format_number }}</td>
+  <td class="text-right">{{ p.lot_size or '-' }}</td>
+  <td class="text-right">{{ p.order_qty|format_number }}</td>
+  <td class="text-center">{{ p.lead_time_days }}日</td>
+  <td class="text-center">×{{ p.safety_factor }}</td>
+  <td class="text-center">{% if p.reorder_auto %}<span class="badge badge-green">自動</span>{% else %}<span class="badge badge-gray">手動</span>{% endif %}</td>
+  <td class="text-center" style="white-space:nowrap">
+    <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
+    <form method="post" action="/products/{{ p.id }}/delete" style="display:inline;margin-left:4px"
+          onsubmit="return confirm('「{{ p.product_name }}」を削除しますか？\n在庫・発注履歴は残ります。')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger btn-sm">削除</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</tbody></table>
+</div><!-- /table-wrap -->
+</div>
+{% endblock %}

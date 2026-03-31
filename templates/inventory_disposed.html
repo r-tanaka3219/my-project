@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}廃棄・退避在庫{% endblock %}
+{% block content %}
+<div class="page-title"><span>🗑 廃棄・退避在庫</span>
+  <div class="page-title-actions">
+    <a href="/inventory/disposed/export" class="btn btn-outline btn-sm">📤 Excel出力</a>
+    <a href="/inventory" class="btn btn-outline btn-sm">← 在庫一覧に戻る</a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}" style="margin-bottom:12px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card" style="padding:10px 16px;margin-bottom:0">
+  <form method="get" action="/inventory/disposed" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
+           >
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/inventory/disposed" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+<table style="table-layout:fixed;width:100%"><thead><tr>
+    <th style="width:5%">退避日</th>
+    <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th>
+    <th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:12%">商品名</th>
+    <th class="text-right" style="width:5%">数量</th>
+    <th class="text-right" style="width:6%">原価(円)</th>
+    <th class="text-right" style="width:8%">ロス金額(円)</th>
+    <th style="width:8%">賞味期限</th><th style="width:5%">ロット</th>
+    <th style="width:9%">退避理由</th><th style="width:6%">備考</th><th style="width:9%">操作</th>
+  </tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td style="font-size:12px;white-space:nowrap">{{ r.disposed_at }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.supplier_cd or '-' }}</td>
+    <td style="font-size:12px">{{ r.supplier_name }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.product_cd or '-' }}</td>
+    <td style="font-family:monospace;font-size:12px">{{ r.jan }}</td>
+    <td>{{ r.product_name }}</td>
+    <td class="text-right">{{ r.quantity|format_number }}</td>
+    <td class="text-right">{{ "{:,.0f}".format(r.cost_price or 0) }}</td>
+    <td class="text-right" style="font-weight:bold;color:#dc2626">{{ "{:,.0f}".format(r.loss_amount or 0) }}</td>
+    <td style="font-size:12px">{{ r.expiry_date or '-' }}</td>
+    <td style="font-size:12px">{{ r.lot_no or '-' }}</td>
+    <td>
+      {% if r.reason_type == '期限切れ' %}<span class="badge badge-red">{{ r.reason_type }}</span>
+      {% elif r.reason_type == '出荷不可' %}<span class="badge badge-orange">{{ r.reason_type }}</span>
+      {% elif r.reason_type == '破損' %}<span class="badge badge-yellow">{{ r.reason_type }}</span>
+      {% elif r.reason_type == '自主回収' %}<span class="badge badge-red">{{ r.reason_type }}</span>
+      {% else %}<span class="badge badge-gray">{{ r.reason_type }}</span>{% endif %}
+    </td>
+    <td style="font-size:12px;color:#6b7280">{{ r.reason_note or '' }}</td>
+    <td>
+      <form method="post" action="/inventory/disposed/{{ r.id }}/restore"
+            onsubmit="return confirm('「{{ r.product_name }}」を在庫に戻しますか？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success btn-sm" style="font-size:11px">在庫に戻す</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="14" style="text-align:center;padding:24px;color:#9ca3af">退避された在庫はありません</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div><!-- /table-wrap -->
+  {% if rows %}
+  <div style="text-align:right;padding:10px 12px;font-weight:bold;font-size:14px;border-top:2px solid #e5e7eb">
+    累計ロス金額：<span style="color:#dc2626">{{ "{:,.0f}".format(rows|sum(attribute='loss_amount')) }} 円</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

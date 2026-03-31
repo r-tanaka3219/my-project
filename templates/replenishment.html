@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}棚別補充指示{% endblock %}
+{% block content %}
+<style>
+.inline-task-form{display:grid;grid-template-columns:90px 130px minmax(120px,1fr) auto;gap:6px;align-items:center}
+.inline-complete-form{display:grid;grid-template-columns:90px minmax(120px,1fr) auto;gap:6px;align-items:center}
+@media (max-width:1080px){.inline-task-form,.inline-complete-form{grid-template-columns:1fr}}
+</style>
+
+<div class="page-title"><span>🪜 棚別の補充指示書</span><div class="page-title-actions"><a href="/inventory/replenishment/export_csv{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-outline btn-sm">CSV出力</a><a href="/inventory/replenishment/export_excel{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-outline btn-sm">Excel出力</a><a href="/inventory" class="btn btn-outline btn-sm">← 在庫一覧へ</a></div></div>
+
+<div class="card" style="background:#eff6ff;border-left:4px solid #2563eb">
+  商品マスタのロケーションを棚番とみなし、同一棚の在庫とバックヤード在庫を分けて補充候補を出します。今回はさらに、補充指示の登録と完了実績まで管理できるようにしています。
+</div>
+
+<div class="card" style="padding:10px 16px">
+  <form method="get" action="/inventory/replenishment" class="search-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="商品名・JAN・棚ロケーション">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
+    {% if q %}<a href="/inventory/replenishment" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">補充対象一覧</div>
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:7%">状態</th><th style="width:9%">仕入先</th><th style="width:15%">商品</th><th style="width:9%">棚ロケーション</th><th class="text-right" style="width:6%">棚在庫</th><th class="text-right" style="width:6%">補充点</th><th class="text-right" style="width:6%">棚目標</th><th class="text-right" style="width:9%">引当可能在庫</th><th class="text-right" style="width:8%">推奨補充数</th><th class="text-center" style="width:8%">最古期限</th><th class="text-center" style="width:17%">実行</th></tr></thead><tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{% if r.status == '欠品' %}<span class="badge badge-red">{{ r.status }}</span>{% elif r.status == '要補充' %}<span class="badge badge-yellow">{{ r.status }}</span>{% else %}<span class="badge badge-blue">{{ r.status }}</span>{% endif %}</td>
+    <td><div>{{ r.supplier_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</div></td>
+    <td><div>{{ r.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ r.product_cd }} / {{ r.jan }}</div></td>
+    <td style="font-family:monospace">{{ r.shelf_location }}</td>
+    <td class="text-right">{{ r.shelf_qty|format_number }}</td>
+    <td class="text-right">{{ r.shelf_trigger|format_number }}</td>
+    <td class="text-right">{{ r.shelf_target|format_number }}</td>
+    <td class="text-right">{{ r.reserve_qty|format_number }}</td>
+    <td class="text-right" style="font-weight:bold">{{ r.suggested_replenish_qty|format_number }}</td>
+    <td class="text-center ">{{ r.reserve_oldest_expiry or '-' }}</td>
+    <td>
+      <form method="post" action="/inventory/replenishment/create" class="inline-task-form" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="jan" value="{{ r.jan }}">
+        <input type="hidden" name="shelf_location" value="{{ r.shelf_location }}">
+        <input type="number" name="qty" min="1" value="{{ r.suggested_replenish_qty }}" style="width:55px;font-size:11px;padding:2px 4px">
+        <input type="text" name="from_location" placeholder="補充元" style="width:65px;font-size:11px;padding:2px 4px">
+        <input type="text" name="note" placeholder="備考" style="width:65px;font-size:11px;padding:2px 4px">
+        <button class="btn btn-primary btn-sm">指示登録</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+</div>
+
+<div class="card">
+  <div class="card-title">補充指示・完了実績</div>
+  {% if tasks %}
+  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:14%">作業日</th><th style="width:18%">商品</th><th style="width:12%">棚</th><th style="width:13%">補充元</th><th class="text-right" style="width:9%">指示数</th><th class="text-right" style="width:9%">完了数</th><th style="width:11%">状態</th><th style="width:14%">完了登録</th></tr></thead>d><tbody>
+  {% for t in tasks %}
+  <tr>
+    <td>{{ t.task_date }}</td>
+    <td><div>{{ t.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ t.jan }}</div></td>
+    <td>{{ t.shelf_location or '-' }}</td>
+    <td>{{ t.from_location or '-' }}</td>
+    <td class="text-right">{{ t.planned_qty }}</td>
+    <td class="text-right">{{ t.completed_qty }}</td>
+    <td>{% if t.status == 'planned' %}<span class="badge badge-yellow">未完了</span>{% elif t.status == 'partial' %}<span class="badge badge-blue">一部完了</span>{% else %}<span class="badge badge-green">完了</span>{% endif %}</td>
+    <td>
+      {% if t.status in ['planned', 'partial'] %}
+      <form method="post" action="/inventory/replenishment/complete" class="inline-complete-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="task_id" value="{{ t.id }}">
+        <input type="number" name="completed_qty" min="0" value="{{ t.planned_qty }}">
+        <input type="text" name="note" placeholder="備考" style="width:65px;font-size:11px;padding:2px 4px">
+        <button class="btn btn-outline btn-sm">{{ '更新' if t.status == 'partial' else '完了登録' }}</button>
+      </form>
+      {% else %}
+      <span class="badge badge-green">{{ t.completed_at }}</span>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% else %}
+  <p style="color:#9ca3af">補充指示はまだありません。</p>
+  {% endif %}
+</div>
+{% endblock %}
