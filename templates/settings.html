@@ -318,10 +318,13 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
                style="margin-top:3px;flex-shrink:0">
         <div>
           <div style="font-weight:500;font-size:13px;color:var(--color-text-info)">🤖 AIモード（推奨）</div>
-          <div style="font-size:12px;margin-top:4px;line-height:1.7;color:var(--color-text-secondary)">
-            問屋向けハイブリッド予測：<br>
-            Aランク → ホルト・ウィンタース＋分位点＋動的安全在庫＋気温補正<br>
-            B/Cランク → 移動平均＋固定安全在庫
+          <div style="font-size:12px;margin-top:4px;line-height:1.8;color:var(--color-text-secondary)">
+            <b>Aランク（実績14日以上）</b><br>
+            ホルト・ウィンタース加法型（α=0.3/β=0.1）<br>
+            ＋Q25/Q50/Q75分位点 ＋ 気温補正（±30%）<br>
+            ＋ 動的安全在庫（Z×σ_AI×√LT）<br>
+            <b>B/Cランク・実績不足</b><br>
+            直近28日移動平均 ＋ 固定安全在庫
           </div>
         </div>
       </label>
