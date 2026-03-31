@@ -63,7 +63,7 @@ else:
 # 2. base.html にライブエディタUIを埋め込む
 # ─────────────────────────────────────────
 EDITOR_HTML = r'''
-<!-- ══ ライブCSSエディタ ══ -->
+<!-- == ライブCSSエディタ == -->
 <div id="css-editor-fab" title="CSSエディタを開く"
      onclick="cssEditorToggle()"
      style="position:fixed;bottom:20px;right:20px;z-index:9999;
@@ -218,7 +218,7 @@ EDITOR_HTML = r'''
   };
 })();
 </script>
-<!-- ══ /ライブCSSエディタ ══ -->
+<!-- == /ライブCSSエディタ == -->
 '''
 
 with open(BASE_HTML, encoding='utf-8') as f:

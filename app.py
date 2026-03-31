@@ -1,5 +1,13 @@
 """在庫管理・自動発注システム"""
-import os, csv, io, hashlib, hmac, threading, queue, json, time as _time, logging
+import sys, os, csv, io, hashlib, hmac, threading, queue, json, time as _time, logging
+
+# Windows CP932 環境でも UTF-8 で出力できるよう stdout/stderr を再設定
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 logging.basicConfig(
     level=logging.INFO,
@@ -428,7 +436,7 @@ def _build_forecast_rows(db, q=''):
         r = dict(r)
 
         if not ai_mode:
-            # ══ 前年実績モード ══
+            # == 前年実績モード ==
             # 前年同月の日次平均をそのまま使用（WMA/季節/曜日/販促/受注/P3 全て無効）
             ly_daily = _ly_map.get(r['jan'], 0.0)
             base_next_30   = ly_daily * 30.0
@@ -451,7 +459,7 @@ def _build_forecast_rows(db, q=''):
                     direct_demand_days += 1
             p80_daily = p90_daily = daily_std = None
         else:
-            # ══ AIモード（全機能） ══
+            # == AIモード（全機能） ==
             # P1: WMAベースのavg_daily
             avg_daily = float(r.get('avg_daily') or 0)
 

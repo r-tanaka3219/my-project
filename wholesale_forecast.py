@@ -314,7 +314,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
         manual_adj = max(0.1, float(p.get('manual_adj_factor') or 1.0))
 
         if abc_rank == 'A' and len(daily_qtys) >= _MIN_DAYS:
-            # ═══ Aランク: ホルト・ウィンタース + 分位点 + 気温補正 ═══
+            # === Aランク: ホルト・ウィンタース + 分位点 + 気温補正 ===
 
             # ホルト・ウィンタース30日予測
             hw_preds = holt_winters_forecast(daily_qtys, horizon=30)
@@ -354,7 +354,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
             algorithm = 'holt_winters+quantile'
 
         else:
-            # ═══ B/Cランク: 単純移動平均 ═══
+            # === B/Cランク: 単純移動平均 ===
             q25 = q50 = q75 = iqr_std = 0.0
             dyn_ss    = 0.0
             temp_adj  = 1.0
