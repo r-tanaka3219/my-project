@@ -466,6 +466,35 @@ _MIGRATIONS = [
     "INSERT INTO settings(key,value) SELECT 'abc_a_threshold','0.70' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='abc_a_threshold')",
     "INSERT INTO settings(key,value) SELECT 'abc_b_threshold','0.90' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='abc_b_threshold')",
     "INSERT INTO settings(key,value) SELECT 'weather_location','東京' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='weather_location')",
+
+    # 仕入先CD単位の設定（チェーン・店舗別）
+    """CREATE TABLE IF NOT EXISTS supplier_cd_settings (
+        id             SERIAL PRIMARY KEY,
+        chain_cd       TEXT,
+        store_cd       TEXT,
+        supplier_cd    TEXT NOT NULL,
+        exclude_deduct INTEGER DEFAULT 0,
+        notes          TEXT DEFAULT '',
+        created_at     TIMESTAMP DEFAULT NOW(),
+        UNIQUE(chain_cd, store_cd, supplier_cd)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_supplier_cd_settings_chain ON supplier_cd_settings(chain_cd)",
+    "CREATE INDEX IF NOT EXISTS ix_supplier_cd_settings_store ON supplier_cd_settings(store_cd)",
+
+    # 商品CD単位の設定（チェーン・店舗別）
+    """CREATE TABLE IF NOT EXISTS product_cd_settings (
+        id             SERIAL PRIMARY KEY,
+        chain_cd       TEXT,
+        store_cd       TEXT,
+        product_cd     TEXT,
+        jan            TEXT,
+        exclude_deduct INTEGER DEFAULT 0,
+        notes          TEXT DEFAULT '',
+        created_at     TIMESTAMP DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_product_cd_settings_chain ON product_cd_settings(chain_cd)",
+    "CREATE INDEX IF NOT EXISTS ix_product_cd_settings_store ON product_cd_settings(store_cd)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_product_cd_settings ON product_cd_settings(chain_cd, store_cd, COALESCE(product_cd,''), COALESCE(jan,''))",
 ]
 
 def migrate_db():
