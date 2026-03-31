@@ -57,34 +57,37 @@
   </div>
   </form>
 
+  {% for c in chains %}
+  <form id="cf{{ c.id }}" method="post" action="/chains/chain/{{ c.id }}/update" style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="exclude_deduct" value="0">
+  </form>
+  {% endfor %}
+
   <table style="table-layout:fixed;width:100%" class="table">
     <thead>
       <tr>
-        <th style="width:15%">チェーンCD</th>
-        <th style="width:45%">取引先名</th>
-        <th style="width:20%">在庫引き当て除外</th>
-        <th style="width:20%">操作</th>
+        <th style="width:20%;padding:8px 10px">チェーンCD</th>
+        <th style="width:40%;padding:8px 10px">取引先名</th>
+        <th style="width:20%;padding:8px 10px;text-align:center">在庫引き当て除外</th>
+        <th style="width:20%;padding:8px 10px;text-align:center">操作</th>
       </tr>
     </thead>
     <tbody>
       {% for c in chains %}
       <tr {% if c.exclude_deduct %}style="background:#fff7ed"{% endif %}>
-        <td><code>{{ c.chain_cd }}</code></td>
-        <td>
-          <form method="post" action="/chains/chain/{{ c.id }}/update" class="search-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" name="chain_name" value="{{ c.chain_name }}"
-                   style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+        <td style="padding:8px 10px"><code>{{ c.chain_cd }}</code></td>
+        <td style="padding:6px 10px">
+          <input type="text" name="chain_name" value="{{ c.chain_name }}" form="cf{{ c.id }}"
+                 style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;box-sizing:border-box">
         </td>
-        <td style="text-align:center">
-            <input type="hidden" name="exclude_deduct" value="0">
-            <input type="checkbox" name="exclude_deduct" value="1"
-                   {% if c.exclude_deduct %}checked{% endif %}
-                   style="width:16px;height:16px;cursor:pointer">
+        <td style="padding:8px 10px;text-align:center">
+          <input type="checkbox" name="exclude_deduct" value="1" form="cf{{ c.id }}"
+                 {% if c.exclude_deduct %}checked{% endif %}
+                 style="width:16px;height:16px;cursor:pointer">
         </td>
-        <td style="text-align:center">
-            <button type="submit" class="btn btn-primary btn-sm">保存</button>
-          </form>
+        <td style="padding:6px 10px;text-align:center">
+          <button type="submit" form="cf{{ c.id }}" class="btn btn-primary btn-sm">保存</button>
         </td>
       </tr>
       {% else %}
@@ -132,43 +135,45 @@
            style="width:300px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
   </div>
 
+  {% for s in stores %}
+  <form id="sf{{ s.id }}" method="post" action="/chains/store/{{ s.id }}/update" style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="exclude_deduct" value="0">
+  </form>
+  {% endfor %}
+
   <table style="table-layout:fixed;width:100%" class="table" id="store-table">
     <thead>
       <tr>
-        <th style="width:12%">チェーンCD</th>
-        <th style="width:28%">取引先名</th>
-        <th style="width:12%">店舗CD</th>
-        <th style="width:20%">店舗名</th>
-        <th style="width:14%">引き当て除外</th>
-        <th style="width:14%">操作</th>
+        <th style="width:13%;padding:8px 10px">チェーンCD</th>
+        <th style="width:22%;padding:8px 10px">取引先名</th>
+        <th style="width:13%;padding:8px 10px">店舗CD</th>
+        <th style="width:27%;padding:8px 10px">店舗名</th>
+        <th style="width:13%;padding:8px 10px;text-align:center">引き当て除外</th>
+        <th style="width:12%;padding:8px 10px;text-align:center">操作</th>
       </tr>
     </thead>
     <tbody id="store-tbody">
       {% for s in stores %}
       <tr {% if s.exclude_deduct %}style="background:#fff7ed"{% endif %}
           data-search="{{ s.store_cd }}|{{ s.store_name }}|{{ s.chain_cd }}|{{ s.client_name }}">
-        <td>
-          <form method="post" action="/chains/store/{{ s.id }}/update" style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <code style="white-space:nowrap">{{ s.chain_cd }}</code></td>
-        <td>
-            <input type="text" name="client_name" value="{{ s.client_name }}"
-                   style="width:150px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;color:#2563eb;font-weight:bold">
+        <td style="padding:8px 10px"><code>{{ s.chain_cd }}</code></td>
+        <td style="padding:6px 10px">
+          <input type="text" name="client_name" value="{{ s.client_name }}" form="sf{{ s.id }}"
+                 style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;color:#2563eb;font-weight:600;box-sizing:border-box">
         </td>
-        <td><code style="white-space:nowrap">{{ s.store_cd }}</code></td>
-        <td>
-            <input type="text" name="store_name" value="{{ s.store_name }}"
-                   style="width:170px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:13px">
+        <td style="padding:8px 10px"><code>{{ s.store_cd }}</code></td>
+        <td style="padding:6px 10px">
+          <input type="text" name="store_name" value="{{ s.store_name }}" form="sf{{ s.id }}"
+                 style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;box-sizing:border-box">
         </td>
-        <td style="text-align:center">
-            <input type="hidden" name="exclude_deduct" value="0">
-            <input type="checkbox" name="exclude_deduct" value="1"
-                   {% if s.exclude_deduct %}checked{% endif %}
-                   style="width:16px;height:16px;cursor:pointer">
+        <td style="padding:8px 10px;text-align:center">
+          <input type="checkbox" name="exclude_deduct" value="1" form="sf{{ s.id }}"
+                 {% if s.exclude_deduct %}checked{% endif %}
+                 style="width:16px;height:16px;cursor:pointer">
         </td>
-        <td style="text-align:center">
-            <button type="submit" class="btn btn-primary btn-sm">保存</button>
-          </form>
+        <td style="padding:6px 10px;text-align:center">
+          <button type="submit" form="sf{{ s.id }}" class="btn btn-primary btn-sm">保存</button>
         </td>
       </tr>
       {% else %}
