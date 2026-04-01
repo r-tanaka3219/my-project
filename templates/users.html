@@ -4,11 +4,16 @@
 <style>
 .user-table{table-layout:fixed;width:100%}
 .user-table th{background:#f8fafc;font-size:12px;font-weight:600;color:#374151;padding:8px 10px;white-space:nowrap}
-.user-table td{padding:8px 10px;vertical-align:top;border-bottom:1px solid #f3f4f6;font-size:13px}
+.user-table td{padding:6px 10px;vertical-align:middle;border-bottom:1px solid #f3f4f6;font-size:13px}
 .user-table tr:last-child td{border-bottom:none}
 .user-table tr:hover td{background:#fafafa}
-.perm-grid{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:6px}
-.perm-grid label{display:flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap}
+/* チェック横一列スクロール */
+.perm-row{display:flex;flex-wrap:nowrap;align-items:center;gap:2px 6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.perm-row::-webkit-scrollbar{height:3px}
+.perm-row::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.perm-row label{display:flex;align-items:center;gap:2px;font-size:11px;white-space:nowrap;cursor:pointer;padding:2px 4px;border-radius:3px}
+.perm-row label:hover{background:#f0f9ff}
+.perm-actions{display:flex;gap:4px;margin-top:4px;flex-wrap:nowrap}
 </style>
 
 <div class="page-title">👤 ユーザー管理</div>
@@ -37,15 +42,15 @@
       </div>
     </div>
     <div id="new-perms" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:8px">アクセス許可するページ</div>
-      <div class="perm-grid">
+      <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:6px">アクセス許可するページ</div>
+      <div class="perm-row" id="new-perms-row">
         {% for key, label in PAGE_PERMISSIONS %}
         <label><input type="checkbox" name="perm_{{ key }}" value="1" checked> {{ label }}</label>
         {% endfor %}
       </div>
-      <div style="margin-top:8px;display:flex;gap:6px">
-        <button type="button" onclick="checkAll('new-perms', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
-        <button type="button" onclick="checkAll('new-perms', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        <button type="button" onclick="checkAll('new-perms-row', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
+        <button type="button" onclick="checkAll('new-perms-row', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
       </div>
     </div>
     <button type="submit" class="btn btn-primary">追加</button>
@@ -101,7 +106,7 @@
           <span style="font-size:12px;color:#9ca3af">管理者は全ページにアクセス可</span>
         {% else %}
         {% set user_perms = (u.permissions or '').split(',') %}
-        <div class="perm-grid">
+        <div class="perm-row" id="prow{{ u.id }}">
           {% for key, label in PAGE_PERMISSIONS %}
           <label>
             <input type="checkbox" name="perm_{{ key }}" value="1"
@@ -111,10 +116,10 @@
           </label>
           {% endfor %}
         </div>
-        <div style="display:flex;gap:6px">
-          <button type="submit" form="permf{{ u.id }}" class="btn btn-primary btn-sm">権限を保存</button>
-          <button type="button" onclick="checkAll('permf{{ u.id }}', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
-          <button type="button" onclick="checkAll('permf{{ u.id }}', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
+        <div class="perm-actions">
+          <button type="submit" form="permf{{ u.id }}" class="btn btn-primary btn-sm">保存</button>
+          <button type="button" onclick="checkAll('prow{{ u.id }}', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
+          <button type="button" onclick="checkAll('prow{{ u.id }}', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
         </div>
         {% endif %}
       </td>
