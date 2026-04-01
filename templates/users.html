@@ -7,12 +7,11 @@
 .user-table td{padding:6px 10px;vertical-align:middle;border-bottom:1px solid #f3f4f6;font-size:13px}
 .user-table tr:last-child td{border-bottom:none}
 .user-table tr:hover td{background:#fafafa}
-/* チェック横一列スクロール */
-.perm-row{display:flex;flex-wrap:nowrap;align-items:center;gap:2px 6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
-.perm-row::-webkit-scrollbar{height:3px}
-.perm-row::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
-.perm-row label{display:flex;align-items:center;gap:2px;font-size:11px;white-space:nowrap;cursor:pointer;padding:2px 4px;border-radius:3px}
+/* チェック横一列（スクロールなし） */
+.perm-row{display:flex;flex-wrap:nowrap;align-items:center;gap:0 4px}
+.perm-row label{display:inline-flex;align-items:center;gap:2px;font-size:11px;white-space:nowrap;cursor:pointer;padding:2px 3px;border-radius:3px}
 .perm-row label:hover{background:#f0f9ff}
+.perm-row input[type=checkbox]{width:12px;height:12px;margin:0;cursor:pointer;flex-shrink:0}
 .perm-actions{display:flex;gap:4px;margin-top:4px;flex-wrap:nowrap}
 </style>
 
@@ -68,18 +67,18 @@
 {% endfor %}
 
 <!-- 登録ユーザー一覧（テーブル） -->
-<div class="card" style="max-width:1400px">
+<div class="card">
   <div class="card-title">登録ユーザー一覧</div>
   <div style="overflow-x:auto">
-  <table class="user-table">
+  <table class="user-table" style="min-width:1100px">
     <thead>
       <tr>
-        <th style="width:10%">ユーザーID</th>
-        <th style="width:7%">役割</th>
-        <th style="width:6%">状態</th>
-        <th style="width:38%">アクセス許可ページ</th>
-        <th style="width:22%">PW変更</th>
-        <th style="width:17%">操作</th>
+        <th style="width:8%">ユーザーID</th>
+        <th style="width:5%">役割</th>
+        <th style="width:5%">状態</th>
+        <th style="width:57%">アクセス許可ページ</th>
+        <th style="width:13%">PW変更</th>
+        <th style="width:12%">操作</th>
       </tr>
     </thead>
     <tbody>
