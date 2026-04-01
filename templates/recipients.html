@@ -9,7 +9,7 @@
   {% endfor %}
 {% endwith %}
 
-<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;align-items:start;max-width:1000px">
+<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;align-items:start;max-width:1400px">
 
   <div>
     <div class="card">
@@ -54,16 +54,16 @@
   <div class="card">
     <div class="card-title">登録済み受信者（{{ recipients|length }}件）</div>
     <table style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:16%">名前</th>
-      <th style="width:26%">メールアドレス</th>
-      <th class="text-center" style="width:14%">送信区分</th>
-      <th class="text-center" style="width:12%">仕入先CD</th>
-      <th class="text-center" style="width:8%">状態</th>
-      <th style="width:24%">操作</th>
+      <th style="width:13%">名前</th>
+      <th style="width:20%">メールアドレス</th>
+      <th class="text-center" style="width:11%">送信区分</th>
+      <th style="width:18%">仕入先CD</th>
+      <th class="text-center" style="width:7%">状態</th>
+      <th style="width:31%">操作</th>
     </tr></thead><tbody>
     {% for r in recipients %}
     <tr style="{% if not r.is_active %}opacity:0.5{% endif %}">
-      <td style="font-weight:bold">{{ r.name }}</td>
+      <td style="font-weight:bold;font-size:13px">{{ r.name }}</td>
       <td style="font-family:monospace;font-size:11px;word-break:break-all;white-space:normal">{{ r.email }}</td>
       <td style="text-align:center">
         {% set st = r.send_type or 'both' %}
@@ -76,49 +76,51 @@
           <span class="badge badge-orange">期限のみ</span>
         {% endif %}
       </td>
-      <td style="text-align:center;font-family:monospace;font-size:11px">
+      <td style="font-family:monospace;font-size:11px;word-break:break-all;white-space:normal">
         {% if r.supplier_cd %}
-          <span class="badge badge-gray">{{ r.supplier_cd }}</span>
+          {{ r.supplier_cd }}
         {% else %}
-          <span style="color:#9ca3af;font-size:11px">全共通</span>
+          <span style="color:#9ca3af">全共通</span>
         {% endif %}
       </td>
       <td style="text-align:center">
         {% if r.is_active %}<span class="badge badge-green">有効</span>
         {% else %}<span class="badge badge-gray">無効</span>{% endif %}
       </td>
-      <td style="padding:6px 8px;vertical-align:top">
-        <form method="post" action="/recipients/{{ r.id }}/send_type" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <select name="send_type" onchange="this.form.submit()"
-                  style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid #d1d5db;width:50px">
-            <option value="both"   {% if (r.send_type or 'both')=='both'   %}selected{% endif %}>両方</option>
-            <option value="order"  {% if (r.send_type or 'both')=='order'  %}selected{% endif %}>発注</option>
-            <option value="expiry" {% if (r.send_type or 'both')=='expiry' %}selected{% endif %}>期限</option>
-          </select>
-        </form>
-        <button class="btn btn-outline btn-sm" style="padding:2px 5px;font-size:11px;margin-left:2px"
-                onclick="toggleCdEdit({{ r.id }})">仕入先CD</button>
-        <form method="post" action="/recipients/{{ r.id }}/toggle" style="display:inline;margin-left:2px">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-outline btn-sm" style="padding:2px 5px;font-size:11px">{% if r.is_active %}無効化{% else %}有効化{% endif %}</button>
-        </form>
-        <form method="post" action="/recipients/{{ r.id }}/delete" style="display:inline;margin-left:2px"
-              onsubmit="return confirm('削除しますか？')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:11px">削除</button>
-        </form>
+      <td style="padding:6px 8px;vertical-align:middle">
+        <!-- ボタン横一列 -->
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+          <form method="post" action="/recipients/{{ r.id }}/send_type">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="send_type" onchange="this.form.submit()"
+                    style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;height:26px">
+              <option value="both"   {% if (r.send_type or 'both')=='both'   %}selected{% endif %}>両方</option>
+              <option value="order"  {% if (r.send_type or 'both')=='order'  %}selected{% endif %}>発注</option>
+              <option value="expiry" {% if (r.send_type or 'both')=='expiry' %}selected{% endif %}>期限</option>
+            </select>
+          </form>
+          <button class="btn btn-outline btn-sm" style="font-size:11px;white-space:nowrap"
+                  onclick="toggleCdEdit({{ r.id }})">仕入先CD</button>
+          <form method="post" action="/recipients/{{ r.id }}/toggle">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline btn-sm" style="font-size:11px;white-space:nowrap">{% if r.is_active %}無効化{% else %}有効化{% endif %}</button>
+          </form>
+          <form method="post" action="/recipients/{{ r.id }}/delete"
+                onsubmit="return confirm('削除しますか？')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger btn-sm" style="font-size:11px;white-space:nowrap">削除</button>
+          </form>
+        </div>
+        <!-- 仕入先CD編集（展開） -->
         <div id="cd-edit-{{ r.id }}" style="display:none;margin-top:6px">
           <form method="post" action="/recipients/{{ r.id }}/supplier_cd"
-                style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                style="display:flex;gap:4px;align-items:center">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="supplier_cd" value="{{ r.supplier_cd or '' }}"
                    placeholder="例: 244,360,584"
-                   style="font-size:11px;padding:3px 6px;border:1px solid #93c5fd;border-radius:4px;width:130px">
-            <button type="submit" class="btn btn-primary btn-sm"
-                    style="padding:3px 8px;font-size:11px">保存</button>
-            <button type="button" class="btn btn-outline btn-sm"
-                    style="padding:3px 8px;font-size:11px"
+                   style="font-size:11px;padding:3px 6px;border:1px solid #93c5fd;border-radius:4px;width:160px">
+            <button type="submit" class="btn btn-primary btn-sm" style="font-size:11px">保存</button>
+            <button type="button" class="btn btn-outline btn-sm" style="font-size:11px"
                     onclick="toggleCdEdit({{ r.id }})">取消</button>
           </form>
         </div>
