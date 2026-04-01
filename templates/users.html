@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}ユーザー管理{% endblock %}
 {% block content %}
+<style>
+.user-table{table-layout:fixed;width:100%}
+.user-table th{background:#f8fafc;font-size:12px;font-weight:600;color:#374151;padding:8px 10px;white-space:nowrap}
+.user-table td{padding:8px 10px;vertical-align:top;border-bottom:1px solid #f3f4f6;font-size:13px}
+.user-table tr:last-child td{border-bottom:none}
+.user-table tr:hover td{background:#fafafa}
+.perm-grid{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:6px}
+.perm-grid label{display:flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap}
+</style>
+
 <div class="page-title">👤 ユーザー管理</div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -28,14 +38,12 @@
     </div>
     <div id="new-perms" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:8px">アクセス許可するページ</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <div class="perm-grid">
         {% for key, label in PAGE_PERMISSIONS %}
-        <label style="display:flex;align-items:center;gap:4px;font-size:13px;min-width:120px">
-          <input type="checkbox" name="perm_{{ key }}" value="1" checked> {{ label }}
-        </label>
+        <label><input type="checkbox" name="perm_{{ key }}" value="1" checked> {{ label }}</label>
         {% endfor %}
       </div>
-      <div style="margin-top:8px;display:flex;gap:8px">
+      <div style="margin-top:8px;display:flex;gap:6px">
         <button type="button" onclick="checkAll('new-perms', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
         <button type="button" onclick="checkAll('new-perms', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
       </div>
@@ -44,73 +52,120 @@
   </form>
 </div>
 
-<!-- 登録ユーザー一覧 -->
-<div class="card" style="max-width:780px">
+<!-- フォーム定義（table外に配置してHTML構造を正確に保つ） -->
+{% for u in users %}
+<form id="pwf{{ u.id }}" method="post" action="/users/{{ u.id }}/password" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<form id="permf{{ u.id }}" method="post" action="/users/{{ u.id }}/permissions" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endfor %}
+
+<!-- 登録ユーザー一覧（テーブル） -->
+<div class="card">
   <div class="card-title">登録ユーザー一覧</div>
-  {% for u in users %}
-  <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px;{% if not u.is_active %}opacity:0.6;background:#f9fafb{% endif %}">
-
-    <!-- ① ユーザー名・バッジ行 -->
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <strong style="font-size:15px">{{ u.username }}</strong>
-      {% if u.username == current_user() %}<span class="badge badge-blue">ログイン中</span>{% endif %}
-      {% if u.role=='admin' %}<span class="badge badge-red">管理者</span>
-      {% else %}<span class="badge badge-gray">ユーザー</span>{% endif %}
-      {% if u.is_active %}<span class="badge badge-green">有効</span>
-      {% else %}<span class="badge badge-gray">無効</span>{% endif %}
-    </div>
-
-    <!-- ② 操作ボタン行 -->
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:{% if u.role != 'admin' %}10px{% else %}0{% endif %}">
-      <form method="post" action="/users/{{ u.id }}/password" style="display:flex;gap:4px;align-items:center">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="password" name="password" placeholder="新パスワード"
-               style="width:120px;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px">
-        <button class="btn btn-outline btn-sm">PW変更</button>
-      </form>
-      {% if u.username != current_user() %}
-      <form method="post" action="/users/{{ u.id }}/toggle" style="display:inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-outline btn-sm">{% if u.is_active %}無効化{% else %}有効化{% endif %}</button>
-      </form>
-      <form method="post" action="/users/{{ u.id }}/delete" style="display:inline"
-            onsubmit="return confirm('「{{ u.username }}」を削除しますか？')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-danger btn-sm">削除</button>
-      </form>
-      {% endif %}
-    </div>
-
-    <!-- ③ 権限編集（一般ユーザーのみ） -->
-    {% if u.role != 'admin' %}
-    <form method="post" action="/users/{{ u.id }}/permissions">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div style="font-size:12px;color:#6b7280;margin-bottom:6px">アクセス許可ページ：</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
+  <div style="overflow-x:auto">
+  <table class="user-table">
+    <thead>
+      <tr>
+        <th style="width:12%">ユーザーID</th>
+        <th style="width:8%">役割</th>
+        <th style="width:7%">状態</th>
+        <th style="width:42%">アクセス許可ページ</th>
+        <th style="width:17%">PW変更</th>
+        <th style="width:14%">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for u in users %}
+    <tr {% if not u.is_active %}style="opacity:0.55;background:#f9fafb"{% endif %}>
+      <!-- ユーザーID -->
+      <td>
+        <strong>{{ u.username }}</strong>
+        {% if u.username == current_user() %}<br><span class="badge badge-blue" style="font-size:10px">ログイン中</span>{% endif %}
+      </td>
+      <!-- 役割 -->
+      <td>
+        {% if u.role == 'admin' %}<span class="badge badge-red">管理者</span>
+        {% else %}<span class="badge badge-gray">一般</span>{% endif %}
+      </td>
+      <!-- 状態 -->
+      <td>
+        {% if u.is_active %}<span class="badge badge-green">有効</span>
+        {% else %}<span class="badge badge-gray">無効</span>{% endif %}
+      </td>
+      <!-- アクセス許可ページ -->
+      <td>
+        {% if u.role == 'admin' %}
+          <span style="font-size:12px;color:#9ca3af">管理者は全ページにアクセス可</span>
+        {% else %}
         {% set user_perms = (u.permissions or '').split(',') %}
-        {% for key, label in PAGE_PERMISSIONS %}
-        <label style="display:flex;align-items:center;gap:4px;font-size:13px;min-width:120px">
-          <input type="checkbox" name="perm_{{ key }}" value="1" {% if key in user_perms %}checked{% endif %}> {{ label }}
-        </label>
-        {% endfor %}
-      </div>
-      <div style="margin-top:8px">
-        <button type="submit" class="btn btn-primary btn-sm">権限を保存</button>
-      </div>
-    </form>
-    {% else %}
-    <div style="font-size:12px;color:#9ca3af">管理者はすべての機能にアクセスできます</div>
-    {% endif %}
+        <div class="perm-grid">
+          {% for key, label in PAGE_PERMISSIONS %}
+          <label>
+            <input type="checkbox" name="perm_{{ key }}" value="1"
+                   form="permf{{ u.id }}"
+                   {% if key in user_perms %}checked{% endif %}>
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button type="submit" form="permf{{ u.id }}" class="btn btn-primary btn-sm">権限を保存</button>
+          <button type="button" onclick="checkAll('permf{{ u.id }}', true)" class="btn btn-outline btn-sm" style="font-size:11px">全選択</button>
+          <button type="button" onclick="checkAll('permf{{ u.id }}', false)" class="btn btn-outline btn-sm" style="font-size:11px">全解除</button>
+        </div>
+        {% endif %}
+      </td>
+      <!-- PW変更 -->
+      <td>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="password" name="password" placeholder="新パスワード"
+                 form="pwf{{ u.id }}"
+                 style="width:110px;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px">
+          <button type="submit" form="pwf{{ u.id }}" class="btn btn-outline btn-sm">変更</button>
+        </div>
+      </td>
+      <!-- 操作 -->
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px">
+        {% if u.username != current_user() %}
+        <form method="post" action="/users/{{ u.id }}/toggle">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline btn-sm" style="width:100%">
+            {% if u.is_active %}無効化{% else %}有効化{% endif %}
+          </button>
+        </form>
+        <form method="post" action="/users/{{ u.id }}/delete"
+              onsubmit="return confirm('「{{ u.username }}」を削除しますか？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-danger btn-sm" style="width:100%">削除</button>
+        </form>
+        {% else %}
+          <span style="font-size:11px;color:#9ca3af">（自分）</span>
+        {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
   </div>
-  {% endfor %}
 </div>
 
 <script>
 function toggleNewPerms(role) {
   document.getElementById('new-perms').style.display = role === 'admin' ? 'none' : '';
 }
-function checkAll(containerId, checked) {
-  document.querySelectorAll('#' + containerId + ' input[type=checkbox]').forEach(cb => cb.checked = checked);
+function checkAll(formIdOrContainerId, checked) {
+  // form id または container id の両方に対応
+  let el = document.getElementById(formIdOrContainerId);
+  if (el) {
+    // form要素の場合はquerySelectorAllで配下のチェックボックスを取得
+    // container divの場合も同様
+    el.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = checked);
+  }
 }
 </script>
 {% endblock %}
