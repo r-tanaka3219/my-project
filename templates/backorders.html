@@ -18,15 +18,15 @@
   <div class="card-title">部分入荷・未納終了</div>
   <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
   <th style="width:9%">発注日</th>
-  <th style="width:13%">仕入先</th>
-  <th style="width:18%">商品</th>
-  <th class="text-center" style="width:6%">発注数</th>
-  <th class="text-center" style="width:6%">受領済</th>
-  <th class="text-center" style="width:6%">残数</th>
+  <th style="width:14%">仕入先</th>
+  <th style="width:19%">商品</th>
+  <th class="text-center" style="width:7%">発注数</th>
+  <th class="text-center" style="width:7%">受領済</th>
+  <th class="text-center" style="width:7%">残数</th>
   <th class="text-center" style="width:7%">入荷予定</th>
   <th class="text-center" style="width:7%">警告</th>
   <th class="text-center" style="width:7%">経過</th>
-  <th class="text-center" style="width:21%">操作</th>
+  <th class="text-center" style="width:16%">操作</th>
 </tr></thead><tbody>
   {% for r in rows %}
   <tr {% if r.delay_level in ['遅延','長期未着'] %}style="background:#fef2f2"{% elif r.delay_level == '入荷接近' %}style="background:#fff7ed"{% endif %}>
