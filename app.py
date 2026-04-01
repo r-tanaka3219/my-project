@@ -202,7 +202,7 @@ def _record_receipt(db, product, qty, expiry, lot_no='', location_code='', sourc
         INSERT INTO stocks
         (product_id,jan,product_name,supplier_cd,supplier_name,
          product_cd,unit_qty,quantity,expiry_date,lot_no,location_code)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, [product['id'],product['jan'],product['product_name'],
           product['supplier_cd'],product['supplier_name'],product['product_cd'],
           product['unit_qty'],qty,expiry,lot_no,location_code or product.get('location_code','') or ''])
@@ -906,6 +906,10 @@ def inject_permissions():
 # --- グローバルエラーハンドラー ---
 @app.errorhandler(500)
 def internal_error(e):
+    import traceback, sys
+    tb = traceback.format_exc()
+    print("500 ERROR:", tb, flush=True)
+    logger.error("500 ERROR: %s", tb)
     orig = getattr(e, 'original_exception', e)
     err_str = str(orig)
     is_db = any(w in err_str.lower() for w in
