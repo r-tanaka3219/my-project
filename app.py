@@ -1837,6 +1837,94 @@ def recipient_delete(rid):
     flash('削除しました。', 'success')
     return redirect(url_for('recipients'))
 
+@app.route('/recipients/<int:rid>/supplier_cd', methods=['POST'])
+@admin_required
+def recipient_supplier_cd(rid):
+    db = get_db()
+    supplier_cd = request.form.get('supplier_cd', '').strip()
+    db.execute("UPDATE mail_recipients SET supplier_cd=%s WHERE id=%s", [supplier_cd, rid])
+    db.commit()
+    return redirect(url_for('recipients'))
+
+@app.route('/recipients/template')
+@admin_required
+def recipients_template():
+    """Excelテンプレートダウンロード"""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'メール受信者'
+    headers = ['名前', 'メールアドレス', '送信区分', '仕入先CD', '有効']
+    notes   = ['必須', '必須', 'both/order/expiry', 'カンマ区切りで複数可（例:244,360）', '1=有効 0=無効']
+    header_fill = PatternFill('solid', fgColor='1d4ed8')
+    note_fill   = PatternFill('solid', fgColor='eff6ff')
+    for col, (h, n) in enumerate(zip(headers, notes), 1):
+        hc = ws.cell(row=1, column=col, value=h)
+        hc.font = Font(bold=True, color='FFFFFF')
+        hc.fill = header_fill
+        hc.alignment = Alignment(horizontal='center')
+        nc = ws.cell(row=2, column=col, value=n)
+        nc.fill = note_fill
+        nc.font = Font(italic=True, color='6b7280')
+    # サンプル行
+    ws.append(['山田商事', 'yamada@example.com', 'both', '244,360', '1'])
+    ws.append(['鈴木物産', 'suzuki@example.com', 'order', '584', '1'])
+    col_widths = [20, 30, 14, 30, 8]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from flask import send_file
+    return send_file(buf, as_attachment=True,
+                     download_name='recipients_template.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.route('/recipients/import', methods=['POST'])
+@admin_required
+def recipients_import():
+    """Excel一括インポート"""
+    import openpyxl
+    f = request.files.get('excel_file')
+    if not f or not f.filename.endswith(('.xlsx', '.xls')):
+        flash('Excelファイル（.xlsx）を選択してください。', 'danger')
+        return redirect(url_for('recipients'))
+    db = get_db()
+    try:
+        wb = openpyxl.load_workbook(f, data_only=True)
+        ws = wb.active
+        added = updated = skipped = 0
+        for row in ws.iter_rows(min_row=3, values_only=True):  # 1行目=ヘッダ, 2行目=説明
+            name        = str(row[0] or '').strip() if row[0] is not None else ''
+            email       = str(row[1] or '').strip() if row[1] is not None else ''
+            send_type   = str(row[2] or 'both').strip() if row[2] is not None else 'both'
+            supplier_cd = str(row[3] or '').strip() if row[3] is not None else ''
+            is_active   = int(row[4]) if row[4] is not None else 1
+            if not name or not email:
+                skipped += 1
+                continue
+            if send_type not in ('both', 'order', 'expiry'):
+                send_type = 'both'
+            existing = db.execute("SELECT id FROM mail_recipients WHERE email=%s", [email]).fetchone()
+            if existing:
+                db.execute(
+                    "UPDATE mail_recipients SET name=%s, send_type=%s, supplier_cd=%s, is_active=%s WHERE email=%s",
+                    [name, send_type, supplier_cd, is_active, email])
+                updated += 1
+            else:
+                db.execute(
+                    "INSERT INTO mail_recipients (name,email,send_type,supplier_cd,is_active) VALUES (%s,%s,%s,%s,%s)",
+                    [name, email, send_type, supplier_cd, is_active])
+                added += 1
+        db.commit()
+        flash(f'インポート完了：追加 {added}件 / 更新 {updated}件 / スキップ {skipped}件', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f'インポートエラー: {e}', 'danger')
+    return redirect(url_for('recipients'))
+
 
 # ─── 棚卸（月末棚卸リスト・実棚修正）────────────────────────────
 @app.route('/stocktake')

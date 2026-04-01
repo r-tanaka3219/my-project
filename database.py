@@ -495,6 +495,8 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS ix_product_cd_settings_chain ON product_cd_settings(chain_cd)",
     "CREATE INDEX IF NOT EXISTS ix_product_cd_settings_store ON product_cd_settings(store_cd)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_product_cd_settings ON product_cd_settings(chain_cd, store_cd, COALESCE(product_cd,''), COALESCE(jan,''))",
+    # mail_recipients に仕入先CD列追加
+    "ALTER TABLE mail_recipients ADD COLUMN IF NOT EXISTS supplier_cd TEXT DEFAULT ''",
 ]
 
 def migrate_db():

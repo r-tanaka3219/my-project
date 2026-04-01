@@ -9,7 +9,7 @@
   {% endfor %}
 {% endwith %}
 
-<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;align-items:start;max-width:1400px">
+<div style="display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start">
 
   <div>
     <div class="card">
@@ -36,6 +36,26 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Excel一括登録</div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:10px;line-height:1.6">
+        Excelファイルで受信者を一括追加・更新できます。<br>
+        メールアドレスが一致する場合は上書き更新されます。
+      </div>
+      <a href="/recipients/template" class="btn btn-outline btn-sm" style="display:block;text-align:center;margin-bottom:10px">
+        📥 テンプレートをダウンロード
+      </a>
+      <form method="post" action="/recipients/import" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <label style="font-size:12px">Excelファイル（.xlsx）</label>
+          <input type="file" name="excel_file" accept=".xlsx,.xls" required
+                 style="font-size:12px;width:100%;padding:4px">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">📤 インポート実行</button>
+      </form>
+    </div>
+
+    <div class="card">
       <div class="card-title">送信区分の説明</div>
       <table style="table-layout:fixed;width:100%;font-size:12px"><thead>
         <tr><th style="width:35%">区分</th><th style="width:32%">発注</th><th style="width:33%">期限</th></tr>
@@ -54,12 +74,12 @@
   <div class="card">
     <div class="card-title">登録済み受信者（{{ recipients|length }}件）</div>
     <table style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:13%">名前</th>
-      <th style="width:20%">メールアドレス</th>
-      <th class="text-center" style="width:11%">送信区分</th>
-      <th style="width:18%">仕入先CD</th>
-      <th class="text-center" style="width:7%">状態</th>
-      <th style="width:31%">操作</th>
+      <th style="width:12%">名前</th>
+      <th style="width:18%">メールアドレス</th>
+      <th class="text-center" style="width:10%">送信区分</th>
+      <th style="width:26%">仕入先CD</th>
+      <th class="text-center" style="width:6%">状態</th>
+      <th style="width:28%">操作</th>
     </tr></thead><tbody>
     {% for r in recipients %}
     <tr style="{% if not r.is_active %}opacity:0.5{% endif %}">
