@@ -9,7 +9,7 @@
   {% endfor %}
 {% endwith %}
 
-<div style="display:grid;grid-template-columns:280px 1fr;gap:12px;align-items:start">
+<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;align-items:start;max-width:1000px">
 
   <div>
     <div class="card">
@@ -54,12 +54,12 @@
   <div class="card">
     <div class="card-title">登録済み受信者（{{ recipients|length }}件）</div>
     <table style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:15%">名前</th>
-      <th style="width:25%">メールアドレス</th>
-      <th class="text-center" style="width:15%">送信区分</th>
-      <th class="text-center" style="width:13%">仕入先CD</th>
-      <th class="text-center" style="width:10%">状態</th>
-      <th class="text-center" style="width:22%">操作</th>
+      <th style="width:16%">名前</th>
+      <th style="width:26%">メールアドレス</th>
+      <th class="text-center" style="width:14%">送信区分</th>
+      <th class="text-center" style="width:12%">仕入先CD</th>
+      <th class="text-center" style="width:8%">状態</th>
+      <th style="width:24%">操作</th>
     </tr></thead><tbody>
     {% for r in recipients %}
     <tr style="{% if not r.is_active %}opacity:0.5{% endif %}">
@@ -87,7 +87,7 @@
         {% if r.is_active %}<span class="badge badge-green">有効</span>
         {% else %}<span class="badge badge-gray">無効</span>{% endif %}
       </td>
-      <td class="table-actions-cell" style="text-align:center;white-space:nowrap;overflow:visible">
+      <td style="padding:6px 8px;vertical-align:top">
         <form method="post" action="/recipients/{{ r.id }}/send_type" style="display:inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <select name="send_type" onchange="this.form.submit()"

@@ -33,7 +33,7 @@
 </div>
 {% endif %}
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+<div style="display:grid;grid-template-columns:1fr 240px;gap:16px">
 <div>
 
   <!-- 発注点以下テーブル（JAN・入数を含む） -->
@@ -144,16 +144,16 @@
   <div class="card">
     <div class="card-title">クイック操作</div>
     <div style="display:flex;flex-direction:column;gap:7px">
-      <a href="/receipt" class="btn btn-primary" style="text-align:center">入庫登録</a>
-      <a href="/orders" class="btn btn-success" style="text-align:center">発注チェック</a>
-      <a href="/stocktake" class="btn btn-purple" style="text-align:center">棚卸リスト</a>
+      <a href="/receipt" class="btn btn-primary btn-sm" style="text-align:center">入庫登録</a>
+      <a href="/orders" class="btn btn-success btn-sm" style="text-align:center">発注チェック</a>
+      <a href="/stocktake" class="btn btn-purple btn-sm" style="text-align:center">棚卸リスト</a>
       <form method="post" action="/expiry_check" style="margin:0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-warning" style="width:100%;text-align:center">期限チェック実行</button>
+        <button type="submit" class="btn btn-warning btn-sm" style="width:100%;text-align:center">期限チェック実行</button>
       </form>
       <form method="post" action="/orders/auto_check" style="margin:0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline" style="width:100%;text-align:center">発注自動チェック</button>
+        <button type="submit" class="btn btn-outline btn-sm" style="width:100%;text-align:center">発注自動チェック</button>
       </form>
     </div>
   </div>
