@@ -65,7 +65,11 @@
   </form>
   {% endfor %}
 
-  <div style="margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <input type="text" id="chain-search" placeholder="チェーンCD・取引先名で絞り込み"
+           oninput="filterTable('chain-tbody', this.value)"
+           style="width:260px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="filterTable('chain-tbody', document.getElementById('chain-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-chain-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
@@ -79,9 +83,10 @@
         <th style="width:12%;text-align:center">操作</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="chain-tbody">
       {% for c in chains %}
-      <tr {% if c.exclude_deduct %}style="background:#fff7ed"{% endif %}>
+      <tr {% if c.exclude_deduct %}style="background:#fff7ed"{% endif %}
+          data-search="{{ c.chain_cd }}|{{ c.chain_name }}">
         <td class="cd-cell">{{ c.chain_cd }}</td>
         <td style="padding:5px 10px">
           <input type="text" name="chain_name" value="{{ c.chain_name }}" form="cf{{ c.id }}"
@@ -137,6 +142,7 @@
     <input type="text" id="store-search" placeholder="店舗CD・店舗名・チェーンCDで絞り込み"
            oninput="filterTable('store-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="filterTable('store-tbody', document.getElementById('store-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-store-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
@@ -240,9 +246,10 @@
   </form>
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-    <input type="text" placeholder="仕入先CD・チェーンCD・店舗CDで絞り込み"
+    <input type="text" id="supplier-search" placeholder="仕入先CD・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('supplier-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="filterTable('supplier-tbody', document.getElementById('supplier-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-supplier-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
@@ -364,9 +371,10 @@
   </form>
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-    <input type="text" placeholder="商品CD・JAN・チェーンCD・店舗CDで絞り込み"
+    <input type="text" id="product-search" placeholder="商品CD・JAN・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('product-tbody', this.value)"
            style="width:300px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="filterTable('product-tbody', document.getElementById('product-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-product-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
