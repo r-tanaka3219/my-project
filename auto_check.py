@@ -1290,6 +1290,180 @@ def cleanup_old_data():
         db.close()
 
 
+def _run_weekly_md_annual(year):
+    """毎年1月1日に当年分の52週MDプランを全商品分生成する"""
+    try:
+        from wholesale_forecast import generate_weekly_md_plan
+    except ImportError:
+        logger.warning('[Scheduler] wholesale_forecastをインポートできません')
+        return
+    db = get_db_long()
+    try:
+        prods = db.execute(
+            "SELECT jan FROM products WHERE is_active=TRUE OR is_active=1"
+        ).fetchall()
+        total = 0
+        for p in prods:
+            try:
+                result = generate_weekly_md_plan(db, p['jan'], year)
+                if result:
+                    total += result
+            except Exception as e2:
+                logger.warning(f'[Scheduler] WeeklyMD jan={p["jan"]}: {e2}')
+        db.execute(
+            "INSERT INTO scheduler_log (task_name, result) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            [f'weekly_md_annual_{year}', f'{len(prods)}品目 {total}週分生成完了']
+        )
+        db.commit()
+        logger.info(f'[Scheduler] WeeklyMD: {year}年度 全{len(prods)}品目 {total}週分生成完了')
+    except Exception as e:
+        logger.error(f'[Scheduler] WeeklyMD生成エラー: {e}')
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+def _fetch_weather_api_auto():
+    """Open-Meteo APIから自動的に気温データを取得してDBに保存する"""
+    import urllib.request
+    import json as _json
+    # DBから自動取得設定を確認
+    _check_db = get_db_long()
+    try:
+        _row = _check_db.execute(
+            "SELECT value FROM settings WHERE key='weather_auto_fetch_enabled'"
+        ).fetchone()
+        if _row and str(_row['value']) == '0':
+            logger.info('[weather_auto] 自動取得が無効化されているためスキップします')
+            return
+    except Exception:
+        pass
+    finally:
+        try:
+            _check_db.close()
+        except Exception:
+            pass
+
+    db = get_db_long()
+    try:
+        # 設定: DBの weather_auto_fetch_locations があればそれを使用
+        _loc_db = None
+        try:
+            _loc_row = db.execute(
+                "SELECT value FROM settings WHERE key='weather_auto_fetch_locations'"
+            ).fetchone()
+            if _loc_row and _loc_row['value']:
+                _loc_db = _loc_row['value']
+        except Exception:
+            pass
+        # DB設定優先、なければ.env設定を使用
+        locations_json = _loc_db or os.environ.get('WEATHER_LOCATIONS_JSON', '')
+        if locations_json:
+            try:
+                import json as _json2
+                locations = _json2.loads(locations_json)
+            except Exception:
+                locations = []
+        else:
+            locations = [{
+                'name': os.environ.get('WEATHER_LOCATION', '東京'),
+                'lat':  float(os.environ.get('WEATHER_LAT', '35.6897')),
+                'lon':  float(os.environ.get('WEATHER_LON', '139.6922')),
+            }]
+
+        # 取得日数を設定から読み込む（前後N日）
+        try:
+            _days_row = db.execute(
+                "SELECT value FROM settings WHERE key='weather_auto_fetch_days'"
+            ).fetchone()
+            _fetch_days = int(_days_row['value']) if _days_row and _days_row['value'] else 3
+            _fetch_days = max(1, min(_fetch_days, 30))
+        except Exception:
+            _fetch_days = 3
+
+        if _fetch_days == 1:
+            # 当日のみ
+            start = date.today().isoformat()
+            end   = date.today().isoformat()
+        else:
+            # 前後N日
+            start = (date.today() - timedelta(days=_fetch_days)).isoformat()
+            end   = (date.today() + timedelta(days=_fetch_days)).isoformat()
+
+        logger.info(f'[weather_auto] 取得範囲: {start} 〜 {end}（設定: {_fetch_days}日）')
+        total_inserted = 0
+
+        for loc in locations:
+            url = (
+                f"https://api.open-meteo.com/v1/forecast"
+                f"?latitude={loc['lat']}&longitude={loc['lon']}"
+                f"&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum"
+                f"&timezone=Asia%2FTokyo&start_date={start}&end_date={end}"
+            )
+            with urllib.request.urlopen(url, timeout=15) as resp:
+                data = _json.loads(resp.read())
+            daily = data.get('daily', {})
+            dates  = daily.get('time', [])
+            t_mean = daily.get('temperature_2m_mean', [])
+            t_max  = daily.get('temperature_2m_max', [])
+            t_min  = daily.get('temperature_2m_min', [])
+            precip = daily.get('precipitation_sum', [])
+            inserted = 0
+            for i, d in enumerate(dates):
+                db.execute("""
+                    INSERT INTO weather_data
+                      (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'api')
+                    ON CONFLICT (obs_date, location) DO UPDATE
+                      SET avg_temp        = EXCLUDED.avg_temp,
+                          max_temp        = EXCLUDED.max_temp,
+                          min_temp        = EXCLUDED.min_temp,
+                          precipitation   = EXCLUDED.precipitation,
+                          source          = 'api'
+                """, [
+                    d,
+                    loc['name'],
+                    t_mean[i] if i < len(t_mean) else None,
+                    t_max[i]  if i < len(t_max)  else None,
+                    t_min[i]  if i < len(t_min)  else None,
+                    float(precip[i]) if i < len(precip) and precip[i] is not None else 0.0,
+                ])
+                inserted += 1
+            db.commit()
+            total_inserted += inserted
+            logger.info(f'[Scheduler] WeatherAPI: {loc["name"]} {inserted}日分取得・保存完了')
+
+        # 保持期間を超えた古いデータを削除
+        try:
+            _ret_row = db.execute(
+                "SELECT value FROM settings WHERE key='weather_data_retention_days'"
+            ).fetchone()
+            _retention = int(_ret_row['value']) if _ret_row and _ret_row['value'] else 365
+            if _retention > 0:
+                cutoff = (date.today() - timedelta(days=_retention)).isoformat()
+                deleted = db.execute(
+                    "DELETE FROM weather_data WHERE obs_date < %s", [cutoff]
+                ).rowcount
+                db.commit()
+                if deleted:
+                    logger.info(f'[weather_auto] 古いデータ削除: {deleted}件（{cutoff}より前）')
+        except Exception as _e:
+            logger.warning(f'[weather_auto] 古いデータ削除エラー: {_e}')
+
+        return total_inserted
+    except Exception as e:
+        logger.error(f'[Scheduler] WeatherAPI取得エラー: {e}')
+        return 0
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
 # ─── バックグラウンドスケジューラー ─────────────────────────────
 _scheduler_running = False
 _scheduler_lock = threading.Lock()
@@ -1391,6 +1565,41 @@ def start_scheduler():
                             cleanup_old_data()
             except Exception as e:
                 logger.info(f"[Scheduler] Monthly: {e}")
+            # 毎年1月1日 00:10 に52週MDプラン自動生成
+            try:
+                if today.month == 1 and today.day == 1 and now.hour == 0 and now.minute == 10:
+                    _key = f'weekly_md_annual_{today.year}'
+                    if last_run.get(_key) != today:
+                        last_run[_key] = today
+                        threading.Thread(
+                            target=_run_weekly_md_annual,
+                            args=(today.year,),
+                            daemon=True
+                        ).start()
+                        logger.info(f'[Scheduler] 52週MDプラン自動生成スレッド起動')
+            except Exception as _e:
+                logger.warning(f'[Scheduler] WeeklyMD annual: {_e}')
+            # 毎日 設定時刻 に Open-Meteo から気温データを自動取得
+            try:
+                try:
+                    _wh_db = get_db_long()
+                    _wh_row = _wh_db.execute(
+                        "SELECT value FROM settings WHERE key='weather_auto_fetch_hour'"
+                    ).fetchone()
+                    _weather_hour = int(_wh_row['value']) if _wh_row and _wh_row['value'] else 3
+                    _wh_db.close()
+                except Exception:
+                    _weather_hour = 3
+                if now.hour == _weather_hour and now.minute == 0:
+                    if last_run.get('weather_api') != today:
+                        last_run['weather_api'] = today
+                        threading.Thread(
+                            target=_fetch_weather_api_auto,
+                            daemon=True
+                        ).start()
+                        logger.info(f'[Scheduler] 気象API自動取込スレッド起動（設定時刻: {_weather_hour:02d}:00）')
+            except Exception as _e:
+                logger.warning(f'[Scheduler] WeatherAPI: {_e}')
             time.sleep(60)
 
     t = threading.Thread(target=loop, daemon=True, name='InventoryScheduler')

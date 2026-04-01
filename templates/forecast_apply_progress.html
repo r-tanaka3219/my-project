@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>需要予測 一括反映 進捗</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Meiryo','Hiragino Sans',sans-serif;background:#0f172a;min-height:100vh;color:#e2e8f0;padding:24px}
+.wrap{max-width:800px;margin:0 auto}
+h1{font-size:20px;font-weight:bold;color:#60a5fa;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.spinner{width:20px;height:20px;border:3px solid #334155;border-top:3px solid #60a5fa;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.card{background:#1e293b;border-radius:12px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;color:#94a3b8;margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.progress-bar{background:#0f172a;border-radius:8px;height:20px;overflow:hidden;margin-bottom:10px}
+.progress-fill{height:100%;background:linear-gradient(90deg,#059669,#34d399);border-radius:8px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:11px;font-weight:bold;min-width:40px}
+.stats{display:flex;gap:12px;flex-wrap:wrap}
+.stat{background:#0f172a;border-radius:8px;padding:8px 14px;text-align:center}
+.stat-num{font-size:22px;font-weight:bold}
+.stat-label{font-size:11px;color:#64748b;margin-top:2px}
+.ok{color:#34d399}.skip{color:#fbbf24}.err{color:#f87171}
+.log{background:#0f172a;border-radius:8px;padding:14px;max-height:300px;overflow-y:auto;font-size:12px;line-height:1.8;font-family:monospace}
+.log-entry{padding:2px 0;border-bottom:1px solid #1e293b}
+.log-ok{color:#34d399}.log-err{color:#f87171}.log-info{color:#60a5fa}
+.done-btn{display:none;margin-top:20px;display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;text-decoration:none;font-family:inherit}
+.btn:hover{background:#1d4ed8}
+.btn-success{background:#059669}.btn-success:hover{background:#047857}
+.status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold}
+.badge-running{background:#1e3a5f;color:#60a5fa}
+.badge-done{background:#064e3b;color:#34d399}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>
+    <div class="spinner" id="spinner"></div>
+    需要予測 一括反映
+    <span class="status-badge badge-running" id="status-badge">処理中</span>
+  </h1>
+
+  <div class="card">
+    <div class="card-title">進捗状況</div>
+    <div style="font-size:14px;font-weight:bold;color:#e2e8f0;margin-bottom:12px" id="current-task">処理開始中...</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%">0%</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num ok" id="cnt-ok">0</div><div class="stat-label">更新済み</div></div>
+      <div class="stat"><div class="stat-num err" id="cnt-err">0</div><div class="stat-label">エラー</div></div>
+      <div class="stat"><div class="stat-num" id="cnt-row" style="color:#94a3b8">0</div><div class="stat-label">処理件数</div></div>
+      <div class="stat"><div class="stat-num" id="cnt-total" style="color:#94a3b8">-</div><div class="stat-label">総件数</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ログ</div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div id="done-btn" style="display:none;margin-top:20px">
+    <a href="/reports/forecast" class="btn btn-success">✅ 需要予測画面に戻る</a>
+  </div>
+</div>
+
+<script>
+const jobId = {{ job_id | tojson }};
+const es = new EventSource(`/reports/forecast/apply/progress/${jobId}/stream`);
+const log = document.getElementById('log');
+
+function addLog(msg, cls) {
+  const d = document.createElement('div');
+  d.className = 'log-entry ' + (cls || '');
+  d.textContent = msg;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+es.onmessage = function(e) {
+  const ev = JSON.parse(e.data);
+  if (ev.phase === 'start') {
+    document.getElementById('current-task').textContent = ev.file;
+    const t = ev.total > 0 ? ev.total.toLocaleString() : '-';
+    document.getElementById('cnt-total').textContent = t;
+    addLog(`⚙️ 開始: ${ev.file} (${ev.total > 0 ? ev.total.toLocaleString() + '件' : ''})`, 'log-info');
+  }
+  else if (ev.phase === 'progress') {
+    const cur = ev.current || 0;
+    const pct = ev.total > 0 ? Math.round(cur / ev.total * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-fill').textContent = pct + '%';
+    document.getElementById('cnt-ok').textContent = (ev.ok || 0).toLocaleString();
+    document.getElementById('cnt-err').textContent = (ev.err || 0).toLocaleString();
+    document.getElementById('cnt-row').textContent = cur.toLocaleString();
+  }
+  else if (ev.phase === 'done') {
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-fill').textContent = '100%';
+    document.getElementById('cnt-ok').textContent = (ev.ok || 0).toLocaleString();
+    document.getElementById('cnt-err').textContent = (ev.err || 0).toLocaleString();
+    addLog(`✅ ${ev.detail}`, ev.err > 0 ? 'log-err' : 'log-ok');
+  }
+  else if (ev.phase === 'finished') {
+    es.close();
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('status-badge').textContent = '完了';
+    document.getElementById('status-badge').className = 'status-badge badge-done';
+    document.getElementById('done-btn').style.display = 'block';
+    addLog('🎉 処理完了', 'log-ok');
+  }
+  else if (ev.phase === 'timeout') {
+    es.close();
+    addLog('⚠️ タイムアウト', 'log-err');
+    document.getElementById('done-btn').style.display = 'block';
+  }
+};
+es.onerror = function() {
+  addLog('接続が切れました。処理は継続中の可能性があります。', 'log-err');
+  document.getElementById('done-btn').style.display = 'block';
+};
+</script>
+</body>
+</html>

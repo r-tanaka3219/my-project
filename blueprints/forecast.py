@@ -340,7 +340,17 @@ def weather_data():
         SELECT * FROM weather_data
         ORDER BY obs_date DESC LIMIT 90
     """).fetchall()
-    return render_template('weather_data.html', rows=rows)
+    location_summary = db.execute("""
+        SELECT location,
+               COUNT(*)          AS cnt,
+               MIN(obs_date)     AS oldest,
+               MAX(obs_date)     AS newest,
+               AVG(avg_temp)     AS avg_temp_avg
+        FROM weather_data
+        GROUP BY location
+        ORDER BY location
+    """).fetchall()
+    return render_template('weather_data.html', rows=rows, location_summary=location_summary)
 
 
 @bp.route('/reports/weather/add', methods=['POST'])
@@ -390,21 +400,24 @@ def weather_import():
     for i, row in enumerate(reader, 2):
         try:
             obs_date = (row.get('日付') or row.get('obs_date') or '').strip()
-            avg_temp = row.get('平均気温') or row.get('avg_temp') or ''
-            max_temp = row.get('最高気温') or row.get('max_temp') or ''
-            min_temp = row.get('最低気温') or row.get('min_temp') or ''
+            avg_temp = row.get('平均気温(℃)') or row.get('平均気温') or row.get('avg_temp') or ''
+            max_temp = row.get('最高気温(℃)') or row.get('最高気温') or row.get('max_temp') or ''
+            min_temp = row.get('最低気温(℃)') or row.get('最低気温') or row.get('min_temp') or ''
             location = (row.get('地点') or row.get('location') or '東京').strip()
+            precip   = row.get('降水量(mm)') or row.get('降水量') or 0
             if not obs_date or avg_temp == '':
                 continue
             db.execute("""
-                INSERT INTO weather_data (obs_date, location, avg_temp, max_temp, min_temp, source)
-                VALUES (%s, %s, %s, %s, %s, 'csv')
+                INSERT INTO weather_data (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                VALUES (%s, %s, %s, %s, %s, %s, 'csv')
                 ON CONFLICT (obs_date, location) DO UPDATE
-                  SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp, min_temp=EXCLUDED.min_temp
+                  SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp,
+                      min_temp=EXCLUDED.min_temp, precipitation=EXCLUDED.precipitation
             """, [obs_date, location,
                   float(avg_temp) if avg_temp else None,
                   float(max_temp) if max_temp else None,
-                  float(min_temp) if min_temp else None])
+                  float(min_temp) if min_temp else None,
+                  float(precip) if precip else None])
             created += 1
         except Exception as e:
             errors.append(f'行{i}: {e}')
@@ -425,11 +438,365 @@ def weather_recalc_sensitivity():
 @bp.route('/reports/weather/template')
 @permission_required('reports')
 def weather_template():
+    import datetime
     sio = io.StringIO()
     w   = csv.writer(sio)
-    w.writerow(['日付', '地点', '平均気温', '最高気温', '最低気温'])
-    w.writerow(['2026-04-01', '東京', '16.5', '21.0', '12.0'])
-    w.writerow(['2026-04-02', '東京', '17.2', '22.5', '13.1'])
+    w.writerow(['日付', '地点', '平均気温(℃)', '最高気温(℃)', '最低気温(℃)', '降水量(mm)'])
+    today = datetime.date.today()
+    for i in range(30):
+        d = today - datetime.timedelta(days=29 - i)
+        w.writerow([d.strftime('%Y-%m-%d'), '東京', '15.0', '20.0', '10.0', '0.0'])
     from urllib.parse import quote
     return Response(sio.getvalue().encode('utf-8-sig'), mimetype='text/csv',
                     headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote('気温データテンプレート.csv')})
+
+
+@bp.route('/reports/weather/excel_template')
+@permission_required('reports')
+def weather_excel_template():
+    """気象データ Excelテンプレートをダウンロード（days/locations パラメータ対応）"""
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    import io as _bio
+    import datetime as _dt
+    try:
+        days = max(1, min(int(request.args.get('days', 30)), 365))
+    except (ValueError, TypeError):
+        days = 30
+    # 地点リスト（クエリパラメータ locations=東京,大阪 で指定可、省略時は東京のみ）
+    locs_param = request.args.get('locations', '東京')
+    locations  = [l.strip() for l in locs_param.split(',') if l.strip()] or ['東京']
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '気象データ'
+    headers = ['日付', '地点', '平均気温(℃)', '最高気温(℃)', '最低気温(℃)', '降水量(mm)']
+    hfill = PatternFill(fill_type='solid', fgColor='1D4ED8')
+    hfont = Font(color='FFFFFF', bold=True)
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = hfill
+        c.font = hfont
+        c.alignment = Alignment(horizontal='center')
+    today = _dt.date.today()
+    for loc in locations:
+        for i in range(days):
+            d = today - _dt.timedelta(days=days - 1 - i)
+            ws.append([d.strftime('%Y-%m-%d'), loc, '', '', '', ''])
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 10
+    for col in ['C', 'D', 'E', 'F']:
+        ws.column_dimensions[col].width = 14
+    buf = _bio.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from urllib.parse import quote
+    fname = quote('気象データ_テンプレート.xlsx')
+    return Response(buf.read(),
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{fname}"})
+
+
+@bp.route('/reports/weather/import_page')
+@permission_required('reports')
+def weather_import_page():
+    """過去気象データ 一括インポート専用ページ"""
+    from flask import session
+    result = session.pop('weather_import_result', None)
+    return render_template('weather_import.html', result=result)
+
+
+@bp.route('/reports/weather/excel_import', methods=['POST'])
+@permission_required('reports')
+def weather_excel_import():
+    """気象データをExcel/CSVから一括インポート"""
+    import openpyxl
+    import datetime as _dt
+    db = get_db()
+    f  = request.files.get('excel_file')
+    if not f or not f.filename:
+        flash('ファイルを選択してください。', 'danger')
+        return redirect(url_for('forecast.weather_data'))
+
+    created = 0
+    errors  = []
+    filename = f.filename.lower()
+
+    if filename.endswith('.csv'):
+        # CSV パス
+        content = f.read().decode('utf-8-sig', errors='ignore')
+        reader  = csv.DictReader(io.StringIO(content))
+        for i, row in enumerate(reader, 2):
+            try:
+                obs_date = (row.get('日付') or row.get('obs_date') or '').strip()
+                location = (row.get('地点') or row.get('location') or '東京').strip()
+                avg_temp = row.get('平均気温(℃)') or row.get('平均気温') or row.get('avg_temp') or ''
+                max_temp = row.get('最高気温(℃)') or row.get('最高気温') or row.get('max_temp') or ''
+                min_temp = row.get('最低気温(℃)') or row.get('最低気温') or row.get('min_temp') or ''
+                precip   = row.get('降水量(mm)')  or row.get('降水量')  or 0
+                if not obs_date or avg_temp == '':
+                    continue
+                db.execute("""
+                    INSERT INTO weather_data
+                      (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'import')
+                    ON CONFLICT (obs_date, location) DO UPDATE
+                      SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp,
+                          min_temp=EXCLUDED.min_temp, precipitation=EXCLUDED.precipitation
+                """, [obs_date, location,
+                      float(avg_temp) if avg_temp else None,
+                      float(max_temp) if max_temp else None,
+                      float(min_temp) if min_temp else None,
+                      float(precip)   if precip   else 0])
+                created += 1
+            except Exception as e:
+                errors.append(f'行{i}: {e}')
+    else:
+        # Excel パス
+        try:
+            wb = openpyxl.load_workbook(f, data_only=True)
+            ws = wb.active
+        except Exception as e:
+            flash(f'Excelファイルの読み込みに失敗しました: {e}', 'danger')
+            return redirect(url_for('forecast.weather_data'))
+
+        header_row = [str(c.value).strip() if c.value is not None else '' for c in ws[1]]
+
+        def _col(names):
+            for n in names:
+                for j, h in enumerate(header_row):
+                    if n in h:
+                        return j
+            return -1
+
+        idx_date = _col(['日付', 'obs_date'])
+        idx_loc  = _col(['地点', 'location'])
+        idx_avg  = _col(['平均気温', 'avg_temp'])
+        idx_max  = _col(['最高気温', 'max_temp'])
+        idx_min  = _col(['最低気温', 'min_temp'])
+        idx_pre  = _col(['降水量',   'precipitation'])
+
+        if idx_date < 0 or idx_avg < 0:
+            flash('必須列「日付」「平均気温」が見つかりません。テンプレートを確認してください。', 'danger')
+            return redirect(url_for('forecast.weather_data'))
+
+        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            try:
+                obs_val = row[idx_date] if idx_date < len(row) else None
+                if obs_val is None:
+                    continue
+                if isinstance(obs_val, (_dt.date, _dt.datetime)):
+                    obs_date = obs_val.strftime('%Y-%m-%d')
+                else:
+                    obs_date = str(obs_val).strip()
+                if not obs_date:
+                    continue
+                location = str(row[idx_loc]).strip() if idx_loc >= 0 and idx_loc < len(row) and row[idx_loc] else '東京'
+                avg_temp = row[idx_avg] if idx_avg >= 0 and idx_avg < len(row) else None
+                max_temp = row[idx_max] if idx_max >= 0 and idx_max < len(row) else None
+                min_temp = row[idx_min] if idx_min >= 0 and idx_min < len(row) else None
+                precip   = row[idx_pre] if idx_pre >= 0 and idx_pre < len(row) else 0
+                if avg_temp is None:
+                    continue
+                db.execute("""
+                    INSERT INTO weather_data
+                      (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'import')
+                    ON CONFLICT (obs_date, location) DO UPDATE
+                      SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp,
+                          min_temp=EXCLUDED.min_temp, precipitation=EXCLUDED.precipitation
+                """, [obs_date, location,
+                      float(avg_temp) if avg_temp is not None else None,
+                      float(max_temp) if max_temp is not None else None,
+                      float(min_temp) if min_temp is not None else None,
+                      float(precip)   if precip   is not None else 0])
+                created += 1
+            except Exception as e:
+                errors.append(f'行{i}: {e}')
+
+    db.commit()
+
+    # 地点別インポート結果を集計してセッションへ
+    from flask import session
+    loc_summary = {}
+    for row_data in db.execute("""
+        SELECT location, COUNT(*) AS cnt, MIN(obs_date) AS oldest, MAX(obs_date) AS newest
+        FROM weather_data WHERE source='import'
+        GROUP BY location ORDER BY location
+    """).fetchall():
+        loc_summary[row_data['location']] = {
+            'cnt':    row_data['cnt'],
+            'oldest': str(row_data['oldest']),
+            'newest': str(row_data['newest']),
+        }
+    session['weather_import_result'] = {
+        'created':     created,
+        'error_count': len(errors),
+        'errors':      errors[:5],
+        'loc_summary': loc_summary,
+    }
+    redirect_to = request.form.get('redirect_to', 'import_page')
+    if redirect_to == 'weather_data':
+        flash(f'{created}件インポート完了。', 'success' if not errors else 'warning')
+        return redirect(url_for('forecast.weather_data'))
+    return redirect(url_for('forecast.weather_import_page'))
+
+
+@bp.route('/reports/weather/fetch_api', methods=['POST'])
+@permission_required('reports')
+def weather_fetch_api():
+    """Open-Meteo APIから気象データを取得してDBに保存"""
+    import urllib.request
+    import urllib.parse
+    db = get_db()
+    location = (request.form.get('location') or '東京').strip()
+    try:
+        lat = float(request.form.get('lat') or 35.6897)
+        lon = float(request.form.get('lon') or 139.6922)
+    except (ValueError, TypeError):
+        lat, lon = 35.6897, 139.6922
+    try:
+        days = int(request.form.get('days') or 30)
+        days = max(1, min(days, 92))
+    except (ValueError, TypeError):
+        days = 30
+
+    params = urllib.parse.urlencode({
+        'latitude':  lat,
+        'longitude': lon,
+        'daily':     'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+        'timezone':  'Asia/Tokyo',
+        'past_days': days,
+        'forecast_days': 0,
+    })
+    url = f'https://api.open-meteo.com/v1/forecast?{params}'
+    try:
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            import json as _json
+            data = _json.loads(resp.read())
+    except Exception as e:
+        flash(f'API取得エラー: {e}', 'danger')
+        return redirect(url_for('forecast.weather_data'))
+
+    daily = data.get('daily', {})
+    dates     = daily.get('time', [])
+    max_temps = daily.get('temperature_2m_max', [])
+    min_temps = daily.get('temperature_2m_min', [])
+    avg_temps = daily.get('temperature_2m_mean', [])
+    precips   = daily.get('precipitation_sum', [])
+
+    created = 0
+    errors  = []
+    for i, obs_date in enumerate(dates):
+        try:
+            avg_t = avg_temps[i] if i < len(avg_temps) else None
+            max_t = max_temps[i] if i < len(max_temps) else None
+            min_t = min_temps[i] if i < len(min_temps) else None
+            prec  = precips[i]   if i < len(precips)   else None
+            if avg_t is None:
+                continue
+            db.execute("""
+                INSERT INTO weather_data (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                VALUES (%s, %s, %s, %s, %s, %s, 'api')
+                ON CONFLICT (obs_date, location) DO UPDATE
+                  SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp,
+                      min_temp=EXCLUDED.min_temp, precipitation=EXCLUDED.precipitation,
+                      source='api'
+            """, [obs_date, location, avg_t, max_t, min_t, prec])
+            created += 1
+        except Exception as e:
+            errors.append(f'{obs_date}: {e}')
+    db.commit()
+    msg = f'{location}: {created}件の気象データをAPIから取得しました。'
+    if errors:
+        msg += f' エラー: {len(errors)}件'
+    flash(msg, 'success' if not errors else 'warning')
+    return redirect(url_for('forecast.weather_data'))
+
+
+@bp.route('/reports/weather/fetch_multi', methods=['POST'])
+@permission_required('reports')
+def weather_fetch_multi():
+    """複数地点の気象データを一括取得"""
+    import urllib.request
+    import urllib.parse
+    db = get_db()
+    locations_raw = request.form.getlist('locations')
+    try:
+        days = int(request.form.get('days') or 30)
+        days = max(1, min(days, 92))
+    except (ValueError, TypeError):
+        days = 30
+
+    if not locations_raw:
+        flash('地点を選択してください。', 'warning')
+        return redirect(url_for('forecast.weather_data'))
+
+    total_created = 0
+    total_errors  = 0
+    failed_locs   = []
+
+    for loc_str in locations_raw:
+        parts = loc_str.split('|')
+        if len(parts) != 3:
+            continue
+        location = parts[0].strip()
+        try:
+            lat = float(parts[1])
+            lon = float(parts[2])
+        except ValueError:
+            continue
+
+        params = urllib.parse.urlencode({
+            'latitude':  lat,
+            'longitude': lon,
+            'daily':     'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+            'timezone':  'Asia/Tokyo',
+            'past_days': days,
+            'forecast_days': 0,
+        })
+        url = f'https://api.open-meteo.com/v1/forecast?{params}'
+        try:
+            import json as _json
+            with urllib.request.urlopen(url, timeout=15) as resp:
+                data = _json.loads(resp.read())
+        except Exception as e:
+            failed_locs.append(f'{location}({e})')
+            total_errors += 1
+            continue
+
+        daily     = data.get('daily', {})
+        dates     = daily.get('time', [])
+        max_temps = daily.get('temperature_2m_max', [])
+        min_temps = daily.get('temperature_2m_min', [])
+        avg_temps = daily.get('temperature_2m_mean', [])
+        precips   = daily.get('precipitation_sum', [])
+
+        for i, obs_date in enumerate(dates):
+            try:
+                avg_t = avg_temps[i] if i < len(avg_temps) else None
+                max_t = max_temps[i] if i < len(max_temps) else None
+                min_t = min_temps[i] if i < len(min_temps) else None
+                prec  = precips[i]   if i < len(precips)   else None
+                if avg_t is None:
+                    continue
+                db.execute("""
+                    INSERT INTO weather_data
+                      (obs_date, location, avg_temp, max_temp, min_temp, precipitation, source)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'api')
+                    ON CONFLICT (obs_date, location) DO UPDATE
+                      SET avg_temp=EXCLUDED.avg_temp, max_temp=EXCLUDED.max_temp,
+                          min_temp=EXCLUDED.min_temp, precipitation=EXCLUDED.precipitation,
+                          source='api'
+                """, [obs_date, location, avg_t, max_t, min_t, prec])
+                total_created += 1
+            except Exception:
+                total_errors += 1
+
+    db.commit()
+    loc_count = len(locations_raw) - len(failed_locs)
+    msg = f'{loc_count}地点・{total_created}件の気象データを取得しました。'
+    if failed_locs:
+        msg += f' 取得失敗: {", ".join(failed_locs[:3])}{"他" if len(failed_locs)>3 else ""}'
+    flash(msg, 'success' if not failed_locs else 'warning')
+    return redirect(url_for('forecast.weather_data'))

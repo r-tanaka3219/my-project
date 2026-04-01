@@ -16,6 +16,13 @@
 <div class="page-title">
   <span>52週MDプラン（{{ fiscal_year }}年度）</span>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <form method="post" action="/reports/forecast/wholesale/apply" style="display:inline;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary btn-sm"
+              onclick="return confirm('全商品の52週MDプランを一括生成します。時間がかかる場合があります。よろしいですか？')">
+        ⚡ 全商品一括生成
+      </button>
+    </form>
     <a href="/reports/weekly_md/export?year={{ fiscal_year }}" class="btn btn-outline btn-sm">CSV出力</a>
     <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
     <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>

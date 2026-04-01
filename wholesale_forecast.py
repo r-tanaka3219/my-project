@@ -244,15 +244,22 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
     for r in sales_rows:
         sales_by_jan.setdefault(r['jan'], []).append((r['sale_dt'], int(r['qty'] or 0)))
 
-    # ── 気温データ（過去90日・今後30日予測は平均で代替）────────────────
+    # ── 気温データ（過去90日 + 未来予報分を地点平均でまとめる）───────────
+    # 複数地点が存在する場合に日付ごとの平均を取ることで地点間の衝突を防ぐ
     temp_rows = db.execute("""
-        SELECT obs_date, avg_temp
+        SELECT obs_date, AVG(avg_temp) AS avg_temp
         FROM weather_data
         WHERE obs_date >= CURRENT_DATE - INTERVAL '90 days'
+          AND avg_temp IS NOT NULL
+        GROUP BY obs_date
         ORDER BY obs_date
     """).fetchall()
-    temp_map: dict[date, float] = {r['obs_date']: float(r['avg_temp'] or 20) for r in temp_rows}
-    avg_temp_recent = mean(temp_map.values()) if temp_map else 20.0
+    temp_map: dict[date, float] = {r['obs_date']: float(r['avg_temp']) for r in temp_rows}
+    # 直近30日実績と今後の予報気温を分けて計算
+    past_temps   = [v for k, v in temp_map.items() if k <= date.today()]
+    future_temps = [v for k, v in temp_map.items() if k >  date.today()]
+    # 予報気温がある場合は予報平均を優先、なければ直近実績平均を使用
+    avg_temp_recent = mean(future_temps) if future_temps else (mean(past_temps) if past_temps else 20.0)
 
     # ── 気温感応度マップ（temp_sensitivityテーブルからキャッシュ読込）──
     sens_rows = db.execute("SELECT * FROM temp_sensitivity").fetchall()
@@ -423,10 +430,12 @@ def recalc_temp_sensitivity(db) -> int:
     全商品の気温感応度を再計算してtemp_sensitivityテーブルに保存。
     Returns: 更新件数
     """
-    # 気温データ取得
+    # 気温データ取得（複数地点は日付ごとに平均してキー衝突を防ぐ）
     temp_rows = db.execute("""
-        SELECT obs_date, avg_temp FROM weather_data
+        SELECT obs_date, AVG(avg_temp) AS avg_temp
+        FROM weather_data
         WHERE avg_temp IS NOT NULL
+        GROUP BY obs_date
         ORDER BY obs_date
     """).fetchall()
     if len(temp_rows) < 10:

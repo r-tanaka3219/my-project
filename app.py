@@ -435,6 +435,7 @@ def _build_forecast_rows(db, q=''):
 
         r = dict(r)
 
+        manual_adj = 1.0  # デフォルト値（前年実績モード時はP3無効のため1.0固定）
         if not ai_mode:
             # == 前年実績モード ==
             # 前年同月の日次平均をそのまま使用（WMA/季節/曜日/販促/受注/P3 全て無効）
@@ -915,21 +916,29 @@ def internal_error(e):
     is_db = any(w in err_str.lower() for w in
                 ['connection refused','could not connect','authentication failed',
                  'pg_host','password','psycopg2'])
+    _style = (
+        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
+        "<title>エラー</title>"
+        "<style>body{font-family:sans-serif;background:#fef2f2;display:flex;"
+        "align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px}"
+        ".box{background:#fff;border:2px solid #fca5a5;border-radius:12px;"
+        "padding:40px;max-width:620px;width:100%}"
+        "h2{color:#dc2626;margin-top:0}"
+        ".steps{background:#eff6ff;border-radius:8px;padding:16px 20px;margin-top:16px}"
+        "li{margin:10px 0;font-size:14px;line-height:1.6}"
+        "a.r{display:inline-block;margin-top:20px;padding:10px 24px;"
+        "background:#2563eb;color:#fff;border-radius:8px;text-decoration:none}"
+        "</style></head><body><div class=\"box\">"
+    )
+    _footer = '<a href=\"/\" class=\"r\">再読み込み</a></div></body></html>'
+    is_file = isinstance(orig, (PermissionError, FileNotFoundError)) or \
+              any(w in err_str.lower() for w in ['no such file'])
+    is_encode = isinstance(orig, UnicodeDecodeError) or \
+                any(w in err_str.lower() for w in ['codec', 'encoding'])
     if is_db:
         html = (
-            "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
-            "<title>DB接続エラー</title>"
-            "<style>body{font-family:sans-serif;background:#fef2f2;display:flex;"
-            "align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px}"
-            ".box{background:#fff;border:2px solid #fca5a5;border-radius:12px;"
-            "padding:40px;max-width:620px;width:100%}"
-            "h2{color:#dc2626;margin-top:0}"
-            ".steps{background:#eff6ff;border-radius:8px;padding:16px 20px;margin-top:16px}"
-            "li{margin:10px 0;font-size:14px;line-height:1.6}"
-            "a.r{display:inline-block;margin-top:20px;padding:10px 24px;"
-            "background:#2563eb;color:#fff;border-radius:8px;text-decoration:none}"
-            "</style></head><body><div class=\"box\">"
-            "<h2>PostgreSQL 接続エラー</h2>"
+            _style
+            + "<h2>PostgreSQL 接続エラー</h2>"
             "<p style=\"color:#6b7280;font-size:14px\">データベースに接続できませんでした。<br>"
             "サーバーの .env ファイルの接続情報を確認してください。</p>"
             '<div class=\"steps\"><strong>修正手順:</strong><ol>'
@@ -938,11 +947,53 @@ def internal_error(e):
             "<li>PostgreSQL サービスが起動しているか確認する</li>"
             "<li>下の「再読み込み」をクリック（サーバー再起動は不要）</li>"
             "</ol></div>"
-            '<a href=\"/\" class=\"r\">再読み込み</a>'
-            "</div></body></html>"
+            + _footer
         )
         return html, 500
-    return "<h2>エラーが発生しました</h2><p>システム管理者に連絡してください。</p>", 500
+    if is_file:
+        html = (
+            _style
+            + "<h2>ファイルアクセスエラー</h2>"
+            "<p style=\"color:#6b7280;font-size:14px\">ファイルの読み書き中にエラーが発生しました。<br>"
+            "アップロードしたファイルのパスやアクセス権限を確認してください。</p>"
+            '<div class=\"steps\"><strong>確認事項:</strong><ol>'
+            "<li>対象ファイルが存在するか確認する</li>"
+            "<li>ファイルが他のアプリケーションで開かれていないか確認する</li>"
+            "<li>サーバーのファイルアクセス権限を確認する</li>"
+            "<li>問題が解決しない場合はシステム管理者に連絡してください</li>"
+            "</ol></div>"
+            + _footer
+        )
+        return html, 500
+    if is_encode:
+        html = (
+            _style
+            + "<h2>文字コードエラー</h2>"
+            "<p style=\"color:#6b7280;font-size:14px\">ファイルの文字コード変換中にエラーが発生しました。<br>"
+            "インポートするファイルの文字コードを確認してください。</p>"
+            '<div class=\"steps\"><strong>確認事項:</strong><ol>'
+            "<li>CSVファイルの文字コードが UTF-8 または Shift-JIS であることを確認する</li>"
+            "<li>Excelで開いて「名前を付けて保存」→「CSV UTF-8(BOM付き)」で保存し直す</li>"
+            "<li>特殊文字・絵文字が含まれていないか確認する</li>"
+            "<li>問題が解決しない場合はシステム管理者に連絡してください</li>"
+            "</ol></div>"
+            + _footer
+        )
+        return html, 500
+    html = (
+        _style
+        + "<h2>内部エラーが発生しました</h2>"
+        f"<p style=\"color:#6b7280;font-size:14px\">予期しないエラーが発生しました。<br>"
+        f"エラー内容: <code style=\"background:#f3f4f6;padding:2px 6px;border-radius:4px\">"
+        f"{err_str[:200]}</code></p>"
+        '<div class=\"steps\"><strong>対処方法:</strong><ol>'
+        "<li>ページを再読み込みして再度お試しください</li>"
+        "<li>操作の内容とエラーメッセージをメモしてシステム管理者に連絡してください</li>"
+        "<li>サーバーのログファイルで詳細なエラー情報を確認してください</li>"
+        "</ol></div>"
+        + _footer
+    )
+    return html, 500
 
 
 
@@ -1882,8 +1933,11 @@ def recipients_template():
     wb.save(buf)
     buf.seek(0)
     from flask import send_file
+    _db = get_db()
+    _tn = _db.execute("SELECT value FROM settings WHERE key='recipients_template_name'").fetchone()
+    _dl_name = ((_tn['value'] if _tn else None) or '受信者一覧_テンプレート') + '.xlsx'
     return send_file(buf, as_attachment=True,
-                     download_name='recipients_template.xlsx',
+                     download_name=_dl_name,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/recipients/import', methods=['POST'])
@@ -3278,6 +3332,11 @@ def settings():
         'product_export_name': get_setting('product_export_name', '商品マスタ'),
         'receipt_template_name': get_setting('receipt_template_name', '入庫一括インポート_テンプレート'),
         'stocktake_export_name': get_setting('stocktake_export_name', '棚卸リスト'),
+        'recipients_template_name': get_setting('recipients_template_name', '受信者一覧_テンプレート'),
+        'chain_template_name': get_setting('chain_template_name', 'チェーンマスタ_テンプレート'),
+        'store_template_name': get_setting('store_template_name', '店舗マスタ_テンプレート'),
+        'supplier_setting_template_name': get_setting('supplier_setting_template_name', '仕入先CD設定_テンプレート'),
+        'product_setting_template_name':  get_setting('product_setting_template_name', '商品CD設定_テンプレート'),
     }
     forecast_flags = {
         'forecast_ai_mode':      get_setting('forecast_ai_mode', 1),
@@ -3286,7 +3345,15 @@ def settings():
         'abc_a_threshold':       get_setting('abc_a_threshold', '0.70'),
         'abc_b_threshold':       get_setting('abc_b_threshold', '0.90'),
     }
-    return render_template('settings.html', env=env_content, retention=retention, forecast_flags=forecast_flags)
+    weather_settings = {
+        'weather_auto_fetch_enabled':    get_setting('weather_auto_fetch_enabled', '1'),
+        'weather_auto_fetch_locations':  get_setting('weather_auto_fetch_locations', ''),
+        'weather_auto_fetch_days':       get_setting('weather_auto_fetch_days', '3'),
+        'weather_auto_fetch_hour':       get_setting('weather_auto_fetch_hour', '3'),
+        'weather_data_retention_days':   get_setting('weather_data_retention_days', '365'),
+    }
+    return render_template('settings.html', env=env_content, retention=retention,
+                           forecast_flags=forecast_flags, weather_settings=weather_settings)
 
 @app.route('/settings/save', methods=['POST'])
 @admin_required
@@ -3313,13 +3380,18 @@ def settings_save():
         f"DAILY_MAIL_MINUTE={f.get('DAILY_MAIL_MINUTE','0')}",
         f"MONTH_END_IMPORT_HOUR={f.get('MONTH_END_IMPORT_HOUR','5')}",
         f"MONTH_END_IMPORT_MINUTE={f.get('MONTH_END_IMPORT_MINUTE','0')}",
+        f"WEATHER_LOCATION={f.get('WEATHER_LOCATION', os.getenv('WEATHER_LOCATION','東京'))}",
+        f"WEATHER_LAT={f.get('WEATHER_LAT', os.getenv('WEATHER_LAT','35.6897'))}",
+        f"WEATHER_LON={f.get('WEATHER_LON', os.getenv('WEATHER_LON','139.6922'))}",
+        f"WEATHER_LOCATIONS_JSON={f.get('WEATHER_LOCATIONS_JSON', os.getenv('WEATHER_LOCATIONS_JSON',''))}",
         f"USE_WAITRESS={os.getenv('USE_WAITRESS','1')}",
     ]
     env_path.write_text('\n'.join(lines), encoding='utf-8')
     # 保持月数をDBに保存
     db = get_db()
     int_keys = {'order_history_months', 'disposed_months', 'sales_history_months', 'csv_log_months',
-                'forecast_ai_mode'}
+                'forecast_ai_mode', 'weather_auto_fetch_enabled', 'weather_auto_fetch_days',
+                'weather_auto_fetch_hour', 'weather_data_retention_days'}
     float_keys = {'safety_level_z', 'abc_a_threshold', 'abc_b_threshold'}
     for key, default in [
         ('order_history_months', 12), ('disposed_months', 12), ('sales_history_months', 12),
@@ -3328,13 +3400,25 @@ def settings_save():
         ('product_export_name', '商品マスタ'),
         ('receipt_template_name', '入庫一括インポート_テンプレート'),
         ('stocktake_export_name', '棚卸リスト'),
+        ('recipients_template_name', '受信者一覧_テンプレート'),
+        ('chain_template_name', 'チェーンマスタ_テンプレート'),
+        ('store_template_name', '店舗マスタ_テンプレート'),
+        ('supplier_setting_template_name', '仕入先CD設定_テンプレート'),
+        ('product_setting_template_name', '商品CD設定_テンプレート'),
         ('forecast_ai_mode', 1),
         ('forecast_reorder_mode', 'sf'),
         ('safety_level_z', '1.65'),
         ('abc_a_threshold', '0.70'),
         ('abc_b_threshold', '0.90'),
+        ('weather_auto_fetch_enabled', '1'),
+        ('weather_auto_fetch_locations', ''),
+        ('weather_auto_fetch_days', '3'),
+        ('weather_auto_fetch_hour', '3'),
+        ('weather_data_retention_days', '365'),
     ]:
         if key == 'forecast_ai_mode':
+            raw = '1' if f.get(key) == '1' else '0'
+        elif key == 'weather_auto_fetch_enabled':
             raw = '1' if f.get(key) else '0'
         elif key == 'forecast_reorder_mode':
             raw = f.get(key, 'sf') or 'sf'
@@ -3439,22 +3523,93 @@ def reports_forecast():
 @app.route('/reports/forecast/apply', methods=['POST'])
 @permission_required('reports')
 def reports_forecast_apply():
-    db = get_db()
-    q = request.form.get('q','').strip().lower()
+    import uuid as _uuid
+    q    = request.form.get('q', '').strip().lower()
     mode = (request.form.get('mode') or 'reorder_point').strip()
-    rows = _build_forecast_rows(db, q)
-    updated = 0
-    for r in rows:
-        if mode == 'both':
-            db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s", [int(r['suggested_reorder_point'] or 0), int(r['suggested_order_qty'] or 0), r['product_id']])
-        elif mode == 'order_qty':
-            db.execute("UPDATE products SET order_qty=%s WHERE id=%s", [int(r['suggested_order_qty'] or 0), r['product_id']])
-        else:
-            db.execute("UPDATE products SET reorder_point=%s WHERE id=%s", [int(r['suggested_reorder_point'] or 0), r['product_id']])
-        updated += 1
-    db.commit()
-    flash(f'需要予測をもとに {updated} 件の設定を更新しました。', 'success')
-    return redirect(url_for('reports_forecast', q=q))
+    job_id = str(_uuid.uuid4())
+    _csv_progress_push(job_id, {'phase': 'start', 'file': '需要予測 一括反映', 'total': 0})
+
+    def _run():
+        from database import get_db as _get_db_raw
+        import psycopg2
+        from database import get_dsn, DBConn
+        updated = 0
+        try:
+            conn = psycopg2.connect(**get_dsn())
+            conn.autocommit = False
+            db = DBConn(conn)
+        except Exception as e:
+            _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': 'エラー', 'status': 'err', 'detail': str(e)}]})
+            return
+        try:
+            rows = _build_forecast_rows(db, q)
+            total = len(rows)
+            _csv_progress_push(job_id, {'phase': 'start', 'file': f'需要予測 一括反映（{mode}）', 'total': total})
+            updated = 0
+            for i, r in enumerate(rows, 1):
+                try:
+                    if mode == 'both':
+                        db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s",
+                                   [int(r['suggested_reorder_point'] or 0), int(r['suggested_order_qty'] or 0), r['product_id']])
+                    elif mode == 'order_qty':
+                        db.execute("UPDATE products SET order_qty=%s WHERE id=%s",
+                                   [int(r['suggested_order_qty'] or 0), r['product_id']])
+                    else:
+                        db.execute("UPDATE products SET reorder_point=%s WHERE id=%s",
+                                   [int(r['suggested_reorder_point'] or 0), r['product_id']])
+                    updated += 1
+                except Exception:
+                    pass
+                if i % 50 == 0 or i == total:
+                    _csv_progress_push(job_id, {'phase': 'progress', 'current': i, 'total': total, 'ok': updated, 'skip': 0, 'err': i - updated})
+            db.commit()
+            _csv_progress_push(job_id, {'phase': 'done', 'file': '需要予測 一括反映', 'ok': updated, 'skip': 0, 'err': 0,
+                                        'detail': f'{updated}/{total}件 更新完了'})
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            _csv_progress_push(job_id, {'phase': 'done', 'file': '需要予測 一括反映', 'ok': 0, 'skip': 0, 'err': 1,
+                                        'detail': f'エラー: {e}'})
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+        _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': '需要予測 一括反映', 'status': 'ok', 'detail': f'{updated}件更新'}]})
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return redirect(url_for('forecast_apply_progress', job_id=job_id, q=q, mode=mode))
+
+
+@app.route('/reports/forecast/apply/progress/<job_id>')
+@permission_required('reports')
+def forecast_apply_progress(job_id):
+    q    = request.args.get('q', '')
+    mode = request.args.get('mode', 'reorder_point')
+    return render_template('forecast_apply_progress.html', job_id=job_id, q=q, mode=mode)
+
+
+@app.route('/reports/forecast/apply/progress/<job_id>/stream')
+def forecast_apply_progress_stream(job_id):
+    def generate():
+        sent = 0
+        for _ in range(3600):
+            with _csv_lock:
+                events = _csv_progress.get(job_id, [])
+            while sent < len(events):
+                ev = events[sent]
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                sent += 1
+                if ev.get('phase') == 'finished':
+                    return
+            _time.sleep(0.3)
+        yield f"data: {json.dumps({'phase': 'timeout'})}\n\n"
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
 
 @app.route('/reports/forecast/promotions', methods=['POST'])
 @permission_required('reports')
@@ -3634,7 +3789,7 @@ def reports_forecast_demand_template():
     from urllib.parse import quote
     fname = '受注予定一括インポート_テンプレート.csv'
     return Response(
-        output.getvalue().encode('utf-8-sig'),
+        output.getvalue().encode('utf-8'),
         mimetype='text/csv',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"}
     )
@@ -3778,6 +3933,130 @@ def reports_shortage_create_orders():
 
 
 
+
+
+# ─── sales_history 移行ツール ─────────────────────────────────────
+@app.route('/sales_history/import', methods=['GET', 'POST'])
+@admin_required
+def sales_history_import_page():
+    if request.method == 'GET':
+        return render_template('sales_history_import.html')
+    # POST: バックグラウンドインポート
+    import uuid as _uuid
+    f = request.files.get('file')
+    if not f or not f.filename:
+        flash('ファイルを選択してください。', 'danger')
+        return render_template('sales_history_import.html')
+    content = f.read()
+    job_id = str(_uuid.uuid4())
+    _csv_progress_push(job_id, {'phase': 'start', 'file': f.filename, 'total': 0})
+
+    def _run():
+        import csv as _csv, io as _io, hashlib as _hl, psycopg2
+        from database import get_dsn, DBConn
+        ok = skip = err = 0
+        try:
+            conn = psycopg2.connect(**get_dsn())
+            conn.autocommit = False
+            db = DBConn(conn)
+        except Exception as e:
+            _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': 'エラー', 'status': 'err', 'detail': str(e)}]})
+            return
+        try:
+            text = None
+            for enc in ('utf-8-sig', 'utf-8', 'cp932'):
+                try:
+                    text = content.decode(enc)
+                    break
+                except Exception:
+                    pass
+            if text is None:
+                text = content.decode('utf-8', errors='ignore')
+            rows_all = list(_csv.DictReader(_io.StringIO(text)))
+            total = len(rows_all)
+            _csv_progress_push(job_id, {'phase': 'start', 'file': f.filename, 'total': total})
+            ok = skip = err = 0
+            for i, row in enumerate(rows_all, 1):
+                try:
+                    jan         = (row.get('JANコード') or row.get('jan') or '').strip()
+                    product_name= (row.get('商品名') or row.get('product_name') or '').strip()
+                    qty_raw     = row.get('数量') or row.get('quantity') or ''
+                    sale_date   = (row.get('販売日') or row.get('sale_date') or '').strip()
+                    source_file = (row.get('ソースファイル名') or row.get('source_file') or f.filename).strip()
+                    if not jan or not sale_date or qty_raw == '':
+                        skip += 1
+                        continue
+                    quantity = int(float(str(qty_raw).replace(',', '')))
+                    # 重複チェック用ハッシュ
+                    row_hash = _hl.sha256(f'{jan}|{sale_date}|{quantity}|{source_file}'.encode()).hexdigest()
+                    db.execute("""
+                        INSERT INTO sales_history (jan, product_name, quantity, sale_date, source_file, row_hash)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, [jan, product_name, quantity, sale_date, source_file, row_hash])
+                    ok += 1
+                except Exception as e2:
+                    err += 1
+                if i % 100 == 0 or i == total:
+                    _csv_progress_push(job_id, {'phase': 'progress', 'current': i, 'total': total, 'ok': ok, 'skip': skip, 'err': err})
+            db.commit()
+            _csv_progress_push(job_id, {'phase': 'done', 'file': f.filename, 'ok': ok, 'skip': skip, 'err': err,
+                                        'detail': f'{ok}件取込 スキップ{skip}件 エラー{err}件'})
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            _csv_progress_push(job_id, {'phase': 'done', 'file': f.filename, 'ok': 0, 'skip': 0, 'err': 1,
+                                        'detail': f'エラー: {e}'})
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+        _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': f.filename, 'status': 'ok', 'detail': f'{ok}件取込完了'}]})
+
+    threading.Thread(target=_run, daemon=True).start()
+    return redirect(url_for('sales_history_import_progress', job_id=job_id))
+
+
+@app.route('/sales_history/import/progress/<job_id>')
+@admin_required
+def sales_history_import_progress(job_id):
+    return render_template('sales_history_import.html', job_id=job_id)
+
+
+@app.route('/sales_history/import/progress/<job_id>/stream')
+def sales_history_import_stream(job_id):
+    def generate():
+        sent = 0
+        for _ in range(3600):
+            with _csv_lock:
+                events = _csv_progress.get(job_id, [])
+            while sent < len(events):
+                ev = events[sent]
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                sent += 1
+                if ev.get('phase') == 'finished':
+                    return
+            _time.sleep(0.3)
+        yield f"data: {json.dumps({'phase': 'timeout'})}\n\n"
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+@app.route('/sales_history/import/template')
+@admin_required
+def sales_history_import_template():
+    import io as _io, csv as _csv
+    from urllib.parse import quote
+    sio = _io.StringIO()
+    w = _csv.writer(sio)
+    w.writerow(['JANコード', '商品名', '数量', '販売日', 'ソースファイル名'])
+    w.writerow(['4901234567890', 'サンプル商品A', '10', '2024-01-15', '2024年1月売上.csv'])
+    w.writerow(['4901234567891', 'サンプル商品B', '5', '2024-01-15', '2024年1月売上.csv'])
+    return Response(sio.getvalue().encode('utf-8-sig'), mimetype='text/csv',
+                    headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote('sales_history_テンプレート.csv')})
 
 
 if __name__ == '__main__':

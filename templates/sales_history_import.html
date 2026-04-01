@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}販売履歴 移行ツール{% endblock %}
+{% block content %}
+<style>
+.input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+</style>
+
+<div class="page-title">
+  <span>📦 販売履歴 移行ツール</span>
+  <div style="display:flex;gap:8px">
+    <a href="/sales_history/import/template" class="btn btn-outline btn-sm">テンプレートDL</a>
+    <a href="/csv" class="btn btn-outline btn-sm">← CSV設定</a>
+  </div>
+</div>
+
+{% if job_id %}
+{# 進捗モニター表示 #}
+<div id="progressSection">
+  <div class="card">
+    <div class="card-title">取込進捗 <span id="status-badge" style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#dbeafe;color:#1d4ed8;margin-left:8px">処理中</span></div>
+    <div style="font-weight:bold;margin-bottom:8px" id="current-file">待機中...</div>
+    <div style="background:#e5e7eb;border-radius:6px;height:16px;overflow:hidden;margin-bottom:10px">
+      <div id="progress-fill" style="height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);width:0%;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:11px;font-weight:bold;color:#fff;min-width:36px">0%</div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="text-align:center"><div style="font-size:22px;font-weight:bold;color:#059669" id="cnt-ok">0</div><div style="font-size:11px;color:#6b7280">取込成功</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:bold;color:#d97706" id="cnt-skip">0</div><div style="font-size:11px;color:#6b7280">スキップ</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:bold;color:#dc2626" id="cnt-err">0</div><div style="font-size:11px;color:#6b7280">エラー</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:bold;color:#6b7280" id="cnt-total">-</div><div style="font-size:11px;color:#6b7280">総行数</div></div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;max-height:200px;overflow-y:auto;font-size:12px;font-family:monospace" id="log"></div>
+  </div>
+  <div id="done-btn" style="display:none;margin-top:12px">
+    <a href="/sales_history/import" class="btn btn-primary">新たにインポート</a>
+    <a href="/csv" class="btn btn-outline" style="margin-left:8px">← CSV設定へ</a>
+  </div>
+</div>
+
+<script>
+const jobId = {{ job_id | tojson }};
+const es = new EventSource(`/sales_history/import/progress/${jobId}/stream`);
+const logEl = document.getElementById('log');
+function addLog(msg, color) {
+  const d = document.createElement('div');
+  d.style.color = color || '#374151';
+  d.style.borderBottom = '1px solid #e5e7eb';
+  d.style.padding = '2px 0';
+  d.textContent = msg;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+es.onmessage = function(e) {
+  const ev = JSON.parse(e.data);
+  if (ev.phase === 'start') {
+    document.getElementById('current-file').textContent = ev.file;
+    document.getElementById('cnt-total').textContent = ev.total > 0 ? ev.total.toLocaleString() : '-';
+    addLog('📂 開始: ' + ev.file, '#2563eb');
+  } else if (ev.phase === 'progress') {
+    const pct = ev.total > 0 ? Math.round(ev.current / ev.total * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-fill').textContent = pct + '%';
+    document.getElementById('cnt-ok').textContent = (ev.ok || 0).toLocaleString();
+    document.getElementById('cnt-skip').textContent = (ev.skip || 0).toLocaleString();
+    document.getElementById('cnt-err').textContent = (ev.err || 0).toLocaleString();
+  } else if (ev.phase === 'done') {
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-fill').textContent = '100%';
+    document.getElementById('cnt-ok').textContent = (ev.ok || 0).toLocaleString();
+    document.getElementById('cnt-skip').textContent = (ev.skip || 0).toLocaleString();
+    document.getElementById('cnt-err').textContent = (ev.err || 0).toLocaleString();
+    addLog('✅ ' + ev.detail, '#059669');
+  } else if (ev.phase === 'finished') {
+    es.close();
+    document.getElementById('status-badge').textContent = '完了';
+    document.getElementById('status-badge').style.background = '#dcfce7';
+    document.getElementById('status-badge').style.color = '#16a34a';
+    document.getElementById('done-btn').style.display = 'block';
+    addLog('🎉 処理完了', '#059669');
+  } else if (ev.phase === 'timeout') {
+    es.close();
+    addLog('⚠️ タイムアウト', '#dc2626');
+    document.getElementById('done-btn').style.display = 'block';
+  }
+};
+es.onerror = function() {
+  addLog('接続が切れました', '#dc2626');
+  document.getElementById('done-btn').style.display = 'block';
+};
+</script>
+
+{% else %}
+{# アップロードフォーム #}
+<div class="card" style="background:#fef9c3;border-left:4px solid #ca8a04;padding:12px 16px">
+  <strong>注意:</strong> このツールは既存の売上データ（CSV取込済み）以外のデータをsales_historyに直接インポートします。
+  重複データはrow_hash（JANコード・日付・数量・ソースファイルのハッシュ）で自動スキップされます。
+</div>
+
+<div class="card">
+  <div class="card-title">CSVファイルをアップロード</div>
+  <form method="post" action="/sales_history/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="margin-bottom:12px">
+      <label style="font-size:13px;color:#374151;display:block;margin-bottom:4px">CSVファイル *</label>
+      <input type="file" name="file" accept=".csv" required style="font-size:13px">
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:12px">
+      必須列: JANコード, 数量, 販売日（YYYY-MM-DD形式）<br>
+      オプション列: 商品名, ソースファイル名
+    </div>
+    <button type="submit" class="btn btn-primary">📤 インポート開始</button>
+    <a href="/sales_history/import/template" class="btn btn-outline" style="margin-left:8px">テンプレートDL</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">使い方</div>
+  <ol style="font-size:13px;color:#374151;line-height:2;padding-left:20px">
+    <li>「テンプレートDL」でCSVファイルの形式を確認</li>
+    <li>既存の売上データを上記の形式に変換</li>
+    <li>CSVファイルを選択して「インポート開始」をクリック</li>
+    <li>進捗モニターで結果を確認</li>
+  </ol>
+  <div style="margin-top:10px;font-size:12px;color:#6b7280">
+    ※ 同じ JANコード・日付・数量・ソースファイルの組み合わせは自動的にスキップされます（重複防止）
+  </div>
+</div>
+
+<div class="card" style="background:#fef3c7;border-left:4px solid #d97706;padding:12px 16px">
+  <div style="font-weight:600;color:#92400e;margin-bottom:6px">⚠️ AI予測のウォームアップ期間について</div>
+  <div style="font-size:13px;color:#78350f;line-height:1.8">
+    AI需要予測（ホルト・ウィンタース法）は <strong>過去180日分以上の販売実績</strong> が蓄積されると精度が向上します。<br>
+    新規導入直後は実績データが少ないため、予測値が0または低くなる場合があります。<br>
+    <strong>対処方法:</strong>
+    <ul style="margin-top:4px;padding-left:20px">
+      <li>過去の売上CSVを本ツールでインポートして実績を補完する（推奨）</li>
+      <li>CSV定期取込を設定し、180日間のウォームアップ期間を待つ</li>
+      <li>需要予測画面の「受注予定（手動登録）」で直近の販売予定を手動入力する</li>
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

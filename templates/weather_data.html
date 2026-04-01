@@ -12,7 +12,7 @@
 <div class="page-title">
   <span>気温データ管理</span>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a href="/reports/weather/template" class="btn btn-outline btn-sm">テンプレートDL</a>
+    <a href="/reports/weather/import_page" class="btn btn-primary btn-sm">☁️ 過去データ一括インポート</a>
     <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
     <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
   </div>
@@ -53,29 +53,352 @@
         <input type="number" name="precipitation" step="0.1" value="0" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       </div>
       <div style="padding-top:18px">
-        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">登録</button>
+        <button type="submit" class="btn btn-primary btn-sm" style="padding:4px 16px">登録</button>
       </div>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <div class="card-title">CSVインポート（気象庁フォーマット対応）</div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <form method="post" action="/reports/weather/import" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="file" name="file" accept=".csv" required>
-      <button type="submit" class="btn btn-outline btn-sm">インポート</button>
-    </form>
-    <form method="post" action="/reports/weather/recalc_sensitivity"
-          onsubmit="return confirm('全商品の気温感応度を再計算します（時間がかかる場合があります）。よろしいですか？')" style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-purple btn-sm">気温感応度を再計算</button>
-    </form>
+  <div class="card-title">📥 気象データ 一括インポート</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+
+    {# Excel一括インポート #}
+    <div style="flex:1;min-width:280px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:8px">📊 Excelインポート（推奨）</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <a href="/reports/weather/excel_template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
+        <span style="font-size:11px;color:#6b7280">.xlsx形式</span>
+      </div>
+      <form method="post" action="/reports/weather/excel_import" enctype="multipart/form-data"
+            style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="excel_file" accept=".xlsx,.xls,.csv" required style="font-size:12px;max-width:220px">
+        <button type="submit" class="btn btn-success btn-sm">📤 インポート</button>
+      </form>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">
+        列：日付 / 地点 / 平均気温(℃) / 最高気温(℃) / 最低気温(℃) / 降水量(mm)<br>
+        同一「日付×地点」は上書き更新。CSV(.csv)も対応。
+      </div>
+    </div>
+
+    {# 気温感応度再計算 #}
+    <div style="flex:0 0 auto;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
+      <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px">🧮 気温感応度を再計算</div>
+      <form method="post" action="/reports/weather/recalc_sensitivity"
+            onsubmit="return confirm('全商品の気温感応度を再計算します。よろしいですか？')" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-purple btn-sm">再計算を実行</button>
+      </form>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">
+        データインポート後に実行して<br>AI予測の精度を最新化します
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">🌐 気象データ取得（Open-Meteo API・無料）</div>
+  <div style="font-size:12px;color:#374151;margin-bottom:12px">
+    無料の気象APIから過去最大92日分の実測データを自動取得します。インターネット接続が必要です。
+    地点ごとにデータを取得・蓄積し、AI需要予測の精度向上に活用できます。
+  </div>
+
+  {# 単一地点取得フォーム #}
+  <form method="post" action="/reports/weather/fetch_api" id="apiFetchForm" style="margin-bottom:16px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="lat" id="apiLat" value="35.6897">
+    <input type="hidden" name="lon" id="apiLon" value="139.6922">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      <div>
+        <label style="font-size:12px;color:#6b7280;display:block">地点名</label>
+        <input type="text" name="location" id="apiLocation" value="東京" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:100px">
+      </div>
+      <div>
+        <label style="font-size:12px;color:#6b7280;display:block">取得日数</label>
+        <select name="days" id="apiDays" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="7">7日</option>
+          <option value="14">14日</option>
+          <option value="30" selected>30日</option>
+          <option value="60">60日</option>
+          <option value="92">92日（最大）</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">📡 この地点を取得</button>
+    </div>
+
+    {# 都道府県プリセット #}
+    <div style="margin-bottom:8px">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">都道府県プリセット（クリックで地点設定）</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">北海道</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('札幌',43.0618,141.3545)">札幌</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">東北</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('青森',40.8246,140.7404)">青森</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('盛岡',39.7036,141.1527)">盛岡</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('仙台',38.2688,140.8721)">仙台</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('秋田',39.7186,140.1023)">秋田</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('山形',38.2404,140.3633)">山形</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('福島',37.7608,140.4748)">福島</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">関東</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('水戸',36.3418,140.4468)">水戸</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('宇都宮',36.5651,139.8836)">宇都宮</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('前橋',36.3911,139.0608)">前橋</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('さいたま',35.8617,139.6456)">さいたま</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('千葉',35.6074,140.1065)">千葉</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('東京',35.6897,139.6922)">東京</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('横浜',35.4478,139.6425)">横浜</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">中部</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('新潟',37.9161,139.0364)">新潟</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('富山',36.6953,137.2113)">富山</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('金沢',36.5944,136.6256)">金沢</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('福井',36.0652,136.2216)">福井</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('甲府',35.6639,138.5686)">甲府</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('長野',36.6513,138.1812)">長野</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('岐阜',35.3912,136.7223)">岐阜</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('静岡',34.9769,138.3831)">静岡</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('名古屋',35.1815,136.9066)">名古屋</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('津',34.7303,136.5086)">津</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">近畿</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('大津',35.0045,135.8686)">大津</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('京都',35.0211,135.7556)">京都</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('大阪',34.6937,135.5023)">大阪</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('神戸',34.6913,135.1830)">神戸</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('奈良',34.6851,135.8328)">奈良</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('和歌山',34.2306,135.1709)">和歌山</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">中国</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('鳥取',35.5036,134.2381)">鳥取</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('松江',35.4723,133.0505)">松江</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('岡山',34.6618,133.9344)">岡山</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('広島',34.3853,132.4553)">広島</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('山口',34.1860,131.4706)">山口</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">四国</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('徳島',34.0658,134.5593)">徳島</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('高松',34.3401,134.0434)">高松</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('松山',33.8416,132.7657)">松山</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('高知',33.5597,133.5311)">高知</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:#6b7280;align-self:center;min-width:40px">九州沖縄</span>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('福岡',33.5902,130.4017)">福岡</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('佐賀',33.2494,130.2989)">佐賀</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('長崎',32.7503,129.8778)">長崎</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('熊本',32.7898,130.7417)">熊本</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('大分',33.2382,131.6126)">大分</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('宮崎',31.9077,131.4202)">宮崎</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('鹿児島',31.5602,130.5581)">鹿児島</button>
+        <button type="button" class="btn btn-outline btn-sm pref-btn" onclick="setCity('那覇',26.2124,127.6809)">那覇</button>
+      </div>
+    </div>
+  </form>
+
+  {# 複数地点一括取得フォーム #}
+  <div style="border-top:1px solid #e5e7eb;padding-top:14px">
+    <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px">📋 複数地点を一括取得</div>
+    {# CSRFトークンを隠しフィールドで保持 #}
+    <input type="hidden" id="multiCsrfToken" value="{{ csrf_token() }}">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+      <div>
+        <label style="font-size:12px;color:#6b7280;display:block">取得日数</label>
+        <select id="multiDays" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <option value="7">7日</option>
+          <option value="14">14日</option>
+          <option value="30" selected>30日</option>
+          <option value="60">60日</option>
+          <option value="92">92日（最大）</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="selectAllPref()">全都道府県選択</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="clearAllPref()">選択解除</button>
+      <button type="button" class="btn btn-primary btn-sm" id="multiSubmitBtn" onclick="startMultiFetch()">📡 選択地点を一括取得</button>
+    </div>
+    {# 進捗バー（取得中のみ表示） #}
+    <div id="multiProgressWrap" style="display:none;margin-bottom:8px">
+      <div style="font-size:12px;color:#374151;margin-bottom:4px" id="multiProgressLabel">処理中...</div>
+      <div style="background:#e5e7eb;border-radius:4px;height:10px;overflow:hidden">
+        <div id="multiProgressBar" style="background:#2563eb;height:100%;width:0%;transition:width 0.3s"></div>
+      </div>
+      <div style="font-size:11px;color:#6b7280;margin-top:3px" id="multiProgressDetail"></div>
+    </div>
+    <div id="multiPrefList" style="display:flex;gap:4px;flex-wrap:wrap;max-height:120px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#f9fafb">
+      {% set all_prefs = [
+        ('札幌',43.0618,141.3545),('青森',40.8246,140.7404),('盛岡',39.7036,141.1527),
+        ('仙台',38.2688,140.8721),('秋田',39.7186,140.1023),('山形',38.2404,140.3633),
+        ('福島',37.7608,140.4748),('水戸',36.3418,140.4468),('宇都宮',36.5651,139.8836),
+        ('前橋',36.3911,139.0608),('さいたま',35.8617,139.6456),('千葉',35.6074,140.1065),
+        ('東京',35.6897,139.6922),('横浜',35.4478,139.6425),('新潟',37.9161,139.0364),
+        ('富山',36.6953,137.2113),('金沢',36.5944,136.6256),('福井',36.0652,136.2216),
+        ('甲府',35.6639,138.5686),('長野',36.6513,138.1812),('岐阜',35.3912,136.7223),
+        ('静岡',34.9769,138.3831),('名古屋',35.1815,136.9066),('津',34.7303,136.5086),
+        ('大津',35.0045,135.8686),('京都',35.0211,135.7556),('大阪',34.6937,135.5023),
+        ('神戸',34.6913,135.1830),('奈良',34.6851,135.8328),('和歌山',34.2306,135.1709),
+        ('鳥取',35.5036,134.2381),('松江',35.4723,133.0505),('岡山',34.6618,133.9344),
+        ('広島',34.3853,132.4553),('山口',34.1860,131.4706),('徳島',34.0658,134.5593),
+        ('高松',34.3401,134.0434),('松山',33.8416,132.7657),('高知',33.5597,133.5311),
+        ('福岡',33.5902,130.4017),('佐賀',33.2494,130.2989),('長崎',32.7503,129.8778),
+        ('熊本',32.7898,130.7417),('大分',33.2382,131.6126),('宮崎',31.9077,131.4202),
+        ('鹿児島',31.5602,130.5581),('那覇',26.2124,127.6809)
+      ] %}
+      {% for name, lat, lon in all_prefs %}
+      <label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;white-space:nowrap" id="prefLabel_{{ loop.index }}">
+        <input type="checkbox" class="multi-loc-cb" data-name="{{ name }}" data-lat="{{ lat }}" data-lon="{{ lon }}" style="margin:0">
+        {{ name }}
+      </label>
+      {% endfor %}
+    </div>
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">
+      ※ 地点を1つずつ順次取得します。全都道府県（47地点×92日）は約2〜3分かかります。取得中はページを閉じないでください。
+    </div>
+  </div>
+
+  <script>
+  function setCity(name, lat, lon) {
+    document.getElementById('apiLocation').value = name;
+    document.getElementById('apiLat').value = lat;
+    document.getElementById('apiLon').value = lon;
+    // プリセットボタンのハイライト
+    document.querySelectorAll('.pref-btn').forEach(b => b.style.background = '');
+    event.target.style.background = '#dbeafe';
+  }
+  function selectAllPref() {
+    document.querySelectorAll('#multiPrefList input.multi-loc-cb').forEach(c => c.checked = true);
+  }
+  function clearAllPref() {
+    document.querySelectorAll('#multiPrefList input.multi-loc-cb').forEach(c => c.checked = false);
+  }
+
+  async function startMultiFetch() {
+    var checked = Array.from(document.querySelectorAll('#multiPrefList input.multi-loc-cb:checked'));
+    if (checked.length === 0) {
+      alert('地点を選択してください。');
+      return;
+    }
+    var days  = document.getElementById('multiDays').value;
+    var csrf  = document.getElementById('multiCsrfToken').value;
+    var btn   = document.getElementById('multiSubmitBtn');
+    var wrap  = document.getElementById('multiProgressWrap');
+    var label = document.getElementById('multiProgressLabel');
+    var bar   = document.getElementById('multiProgressBar');
+    var detail= document.getElementById('multiProgressDetail');
+
+    btn.disabled = true;
+    wrap.style.display = 'block';
+
+    var success = 0;
+    var errors  = [];
+
+    for (var i = 0; i < checked.length; i++) {
+      var cb   = checked[i];
+      var name = cb.dataset.name;
+      var lat  = cb.dataset.lat;
+      var lon  = cb.dataset.lon;
+
+      var pct  = Math.round((i / checked.length) * 100);
+      label.textContent  = '取得中... ' + (i + 1) + ' / ' + checked.length + ' 地点 (' + name + ')';
+      bar.style.width    = pct + '%';
+      detail.textContent = '成功: ' + success + '件  エラー: ' + errors.length + '件';
+
+      try {
+        var fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('location',   name);
+        fd.append('lat',        lat);
+        fd.append('lon',        lon);
+        fd.append('days',       days);
+        var resp = await fetch('/reports/weather/fetch_api', { method: 'POST', body: fd });
+        if (resp.ok || resp.redirected) {
+          success++;
+        } else {
+          errors.push(name + '(HTTP ' + resp.status + ')');
+        }
+      } catch (e) {
+        errors.push(name + '(' + e.message + ')');
+      }
+    }
+
+    // 完了表示
+    bar.style.width    = '100%';
+    bar.style.background = errors.length === 0 ? '#16a34a' : '#d97706';
+    label.textContent  = '✅ 完了: ' + success + '地点 取得成功';
+    if (errors.length > 0) {
+      label.textContent = '⚠️ 完了: ' + success + '地点 成功 / ' + errors.length + '地点 失敗';
+      detail.textContent = '失敗: ' + errors.slice(0, 5).join(', ') + (errors.length > 5 ? ' 他' : '');
+    } else {
+      detail.textContent = '';
+    }
+    btn.disabled = false;
+    btn.textContent = '📡 選択地点を一括取得';
+
+    // 1秒後にページをリロードして結果を表示
+    setTimeout(function() { location.reload(); }, 1200);
+  }
+  </script>
+</div>
+
+{# 地点別取得状況サマリー #}
+<div class="card">
+  <div class="card-title">📍 地点別 取得状況</div>
+  {% if location_summary %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>地点</th>
+          <th style="text-align:right">取得件数</th>
+          <th>最古日付</th>
+          <th>最新日付</th>
+          <th style="text-align:right">平均気温(avg)</th>
+          <th>状態</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in location_summary %}
+      {% set days_covered = ((s.newest - s.oldest).days + 1) if s.oldest and s.newest else 0 %}
+      <tr>
+        <td style="font-weight:600">{{ s.location }}</td>
+        <td style="text-align:right">{{ s.cnt }}件</td>
+        <td>{{ s.oldest }}</td>
+        <td>{{ s.newest }}</td>
+        <td style="text-align:right">
+          {% if s.avg_temp_avg is not none %}
+            {% set t = s.avg_temp_avg|float %}
+            <span class="{% if t >= 30 %}temp-hot{% elif t >= 20 %}temp-warm{% elif t >= 10 %}temp-cool{% else %}temp-cold{% endif %}">
+              {{ '%.1f'|format(t) }}℃
+            </span>
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          {% if s.cnt|int >= 90 %}
+            <span style="background:#dcfce7;color:#15803d;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600">✓ 充分</span>
+          {% elif s.cnt|int >= 30 %}
+            <span style="background:#fef9c3;color:#92400e;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600">△ 少なめ</span>
+          {% else %}
+            <span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600">✕ 不足</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
   <div style="font-size:11px;color:#6b7280;margin-top:8px">
-    列名：日付, 地点, 平均気温, 最高気温, 最低気温（テンプレートDLで確認できます）
+    AI予測の精度向上には各地点90日以上のデータが推奨です。
   </div>
+  {% else %}
+  <div style="color:#94a3b8;text-align:center;padding:24px">データがまだ取得されていません。上記のAPIから取得してください。</div>
+  {% endif %}
 </div>
 
 <div class="card">

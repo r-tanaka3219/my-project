@@ -206,6 +206,31 @@
       <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト" style="width:180px">
       <div class="help">.xlsx</div>
     </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">受信者テンプレート名</label>
+      <input type="text" name="recipients_template_name" value="{{ retention.recipients_template_name }}" placeholder="受信者一覧_テンプレート" style="width:210px">
+      <div class="help">.xlsx</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">チェーンマスタ テンプレート名</label>
+      <input type="text" name="chain_template_name" value="{{ retention.chain_template_name }}" placeholder="チェーンマスタ_テンプレート" style="width:210px">
+      <div class="help">.xlsx</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">店舗マスタ テンプレート名</label>
+      <input type="text" name="store_template_name" value="{{ retention.store_template_name }}" placeholder="店舗マスタ_テンプレート" style="width:210px">
+      <div class="help">.xlsx</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">仕入先CD設定 テンプレート名</label>
+      <input type="text" name="supplier_setting_template_name" value="{{ retention.supplier_setting_template_name }}" placeholder="仕入先CD設定_テンプレート" style="width:210px">
+      <div class="help">.xlsx</div>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品CD設定 テンプレート名</label>
+      <input type="text" name="product_setting_template_name" value="{{ retention.product_setting_template_name }}" placeholder="商品CD設定_テンプレート" style="width:210px">
+      <div class="help">.xlsx</div>
+    </div>
   </div>
   <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px">💾 設定保存</button>
 </div>
@@ -300,11 +325,240 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 </div>
 
-{# テスト送信フォーム（別フォーム） #}
-<form method="post" action="/settings/test_mail" id="test-form" style="display:none">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="test_to" id="test-to">
-</form>
+<div class="card" style="max-width:680px;margin-bottom:16px">
+  <div class="card-title">🌤️ 気象データ自動取得設定</div>
+  <div style="background:#eff6ff;border-left:3px solid #2563eb;padding:10px 14px;border-radius:6px;font-size:12px;color:#1e3a5f;margin-bottom:16px">
+    Open-Meteo API（無料）を使って気象データを毎日自動取得します。インターネット接続が必要です。<br>
+    取得した気温データはAI需要予測の精度向上に自動的に活用されます。
+  </div>
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    {# 自動取得ON/OFF #}
+    <div style="flex:0 0 auto">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">自動取得スケジューラ</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 16px;border:2px solid {% if weather_settings.get('weather_auto_fetch_enabled','1') in ['1',1,True,'True'] %}#16a34a{% else %}#d1d5db{% endif %};border-radius:10px;background:{% if weather_settings.get('weather_auto_fetch_enabled','1') in ['1',1,True,'True'] %}#f0fdf4{% else %}#f9fafb{% endif %}">
+        <input type="checkbox" name="weather_auto_fetch_enabled" value="1"
+               {% if weather_settings.get('weather_auto_fetch_enabled','1') in ['1',1,True,'True'] %}checked{% endif %}
+               style="width:18px;height:18px;cursor:pointer">
+        <div>
+          <div style="font-weight:600;color:#15803d;font-size:13px">毎日 自動取得</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">毎朝 設定時刻にAPIから最新データを取得</div>
+        </div>
+      </label>
+    </div>
+
+    {# 取得時刻 #}
+    <div style="flex:0 0 auto">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">取得時刻（時）</div>
+      <select name="weather_auto_fetch_hour" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px">
+        {% for h in range(24) %}
+        <option value="{{ h }}" {% if weather_settings.get('weather_auto_fetch_hour','3')|int == h %}selected{% endif %}>
+          {{ '%02d:00'|format(h) }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {# 取得日数 #}
+    <div style="flex:0 0 auto">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">取得日数（前後）</div>
+      <select name="weather_auto_fetch_days" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px">
+        <option value="1" {% if weather_settings.get('weather_auto_fetch_days','3') == '1' %}selected{% endif %}>1日（当日のみ）</option>
+        <option value="3" {% if weather_settings.get('weather_auto_fetch_days','3') in ['3',''] %}selected{% endif %}>3日（前後）</option>
+        <option value="7" {% if weather_settings.get('weather_auto_fetch_days','3') == '7' %}selected{% endif %}>7日</option>
+        <option value="14" {% if weather_settings.get('weather_auto_fetch_days','3') == '14' %}selected{% endif %}>14日</option>
+        <option value="30" {% if weather_settings.get('weather_auto_fetch_days','3') == '30' %}selected{% endif %}>30日</option>
+      </select>
+    </div>
+  </div>
+
+  {# 自動取得地点設定（ビジュアル都道府県選択） #}
+  <div style="margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">
+      自動取得地点（都道府県・エリアで選択）
+      <span style="font-size:11px;font-weight:400;color:#6b7280;margin-left:8px">空の場合は基本地点設定（下記）を使用</span>
+    </div>
+
+    {# 全選択・解除ボタン #}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      <button type="button" onclick="weatherSelectAll()" class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 10px">🗾 全都道府県</button>
+      <button type="button" onclick="weatherClearAll()" class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 10px">✕ 全解除</button>
+      <span id="weatherSelectedCount" style="font-size:11px;color:#2563eb;font-weight:600;margin-left:4px">0件選択中</span>
+    </div>
+
+    {# エリア別チェックボックス #}
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;background:#f9fafb">
+      {% set weather_regions = [
+        ('北海道', [('札幌',43.0618,141.3545)]),
+        ('東北', [('青森',40.8246,140.7404),('盛岡',39.7036,141.1527),('仙台',38.2688,140.8721),('秋田',39.7186,140.1023),('山形',38.2404,140.3633),('福島',37.7608,140.4748)]),
+        ('関東', [('水戸',36.3418,140.4468),('宇都宮',36.5651,139.8836),('前橋',36.3911,139.0608),('さいたま',35.8617,139.6456),('千葉',35.6074,140.1065),('東京',35.6897,139.6922),('横浜',35.4478,139.6425)]),
+        ('北陸・甲信越', [('新潟',37.9161,139.0364),('富山',36.6953,137.2113),('金沢',36.5944,136.6256),('福井',36.0652,136.2216),('甲府',35.6639,138.5686),('長野',36.6513,138.1812)]),
+        ('東海', [('岐阜',35.3912,136.7223),('静岡',34.9769,138.3831),('名古屋',35.1815,136.9066),('津',34.7303,136.5086)]),
+        ('近畿', [('大津',35.0045,135.8686),('京都',35.0211,135.7556),('大阪',34.6937,135.5023),('神戸',34.6913,135.1830),('奈良',34.6851,135.8328),('和歌山',34.2306,135.1709)]),
+        ('中国', [('鳥取',35.5036,134.2381),('松江',35.4723,133.0505),('岡山',34.6618,133.9344),('広島',34.3853,132.4553),('山口',34.1860,131.4706)]),
+        ('四国', [('徳島',34.0658,134.5593),('高松',34.3401,134.0434),('松山',33.8416,132.7657),('高知',33.5597,133.5311)]),
+        ('九州・沖縄', [('福岡',33.5902,130.4017),('佐賀',33.2494,130.2989),('長崎',32.7503,129.8778),('熊本',32.7898,130.7417),('大分',33.2382,131.6126),('宮崎',31.9077,131.4202),('鹿児島',31.5602,130.5581),('那覇',26.2124,127.6809)])
+      ] %}
+      {% for region_name, prefs in weather_regions %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:600;color:#374151;min-width:80px">{{ region_name }}</span>
+          <button type="button" onclick="weatherSelectRegion('region-{{ loop.index }}')"
+                  style="font-size:10px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;color:#374151">全選択</button>
+          <button type="button" onclick="weatherClearRegion('region-{{ loop.index }}')"
+                  style="font-size:10px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;color:#374151">解除</button>
+        </div>
+        <div id="region-{{ loop.index }}" style="display:flex;gap:4px;flex-wrap:wrap;padding-left:8px">
+          {% for pref_name, lat, lon in prefs %}
+          <label style="display:inline-flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;white-space:nowrap;padding:2px 6px;border:1px solid #e5e7eb;border-radius:4px;background:#fff;transition:background 0.1s"
+                 onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background=this.querySelector('input').checked?'#dbeafe':'#fff'">
+            <input type="checkbox" class="weather-loc-cb"
+                   data-name="{{ pref_name }}" data-lat="{{ lat }}" data-lon="{{ lon }}"
+                   style="margin:0;width:12px;height:12px"
+                   onchange="weatherUpdateJson();this.parentElement.style.background=this.checked?'#dbeafe':'#fff'">
+            {{ pref_name }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% if not loop.last %}<div style="border-top:1px solid #f3f4f6;margin-bottom:8px"></div>{% endif %}
+      {% endfor %}
+    </div>
+
+    {# 隠しフィールド（JSON値） #}
+    <textarea name="weather_auto_fetch_locations" id="weatherLocationsJson"
+              style="display:none">{{ weather_settings.get('weather_auto_fetch_locations','') }}</textarea>
+
+    <div style="font-size:11px;color:#6b7280;margin-top:6px">
+      ✓ チェックした都道府県の気象データが毎日自動取得されます。未選択の場合は下記の基本地点設定を使用します。
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    // 保存済みJSON → チェックボックスを復元
+    function initWeatherCheckboxes() {
+      var raw = document.getElementById('weatherLocationsJson').value.trim();
+      if (!raw) return;
+      try {
+        var saved = JSON.parse(raw);
+        var names = saved.map(function(x){ return x.name; });
+        document.querySelectorAll('.weather-loc-cb').forEach(function(cb) {
+          if (names.indexOf(cb.dataset.name) !== -1) {
+            cb.checked = true;
+            cb.parentElement.style.background = '#dbeafe';
+          }
+        });
+      } catch(e) {}
+      weatherUpdateJson();
+    }
+
+    window.weatherUpdateJson = function() {
+      var result = [];
+      document.querySelectorAll('.weather-loc-cb:checked').forEach(function(cb) {
+        result.push({name: cb.dataset.name, lat: parseFloat(cb.dataset.lat), lon: parseFloat(cb.dataset.lon)});
+      });
+      document.getElementById('weatherLocationsJson').value = result.length ? JSON.stringify(result) : '';
+      var el = document.getElementById('weatherSelectedCount');
+      if (el) el.textContent = result.length + '件選択中';
+    };
+
+    window.weatherSelectAll = function() {
+      document.querySelectorAll('.weather-loc-cb').forEach(function(cb) {
+        cb.checked = true;
+        cb.parentElement.style.background = '#dbeafe';
+      });
+      weatherUpdateJson();
+    };
+
+    window.weatherClearAll = function() {
+      document.querySelectorAll('.weather-loc-cb').forEach(function(cb) {
+        cb.checked = false;
+        cb.parentElement.style.background = '#fff';
+      });
+      weatherUpdateJson();
+    };
+
+    window.weatherSelectRegion = function(regionId) {
+      document.querySelectorAll('#' + regionId + ' .weather-loc-cb').forEach(function(cb) {
+        cb.checked = true;
+        cb.parentElement.style.background = '#dbeafe';
+      });
+      weatherUpdateJson();
+    };
+
+    window.weatherClearRegion = function(regionId) {
+      document.querySelectorAll('#' + regionId + ' .weather-loc-cb').forEach(function(cb) {
+        cb.checked = false;
+        cb.parentElement.style.background = '#fff';
+      });
+      weatherUpdateJson();
+    };
+
+    // メインフォームのsubmit前にJSONを更新
+    var mainForm = document.getElementById('mainForm') || document.querySelector('form[action="/settings/save"]');
+    if (mainForm) {
+      mainForm.addEventListener('submit', function() { weatherUpdateJson(); });
+    }
+
+    // 初期化
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initWeatherCheckboxes);
+    } else {
+      initWeatherCheckboxes();
+    }
+  })();
+  </script>
+
+  {# .env の単一地点設定 #}
+  <div style="border-top:1px solid #e5e7eb;padding-top:12px">
+    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">
+      基本地点設定（単一地点の場合・上記JSONが空の場合に使用）
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div>
+        <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:2px">地点名</label>
+        <input type="text" name="WEATHER_LOCATION" value="{{ env.get('WEATHER_LOCATION','東京') }}"
+               style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:90px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:2px">緯度(lat)</label>
+        <input type="text" name="WEATHER_LAT" value="{{ env.get('WEATHER_LAT','35.6897') }}"
+               style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:100px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:2px">経度(lon)</label>
+        <input type="text" name="WEATHER_LON" value="{{ env.get('WEATHER_LON','139.6922') }}"
+               style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:100px">
+      </div>
+    </div>
+  </div>
+
+  {# 過去データ保持期間 #}
+  <div style="border-top:1px solid #e5e7eb;padding-top:12px;margin-top:4px">
+    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px">
+      🗄️ 過去データ保持期間
+      <span style="font-size:11px;font-weight:400;color:#6b7280;margin-left:6px">毎日の自動取得後に古いデータを自動削除</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <select name="weather_data_retention_days" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px">
+        <option value="90"  {% if weather_settings.get('weather_data_retention_days','365') == '90'  %}selected{% endif %}>90日（約3ヶ月）</option>
+        <option value="180" {% if weather_settings.get('weather_data_retention_days','365') == '180' %}selected{% endif %}>180日（約6ヶ月）</option>
+        <option value="365" {% if weather_settings.get('weather_data_retention_days','365') in ['365',''] %}selected{% endif %}>365日（1年）※推奨</option>
+        <option value="730" {% if weather_settings.get('weather_data_retention_days','365') == '730' %}selected{% endif %}>730日（2年）</option>
+        <option value="0"   {% if weather_settings.get('weather_data_retention_days','365') == '0'   %}selected{% endif %}>無制限（削除しない）</option>
+      </select>
+      <span style="font-size:11px;color:#6b7280">AI予測には最低90日・精度向上には365日以上推奨</span>
+    </div>
+  </div>
+
+  {# 保存ボタン + 管理画面リンク #}
+  <div style="border-top:1px solid #e5e7eb;padding-top:12px;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button type="submit" class="btn btn-primary">💾 設定保存</button>
+    <a href="/reports/weather" class="btn btn-outline btn-sm">📊 気象データ管理画面へ</a>
+    <span style="font-size:11px;color:#6b7280">手動取得・都道府県プリセット・データ一覧は気象データ管理画面から操作できます</span>
+  </div>
+</div>
 
 <div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">📈 需要予測ロジック設定</div>
@@ -476,6 +730,12 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
   <button type="submit" class="btn btn-primary">💾 設定保存</button>
 </div>
+</form>
+
+{# テスト送信フォーム（別フォーム・メインフォームの外に配置） #}
+<form method="post" action="/settings/test_mail" id="test-form" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="test_to" id="test-to">
 </form>
 
 <script>

@@ -65,12 +65,18 @@
   </form>
   {% endfor %}
 
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     <input type="text" id="chain-search" placeholder="チェーンCD・取引先名で絞り込み"
            oninput="filterTable('chain-tbody', this.value)"
            style="width:260px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
     <button onclick="filterTable('chain-tbody', document.getElementById('chain-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-chain-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+    <a href="/chains/chain/template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
+    <form method="post" action="/chains/chain/import" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="excel_file" accept=".xlsx,.xls" required style="font-size:12px;max-width:200px">
+      <button type="submit" class="btn btn-success btn-sm">📤 一括インポート</button>
+    </form>
   </div>
 
   <div style="overflow-x:auto">
@@ -138,12 +144,18 @@
     </div>
   </form>
 
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     <input type="text" id="store-search" placeholder="店舗CD・店舗名・チェーンCDで絞り込み"
            oninput="filterTable('store-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
     <button onclick="filterTable('store-tbody', document.getElementById('store-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-store-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+    <a href="/chains/store/template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
+    <form method="post" action="/chains/store/import" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="excel_file" accept=".xlsx,.xls" required style="font-size:12px;max-width:200px">
+      <button type="submit" class="btn btn-success btn-sm">📤 一括インポート</button>
+    </form>
   </div>
 
   {% for s in stores %}
@@ -245,12 +257,19 @@
     </div>
   </form>
 
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     <input type="text" id="supplier-search" placeholder="仕入先CD・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('supplier-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
     <button onclick="filterTable('supplier-tbody', document.getElementById('supplier-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-supplier-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+    <span style="width:1px;height:20px;background:#e5e7eb;display:inline-block"></span>
+    <a href="/chains/supplier/template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
+    <form method="post" action="/chains/supplier/import" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="excel_file" accept=".xlsx,.xls" required style="font-size:12px;max-width:190px">
+      <button type="submit" class="btn btn-success btn-sm">📤 一括インポート</button>
+    </form>
   </div>
 
   <div style="overflow-x:auto">
@@ -370,12 +389,19 @@
     </div>
   </form>
 
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     <input type="text" id="product-search" placeholder="商品CD・JAN・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('product-tbody', this.value)"
            style="width:300px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
     <button onclick="filterTable('product-tbody', document.getElementById('product-search').value)" class="btn btn-outline btn-sm">🔍 検索</button>
     <button onclick="document.getElementById('new-product-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+    <span style="width:1px;height:20px;background:#e5e7eb;display:inline-block"></span>
+    <a href="/chains/product/template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
+    <form method="post" action="/chains/product/import" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="excel_file" accept=".xlsx,.xls" required style="font-size:12px;max-width:190px">
+      <button type="submit" class="btn btn-success btn-sm">📤 一括インポート</button>
+    </form>
   </div>
 
   <div style="overflow-x:auto">
