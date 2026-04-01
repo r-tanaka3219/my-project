@@ -117,19 +117,20 @@
 </div>
 
 <div class="card" style="padding:10px 14px">
-  <form method="get" action="/reports/forecast/wholesale" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0">
-    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名" style="flex:1;min-width:180px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+  <form method="get" action="/reports/forecast/wholesale" style="display:flex;gap:8px;align-items:center;margin:0">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="仕入先CD・商品CD・JAN・商品名"
+           style="width:320px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
     <button type="submit" class="btn btn-outline btn-sm">検索</button>
     {% if q %}<a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
   </form>
 </div>
 
 <div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b;padding:10px 14px">
-  <form method="post" action="/reports/forecast/wholesale/apply" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0">
+  <form method="post" action="/reports/forecast/wholesale/apply" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="q" value="{{ q or '' }}">
-    <span style="font-weight:600;font-size:13px">予測値を設定へ反映</span>
-    <select name="mode" style="padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <span style="font-weight:600;font-size:13px;white-space:nowrap">予測値を設定へ反映</span>
+    <select name="mode" style="width:160px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       <option value="reorder_point">発注点のみ</option>
       <option value="order_qty">発注数のみ</option>
       <option value="both">発注点＋発注数</option>
