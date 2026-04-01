@@ -26,7 +26,6 @@
         </select>
       </div>
     </div>
-    <!-- 一般ユーザーの権限選択 -->
     <div id="new-perms" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:8px">アクセス許可するページ</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -46,38 +45,43 @@
 </div>
 
 <!-- 登録ユーザー一覧 -->
-<div class="card">
+<div class="card" style="max-width:780px">
   <div class="card-title">登録ユーザー一覧</div>
   {% for u in users %}
   <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px;{% if not u.is_active %}opacity:0.6;background:#f9fafb{% endif %}">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:{% if u.role != 'admin' %}10px{% else %}0{% endif %}">
+
+    <!-- ① ユーザー名・バッジ行 -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <strong style="font-size:15px">{{ u.username }}</strong>
       {% if u.username == current_user() %}<span class="badge badge-blue">ログイン中</span>{% endif %}
       {% if u.role=='admin' %}<span class="badge badge-red">管理者</span>
       {% else %}<span class="badge badge-gray">ユーザー</span>{% endif %}
       {% if u.is_active %}<span class="badge badge-green">有効</span>
       {% else %}<span class="badge badge-gray">無効</span>{% endif %}
-      <div style="margin-left:auto;display:flex;gap:6px">
-        <!-- パスワード変更 -->
-        <form method="post" action="/users/{{ u.id }}/password" style="display:flex;gap:4px">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="password" name="password" placeholder="新パスワード" style="width:120px;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px">
-          <button class="btn btn-outline btn-sm">PW変更</button>
-        </form>
-        {% if u.username != current_user() %}
-        <form method="post" action="/users/{{ u.id }}/toggle" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-outline btn-sm">{% if u.is_active %}無効化{% else %}有効化{% endif %}</button>
-        </form>
-        <form method="post" action="/users/{{ u.id }}/delete" style="display:inline"
-              onsubmit="return confirm('「{{ u.username }}」を削除しますか？')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger btn-sm">削除</button>
-        </form>
-        {% endif %}
-      </div>
     </div>
-    <!-- 一般ユーザーの権限編集 -->
+
+    <!-- ② 操作ボタン行 -->
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:{% if u.role != 'admin' %}10px{% else %}0{% endif %}">
+      <form method="post" action="/users/{{ u.id }}/password" style="display:flex;gap:4px;align-items:center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="password" name="password" placeholder="新パスワード"
+               style="width:120px;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px">
+        <button class="btn btn-outline btn-sm">PW変更</button>
+      </form>
+      {% if u.username != current_user() %}
+      <form method="post" action="/users/{{ u.id }}/toggle" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline btn-sm">{% if u.is_active %}無効化{% else %}有効化{% endif %}</button>
+      </form>
+      <form method="post" action="/users/{{ u.id }}/delete" style="display:inline"
+            onsubmit="return confirm('「{{ u.username }}」を削除しますか？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">削除</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- ③ 権限編集（一般ユーザーのみ） -->
     {% if u.role != 'admin' %}
     <form method="post" action="/users/{{ u.id }}/permissions">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -90,7 +94,7 @@
         </label>
         {% endfor %}
       </div>
-      <div style="margin-top:8px;display:flex;gap:8px">
+      <div style="margin-top:8px">
         <button type="submit" class="btn btn-primary btn-sm">権限を保存</button>
       </div>
     </form>

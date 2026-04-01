@@ -41,24 +41,24 @@
     <td class="text-center">{{ r.expected_receipt_date or '-' }}</td><td class="text-center">{% if r.delay_level == '遅延' %}<span class="badge badge-red">遅延 {{ r.delay_days }}日</span>{% elif r.delay_level == '長期未着' %}<span class="badge badge-yellow">長期未着 {{ r.delay_days }}日</span>{% elif r.delay_level == '入荷接近' %}<span class="badge badge-blue">入荷接近</span>{% elif r.delay_level == '完了' %}<span class="badge badge-green">完了</span>{% else %}<span class="badge badge-gray">正常</span>{% endif %}</td><td class="text-center">{{ r.order_age }}日{% if r.last_receipt_date %}<div style="font-size:11px;color:#6b7280">最終受領: {{ r.last_receipt_date }}</div>{% endif %}</td>
     <td class="text-center">
   {% if r.outstanding_qty > 0 %}
-  <div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%">
-    <details style="width:100%">
-      <summary class="btn btn-outline btn-sm" style="cursor:pointer;width:100%;text-align:center;list-style:none">受領登録</summary>
-      <form method="post" action="/orders/backorders/receive" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%;box-sizing:border-box">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+    <details style="width:120px">
+      <summary class="btn btn-outline btn-sm" style="cursor:pointer;width:120px;text-align:center;list-style:none">受領登録</summary>
+      <form method="post" action="/orders/backorders/receive" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;width:120px;box-sizing:border-box">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="order_history_id" value="{{ r.id }}">
         <input type="number" name="receive_qty" min="1" max="{{ r.outstanding_qty }}" value="{{ r.outstanding_qty }}" placeholder="数量" style="width:100%;font-size:11px;padding:2px 4px;box-sizing:border-box">
         <input type="date" name="expiry_date" required style="width:100%;font-size:11px;padding:2px 4px;box-sizing:border-box">
         <input type="text" name="location_code" value="{{ r.location_code or '' }}" placeholder="棚番" style="width:100%;font-size:11px;padding:2px 4px;box-sizing:border-box">
         <input type="text" name="note" placeholder="備考" style="width:100%;font-size:11px;padding:2px 4px;box-sizing:border-box">
-        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">登録</button>
+        <button type="submit" class="btn btn-primary btn-sm">登録</button>
       </form>
     </details>
-    <form method="post" action="/orders/backorders/close" onsubmit="return confirm('未納残を終了しますか？')" style="width:100%">
+    <form method="post" action="/orders/backorders/close" onsubmit="return confirm('未納残を終了しますか？')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="order_history_id" value="{{ r.id }}">
       <input type="hidden" name="reason" value="未納終了">
-      <button type="submit" class="btn btn-warning btn-sm" style="width:100%">未納終了</button>
+      <button type="submit" class="btn btn-warning btn-sm" style="width:120px">未納終了</button>
     </form>
   </div>
   {% else %}
