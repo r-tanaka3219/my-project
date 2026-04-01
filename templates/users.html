@@ -69,12 +69,12 @@
   <table class="user-table">
     <thead>
       <tr>
-        <th style="width:12%">ユーザーID</th>
-        <th style="width:8%">役割</th>
-        <th style="width:7%">状態</th>
-        <th style="width:42%">アクセス許可ページ</th>
-        <th style="width:17%">PW変更</th>
-        <th style="width:14%">操作</th>
+        <th style="width:10%">ユーザーID</th>
+        <th style="width:7%">役割</th>
+        <th style="width:6%">状態</th>
+        <th style="width:51%">アクセス許可ページ</th>
+        <th style="width:14%">PW変更</th>
+        <th style="width:12%">操作</th>
       </tr>
     </thead>
     <tbody>
@@ -129,18 +129,16 @@
       </td>
       <!-- 操作 -->
       <td>
-        <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
         {% if u.username != current_user() %}
         <form method="post" action="/users/{{ u.id }}/toggle">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-outline btn-sm" style="width:100%">
-            {% if u.is_active %}無効化{% else %}有効化{% endif %}
-          </button>
+          <button class="btn btn-outline btn-sm">{% if u.is_active %}無効化{% else %}有効化{% endif %}</button>
         </form>
         <form method="post" action="/users/{{ u.id }}/delete"
               onsubmit="return confirm('「{{ u.username }}」を削除しますか？')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-danger btn-sm" style="width:100%">削除</button>
+          <button class="btn btn-danger btn-sm">削除</button>
         </form>
         {% else %}
           <span style="font-size:11px;color:#9ca3af">（自分）</span>
