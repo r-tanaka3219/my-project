@@ -35,12 +35,9 @@
 
 <!-- ━━━ チェーンCD管理 ━━━ -->
 <div id="pane-chain" class="card" style="border-radius:0 8px 8px 8px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div>
-      <div class="card-title" style="margin-bottom:4px">チェーンCD管理</div>
-      <div style="font-size:12px;color:#6b7280">「在庫引き当て除外」をONにするとそのチェーンの売上は在庫から引き算されません。</div>
-    </div>
-    <button onclick="document.getElementById('new-chain-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  <div style="margin-bottom:12px">
+    <div class="card-title" style="margin-bottom:4px">チェーンCD管理</div>
+    <div style="font-size:12px;color:#6b7280">「在庫引き当て除外」をONにするとそのチェーンの売上は在庫から引き算されません。</div>
   </div>
 
   <form method="post" action="/chains/chain/add">
@@ -67,6 +64,10 @@
     <input type="hidden" name="exclude_deduct" value="0">
   </form>
   {% endfor %}
+
+  <div style="margin-bottom:10px">
+    <button onclick="document.getElementById('new-chain-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  </div>
 
   <div style="overflow-x:auto">
   <table class="mgmt-table table">
@@ -105,12 +106,9 @@
 
 <!-- ━━━ 店舗CD管理 ━━━ -->
 <div id="pane-store" class="card" style="display:none;border-radius:0 8px 8px 8px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div>
-      <div class="card-title" style="margin-bottom:4px">店舗CD管理</div>
-      <div style="font-size:12px;color:#6b7280">特定店舗のみ在庫引き当てから除外できます。チェーンCDが除外済みの場合はチェーン設定が優先されます。</div>
-    </div>
-    <button onclick="document.getElementById('new-store-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  <div style="margin-bottom:12px">
+    <div class="card-title" style="margin-bottom:4px">店舗CD管理</div>
+    <div style="font-size:12px;color:#6b7280">特定店舗のみ在庫引き当てから除外できます。チェーンCDが除外済みの場合はチェーン設定が優先されます。</div>
   </div>
 
   <form method="post" action="/chains/store/add">
@@ -135,10 +133,11 @@
     </div>
   </form>
 
-  <div style="margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <input type="text" id="store-search" placeholder="店舗CD・店舗名・チェーンCDで絞り込み"
            oninput="filterTable('store-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="document.getElementById('new-store-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
   {% for s in stores %}
@@ -193,12 +192,9 @@
 
 <!-- ━━━ 仕入先CD設定 ━━━ -->
 <div id="pane-supplier" class="card" style="display:none;border-radius:0 8px 8px 8px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div>
-      <div class="card-title" style="margin-bottom:4px">仕入先CD設定</div>
-      <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で仕入先CDごとの在庫引き当て除外を設定できます。チェーンCD・店舗CDを空白にすると全体設定になります。</div>
-    </div>
-    <button onclick="document.getElementById('new-supplier-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  <div style="margin-bottom:8px">
+    <div class="card-title" style="margin-bottom:4px">仕入先CD設定</div>
+    <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で仕入先CDごとの在庫引き当て除外を設定できます。チェーンCD・店舗CDを空白にすると全体設定になります。</div>
   </div>
 
   <form method="post" action="/chains/supplier-setting/add">
@@ -243,10 +239,11 @@
     </div>
   </form>
 
-  <div style="margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <input type="text" placeholder="仕入先CD・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('supplier-tbody', this.value)"
            style="width:280px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="document.getElementById('new-supplier-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
   <div style="overflow-x:auto">
@@ -313,12 +310,9 @@
 
 <!-- ━━━ 商品CD設定 ━━━ -->
 <div id="pane-product" class="card" style="display:none;border-radius:0 8px 8px 8px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div>
-      <div class="card-title" style="margin-bottom:4px">商品CD設定</div>
-      <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で商品CDごとの在庫引き当て除外を設定できます。商品CDとJANは片方のみでも登録可能です。</div>
-    </div>
-    <button onclick="document.getElementById('new-product-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
+  <div style="margin-bottom:8px">
+    <div class="card-title" style="margin-bottom:4px">商品CD設定</div>
+    <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で商品CDごとの在庫引き当て除外を設定できます。商品CDとJANは片方のみでも登録可能です。</div>
   </div>
 
   <form method="post" action="/chains/product-setting/add">
@@ -369,10 +363,11 @@
     </div>
   </form>
 
-  <div style="margin-bottom:10px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <input type="text" placeholder="商品CD・JAN・チェーンCD・店舗CDで絞り込み"
            oninput="filterTable('product-tbody', this.value)"
            style="width:300px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <button onclick="document.getElementById('new-product-row').style.display=''" class="btn btn-primary btn-sm">＋ 新規追加</button>
   </div>
 
   <div style="overflow-x:auto">
