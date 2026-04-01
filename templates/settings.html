@@ -374,29 +374,42 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 
   <div class="form-group" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
-    <label style="font-weight:500;font-size:13px;display:block;margin-bottom:4px">発注点算出モード（標準在庫発注）</label>
-    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:8px">
-      ⚠️ このモードは<strong>標準在庫発注アシスタント</strong>（WMAベース）に適用されます。<br>
-      問屋向けAI予測（Holt-Winters）は常に「Q75 × LT + 動的安全在庫」で算出されるため、このモードは無効です。
+    <label style="font-weight:500;font-size:13px;display:block;margin-bottom:6px">発注点算出モード（標準在庫発注アシスタント専用）</label>
+
+    <!-- 2エンジンの使い分け説明 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="padding:10px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:12px">
+        <div style="font-weight:600;color:#1e40af;margin-bottom:4px">🤖 問屋向けAI予測（Holt-Winters）</div>
+        <div style="color:#374151;line-height:1.7">
+          対象：<b>Aランク主力品・データ充足商品</b><br>
+          発注点は常に固定式で算出（下記モード選択は無効）<br>
+          <span style="font-family:monospace;font-size:11px">Q75×LT + Z×σ_AI×√LT</span>
+        </div>
+      </div>
+      <div style="padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:12px">
+        <div style="font-weight:600;color:#92400e;margin-bottom:4px">📊 標準在庫発注アシスタント（WMA）</div>
+        <div style="color:#374151;line-height:1.7">
+          対象：<b>新商品・データ不足品・欠品管理重視品</b><br>
+          下記モードで発注点を算出。<br>
+          P90 → チェーン主力品の欠品防止に最適
+        </div>
+      </div>
     </div>
+
     <select name="forecast_reorder_mode" class="form-control" style="max-width:400px">
-      <option value="sf"  {% if forecast_flags.get('forecast_reorder_mode','sf') == 'sf'  %}selected{% endif %}>安全係数モード（標準）</option>
-      <option value="p80" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p80' %}selected{% endif %}>P80モード（欠品確率20%以下）</option>
-      <option value="p90" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p90' %}selected{% endif %}>P90モード（欠品確率10%以下）</option>
+      <option value="sf"  {% if forecast_flags.get('forecast_reorder_mode','sf') == 'sf'  %}selected{% endif %}>安全係数モード（標準・通常商品向け）</option>
+      <option value="p80" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p80' %}selected{% endif %}>P80モード（欠品確率20%以下・やや重要品向け）</option>
+      <option value="p90" {% if forecast_flags.get('forecast_reorder_mode','sf') == 'p90' %}selected{% endif %}>P90モード（欠品確率10%以下・欠品厳禁品向け）</option>
     </select>
-    <div style="margin-top:12px;border:1px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;font-size:12px">
+
+    <div style="margin-top:10px;border:1px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;font-size:12px">
       <table style="table-layout:fixed;width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:var(--color-background-secondary)">
-            <th style="width:16%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">モード</th>
-            <th style="width:38%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">
-              標準在庫発注アシスタント<br>
-              <span style="font-weight:400;font-size:11px;color:#6b7280">AIモード時（WMA＋分位点）の計算式</span>
-            </th>
-            <th style="width:38%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">
-              標準在庫発注アシスタント<br>
-              <span style="font-weight:400;font-size:11px;color:#6b7280">前年実績モード時の計算式</span>
-            </th>
+            <th style="width:14%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">モード</th>
+            <th style="width:30%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">推奨場面</th>
+            <th style="width:28%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">AIモード時（WMA）の計算式</th>
+            <th style="width:28%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">前年実績モード時の計算式</th>
           </tr>
         </thead>
         <tbody>
@@ -404,8 +417,11 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
             <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
               <span class="badge badge-green">安全係数</span>
             </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-size:11px">
+              通常商品・新商品<br>安全係数でバッファ確保
+            </td>
             <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace;font-size:11px">
-              WMA日次予測 × LT × 安全係数
+              WMA日次 × LT × 安全係数
             </td>
             <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace;font-size:11px">
               前年同月日次 × LT × 安全係数
@@ -415,31 +431,32 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
             <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary)">
               <span class="badge badge-yellow">P80</span>
             </td>
-            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace;font-size:11px">
-              P80日次(過去30日分布) × LT<br><span style="color:#6b7280">※5件未満→安全係数モードへ切替</span>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-size:11px">
+              やや重要品<br>80%の日で欠品なし
             </td>
             <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace;font-size:11px">
-              前年同月日次 × LT × 1.05<br><span style="color:#6b7280">※前年データなし→安全係数モードへ切替</span>
+              P80日次(過去30日) × LT<br><span style="color:#6b7280">※5件未満→安全係数へ切替</span>
+            </td>
+            <td style="padding:8px 10px;border-bottom:1px solid var(--color-border-tertiary);font-family:monospace;font-size:11px">
+              前年同月日次 × LT × 1.05<br><span style="color:#6b7280">※前年データなし→安全係数へ切替</span>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 10px">
               <span class="badge badge-red">P90</span>
             </td>
-            <td style="padding:8px 10px;font-family:monospace;font-size:11px">
-              P90日次(過去30日分布) × LT<br><span style="color:#6b7280">※5件未満→安全係数モードへ切替</span>
+            <td style="padding:8px 10px;font-size:11px">
+              欠品厳禁・主力品<br>チェーン向け重要商品
             </td>
             <td style="padding:8px 10px;font-family:monospace;font-size:11px">
-              前年同月日次 × LT × 1.10<br><span style="color:#6b7280">※前年データなし→安全係数モードへ切替</span>
+              P90日次(過去30日) × LT<br><span style="color:#6b7280">※5件未満→安全係数へ切替</span>
+            </td>
+            <td style="padding:8px 10px;font-family:monospace;font-size:11px">
+              前年同月日次 × LT × 1.10<br><span style="color:#6b7280">※前年データなし→安全係数へ切替</span>
             </td>
           </tr>
         </tbody>
       </table>
-    </div>
-    <div style="margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:12px">
-      <strong>問屋向けAI予測（Holt-Winters）の発注点計算式：</strong><br>
-      <span style="font-family:monospace">推奨発注点 = Q75日次 × LT + 動的安全在庫（Z × σ_AI × √LT）</span><br>
-      <span style="color:#6b7280">σ_AI = (Q75 - Q25) / 1.349　　上記「発注点算出モード」の選択は反映されません。</span>
     </div>
     <div class="help" style="margin-top:6px">
       ※ 前日売上データ取込運用のため、当日の実績は翌朝反映されます。当日の急増・急減は <a href="/products" style="color:inherit;text-decoration:underline">商品管理 → 商品編集画面の「手動調整係数」</a> で補正してください。
