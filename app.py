@@ -859,6 +859,7 @@ PAGE_PERMISSIONS = [
     ('order_history', '発注履歴'),
     ('stocktake',     '棚卸'),
     ('reports',       'レポート'),
+    ('forecast',      'AI予測'),
     ('products',      '商品管理'),
     ('csv',           'CSV取込'),
     ('chains',        'チェーン管理'),
