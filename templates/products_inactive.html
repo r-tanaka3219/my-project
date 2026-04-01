@@ -32,7 +32,7 @@
     <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '' }}</td>
     <td>{{ p.product_name }}</td>
     <td class="text-center">{{ p.stock_qty|format_number }}</td>
-    <td class="table-actions-cell text-center">
+    <td style="text-align:center;vertical-align:middle">
         <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
         <form method="post" action="/products/{{ p.id }}/restore" style="display:inline;margin-left:4px"
               onsubmit="return confirm('「{{ p.product_name }}」を有効化しますか？')">
