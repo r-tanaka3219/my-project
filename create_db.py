@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+在庫管理システム - データベース初期化スクリプト
+PostgreSQL への接続・DBユーザー作成・テーブル生成を行います。
+
+実行方法:
+    python create_db.py
+"""
 from __future__ import annotations
+
 import getpass
 import os
 import subprocess
@@ -9,6 +18,10 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent
 ENV_PATH = APP / '.env'
 
+
+# ─────────────────────────────────────────────────────────────
+# .env 読み書き
+# ─────────────────────────────────────────────────────────────
 
 def read_env(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
@@ -34,36 +47,23 @@ def read_env(path: Path) -> dict[str, str]:
 
 
 def write_env(path: Path, values: dict[str, str]) -> None:
-    lines = [
-        f"PG_HOST={values.get('PG_HOST', 'localhost')}",
-        f"PG_PORT={values.get('PG_PORT', '5432')}",
-        f"PG_DBNAME={values.get('PG_DBNAME', 'inventory')}",
-        f"PG_USER={values.get('PG_USER', 'inventory_user')}",
-        f"PG_PASSWORD={values.get('PG_PASSWORD', 'inventory_pass')}",
-        f"SECRET_KEY={values.get('SECRET_KEY', 'inv-secret-key')}",
-        f"MAIL_SERVER={values.get('MAIL_SERVER', '')}",
-        f"MAIL_PORT={values.get('MAIL_PORT', '25')}",
-        f"MAIL_USE_TLS={values.get('MAIL_USE_TLS', 'False')}",
-        f"MAIL_USE_SSL={values.get('MAIL_USE_SSL', 'False')}",
-        f"MAIL_AUTH={values.get('MAIL_AUTH', 'False')}",
-        f"MAIL_USERNAME={values.get('MAIL_USERNAME', '')}",
-        f"MAIL_PASSWORD={values.get('MAIL_PASSWORD', '')}",
-        f"MAIL_FROM={values.get('MAIL_FROM', '')}",
-        f"MAIL_FROM_NAME={values.get('MAIL_FROM_NAME', '在庫管理システム')}",
-    ]
+    """既存 .env を読み込み、指定キーのみ更新して書き直す"""
+    existing = read_env(path)
+    existing.update(values)
+    lines = [f'{k}={v}' for k, v in existing.items()]
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
-def decode_output(data: bytes) -> str:
-    for enc in ('cp932', 'utf-8', 'utf-16'):
-        try:
-            return data.decode(enc)
-        except Exception:
-            pass
-    return data.decode('utf-8', errors='ignore')
-
+# ─────────────────────────────────────────────────────────────
+# psql 検索
+# ─────────────────────────────────────────────────────────────
 
 def find_psql() -> str:
+    import shutil
+    found = shutil.which('psql')
+    if found:
+        return found
+
     candidates = []
     pf64 = os.environ.get('ProgramFiles', r'C:\Program Files')
     pf86 = os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')
@@ -76,10 +76,7 @@ def find_psql() -> str:
     for c in candidates:
         if c.exists():
             return str(c)
-    import shutil
-    found = shutil.which('psql')
-    if found:
-        return found
+
     try:
         import winreg
         for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
@@ -101,15 +98,28 @@ def find_psql() -> str:
                     pass
     except Exception:
         pass
+
     return 'psql'
 
 
+def decode_output(data: bytes) -> str:
+    for enc in ('cp932', 'utf-8', 'utf-16'):
+        try:
+            return data.decode(enc)
+        except Exception:
+            pass
+    return data.decode('utf-8', errors='ignore')
 
-def run_psql(psql: str, host: str, port: str, user: str, password: str, dbname: str, sql: str) -> tuple[int, str]:
+
+def run_psql(
+    psql: str, host: str, port: str, user: str,
+    password: str, dbname: str, sql: str
+) -> tuple[int, str]:
     env = os.environ.copy()
     env['PGPASSWORD'] = password
     proc = subprocess.run(
-        [psql, '-h', host, '-p', str(port), '-U', user, '-d', dbname, '-v', 'ON_ERROR_STOP=1', '-c', sql],
+        [psql, '-h', host, '-p', str(port), '-U', user,
+         '-d', dbname, '-v', 'ON_ERROR_STOP=1', '-c', sql],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         env=env,
@@ -122,89 +132,131 @@ def sql_ident(name: str) -> str:
 
 
 def ask(prompt: str, default: str) -> str:
-    v = input(f'{prompt} [{default}]: ').strip()
+    v = input(f'  {prompt} [{default}]: ').strip()
     return v or default
 
 
+# ─────────────────────────────────────────────────────────────
+# メイン
+# ─────────────────────────────────────────────────────────────
+
 def main() -> int:
-    print('=== Inventory DB bootstrap ===')
+    print()
+    print('=' * 60)
+    print('  在庫管理システム  データベース初期化')
+    print('=' * 60)
+    print()
+
     env = read_env(ENV_PATH)
-    host = ask('PG host', env.get('PG_HOST', 'localhost'))
-    port = ask('PG port', env.get('PG_PORT', '5432'))
-    app_db = ask('App DB name', env.get('PG_DBNAME', 'inventory'))
-    app_user = ask('App DB user', env.get('PG_USER', 'inventory_user'))
-    current_pw = env.get('PG_PASSWORD', 'inventory_pass')
-    entered = getpass.getpass('App DB password [hidden, Enter to keep current]: ')
-    app_pw = entered or current_pw or 'inventory_pass'
-    super_user = ask('Postgres superuser', 'postgres')
-    super_pw = getpass.getpass(f'Password for {super_user}: ')
+
+    print('  ─ アプリ用 DB 接続情報 (.env から読み込み) ─')
+    host    = ask('DB サーバー', env.get('PG_HOST', 'localhost'))
+    port    = ask('ポート番号',  env.get('PG_PORT', '5432'))
+    app_db  = ask('データベース名', env.get('PG_DBNAME', 'inventory'))
+    app_usr = ask('DB ユーザー名', env.get('PG_USER', 'inventory_user'))
+
+    current_pw = env.get('PG_PASSWORD', '')
+    hint = '（入力なしで現在の値を維持）' if current_pw else ''
+    entered = getpass.getpass(f'  DB パスワード {hint}: ')
+    app_pw = entered if entered else (current_pw or 'inventory_pass')
+
+    print()
+    print('  ─ PostgreSQL 管理者接続情報 ─')
+    print('  ※ DB ユーザー・データベースを作成するために必要です')
+    super_user = ask('管理者ユーザー名', 'postgres')
+    super_pw = getpass.getpass(f'  {super_user} のパスワード: ')
 
     psql = find_psql()
-    print(f'Using psql: {psql}')
+    print(f'\n  psql: {psql}')
 
+    # 接続テスト
+    print('\n  接続テスト中...')
     code, out = run_psql(psql, host, port, super_user, super_pw, 'postgres', 'SELECT 1;')
     if code != 0:
-        print('[ERROR] DB bootstrap failed: Connection test failed: ' + out.strip())
+        print('\n  [ERROR] PostgreSQL への接続に失敗しました。')
+        print(f'  詳細: {out.strip()}')
+        print('  確認事項: ホスト / ポート / パスワード / PostgreSQL サービスの起動')
         return 1
+    print('  接続 OK')
 
-    app_user_esc = app_user.replace("'", "''")
-    app_pw_esc = app_pw.replace("'", "''")
-    app_db_esc = app_db.replace("'", "''")
+    # エスケープ
+    usr_esc = app_usr.replace("'", "''")
+    pw_esc  = app_pw.replace("'", "''")
+    db_esc  = app_db.replace("'", "''")
 
+    # ユーザー作成 / パスワード更新
+    print(f'\n  DB ユーザー「{app_usr}」を確認中...')
     user_sql = (
         "DO $$ BEGIN "
-        f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{app_user_esc}') THEN "
-        f"CREATE ROLE {sql_ident(app_user)} LOGIN PASSWORD '{app_pw_esc}'; "
+        f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{usr_esc}') THEN "
+        f"CREATE ROLE {sql_ident(app_usr)} LOGIN PASSWORD '{pw_esc}'; "
         "ELSE "
-        f"ALTER ROLE {sql_ident(app_user)} WITH LOGIN PASSWORD '{app_pw_esc}'; "
+        f"ALTER ROLE {sql_ident(app_usr)} WITH LOGIN PASSWORD '{pw_esc}'; "
         "END IF; "
         "END $$;"
     )
     code, out = run_psql(psql, host, port, super_user, super_pw, 'postgres', user_sql)
     if code != 0:
-        print('[ERROR] DB bootstrap failed: ' + out.strip())
+        print(f'  [ERROR] ユーザー作成に失敗しました: {out.strip()}')
+        return 1
+    print(f'  ユーザー「{app_usr}」OK')
+
+    # データベース作成
+    print(f'\n  データベース「{app_db}」を確認中...')
+    code, out = run_psql(psql, host, port, super_user, super_pw, 'postgres',
+                         f"SELECT 'exists' FROM pg_database WHERE datname = '{db_esc}';")
+    if code != 0:
+        print(f'  [ERROR] DB 確認に失敗しました: {out.strip()}')
         return 1
 
-    db_sql = (
-        "SELECT 'exists' FROM pg_database WHERE datname = "
-        f"'{app_db_esc}';"
-    )
-    code, out = run_psql(psql, host, port, super_user, super_pw, 'postgres', db_sql)
-    if code != 0:
-        print('[ERROR] DB bootstrap failed: ' + out.strip())
-        return 1
-    exists = 'exists' in out.lower()
-    if not exists:
-        create_sql = f'CREATE DATABASE {sql_ident(app_db)} OWNER {sql_ident(app_user)} ENCODING \'UTF8\';'
+    if 'exists' in out.lower():
+        print(f'  データベース「{app_db}」は既に存在します')
+        run_psql(psql, host, port, super_user, super_pw, 'postgres',
+                 f'ALTER DATABASE {sql_ident(app_db)} OWNER TO {sql_ident(app_usr)};')
+    else:
+        create_sql = (
+            f"CREATE DATABASE {sql_ident(app_db)} "
+            f"OWNER {sql_ident(app_usr)} ENCODING 'UTF8';"
+        )
         code, out = run_psql(psql, host, port, super_user, super_pw, 'postgres', create_sql)
         if code != 0:
-            print('[ERROR] DB bootstrap failed: ' + out.strip())
+            print(f'  [ERROR] DB 作成に失敗しました: {out.strip()}')
             return 1
-    else:
-        grant_sql = f'ALTER DATABASE {sql_ident(app_db)} OWNER TO {sql_ident(app_user)};'
-        run_psql(psql, host, port, super_user, super_pw, 'postgres', grant_sql)
+        print(f'  データベース「{app_db}」を作成しました')
 
-    env.update({
-        'PG_HOST': host,
-        'PG_PORT': str(port),
-        'PG_DBNAME': app_db,
-        'PG_USER': app_user,
+    # .env 更新
+    write_env(ENV_PATH, {
+        'PG_HOST':     host,
+        'PG_PORT':     port,
+        'PG_DBNAME':   app_db,
+        'PG_USER':     app_usr,
         'PG_PASSWORD': app_pw,
     })
-    write_env(ENV_PATH, env)
-    print('Database and app user ready.')
+    print('\n  .env を更新しました')
 
-    # initialize tables immediately
+    # テーブル初期化
+    print('\n  テーブルを初期化中...')
     sys.path.insert(0, str(APP))
     try:
         from database import init_db
         init_db()
     except Exception as e:
-        print(f'[ERROR] Table initialization failed: {e}')
+        print(f'  [ERROR] テーブル初期化に失敗しました: {e}')
         return 1
-    print('DB bootstrap completed. Tables are ready.')
+
+    print()
+    print('=' * 60)
+    print('  データベース初期化  完了！')
+    print(f'  DB  : {app_db}@{host}:{port}')
+    print(f'  USER: {app_usr}')
+    print('=' * 60)
+    print()
     return 0
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print('\nキャンセルしました')
+        sys.exit(1)

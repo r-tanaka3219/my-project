@@ -4,15 +4,28 @@ set "APP=%~dp0"
 if "%APP:~-1%"=="\" set "APP=%APP:~0,-1%"
 set "LOGS=%APP%\logs"
 
-echo „Ÿ„Ÿ stdout.logiÅV50sj„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+echo.
+echo  ============================================================
+echo   åœ¨åº«ç®¡ç†ã‚·ã‚¹ãƒ†ãƒ   ãƒ­ã‚°è¡¨ç¤º
+echo  ============================================================
+echo.
+
+echo  â”€â”€ stdout.log (æœ€æ–° 50 è¡Œ) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if exist "%LOGS%\stdout.log" (
     powershell -NoProfile -Command "Get-Content '%LOGS%\stdout.log' -Tail 50"
-) else ( echo  ƒƒOƒtƒ@ƒCƒ‹‚ª‚ ‚è‚Ü‚¹‚ñ: %LOGS%\stdout.log )
+) else (
+    echo  ãƒ­ã‚°ãƒ•ã‚¡ã‚¤ãƒ«ãªã—: %LOGS%\stdout.log
+)
 
 echo.
-echo „Ÿ„Ÿ stderr.logiÅV20sj„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+echo  â”€â”€ stderr.log (æœ€æ–° 30 è¡Œ) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if exist "%LOGS%\stderr.log" (
-    powershell -NoProfile -Command "Get-Content '%LOGS%\stderr.log' -Tail 20"
-) else ( echo  ƒGƒ‰[ƒƒO‚È‚µ )
+    powershell -NoProfile -Command "Get-Content '%LOGS%\stderr.log' -Tail 30"
+) else (
+    echo  ã‚¨ãƒ©ãƒ¼ãƒ­ã‚°ãªã—
+)
+
+echo.
+echo  ãƒ­ã‚°ãƒ•ã‚©ãƒ«ãƒ€: %LOGS%
 echo.
 pause
