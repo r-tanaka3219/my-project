@@ -132,8 +132,8 @@
 
 <div class="card" style="background:#f0f9ff;border:1px solid #bae6fd">
   <div class="card-title" style="color:#0369a1">📋 ファイル名パターンの書き方</div>
-  <table style="table-layout:fixed;width:100%;font-size:12px">
-    <tr><th style="background:#e0f2fe">パターン例</th><th style="background:#e0f2fe">2026年3月の場合</th><th style="background:#e0f2fe">用途</th></tr>
+  <table style="font-size:12px;width:100%">
+    <tr><th style="background:#e0f2fe;min-width:200px">パターン例</th><th style="background:#e0f2fe;min-width:180px">2026年3月の場合</th><th style="background:#e0f2fe;min-width:120px">用途</th></tr>
     <tr><td style="font-family:monospace">{yyyymm}_売上実績.csv</td><td style="font-family:monospace;color:#1d4ed8"><b>202603_売上実績.csv</b></td><td>月次ファイル（推奨）</td></tr>
     <tr><td style="font-family:monospace">{yymm}_売上実績.csv</td><td style="font-family:monospace">2603_売上実績.csv</td><td>月次（2桁年）</td></tr>
     <tr><td style="font-family:monospace">*{yyyymmdd}.csv</td><td style="font-family:monospace">*20260309.csv</td><td>日次ファイル</td></tr>
@@ -378,9 +378,9 @@ document.addEventListener('DOMContentLoaded', function() {
       </form>
     </div>
   </div>
-  <table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:18%">実行日時</th><th style="width:7%">種別</th><th style="width:11%">設定名</th><th style="width:14%">ファイル名</th>
-    <th class="text-right" style="width:6%">成功</th><th class="text-right" style="width:7%">エラー</th><th class="text-center" style="width:10%">状態</th><th style="width:12%">詳細</th><th style="width:15%"></th>
+  <table><thead><tr>
+    <th style="min-width:150px">実行日時</th><th style="min-width:65px">種別</th><th style="min-width:100px">設定名</th><th style="min-width:130px">ファイル名</th>
+    <th class="text-right" style="min-width:60px">成功</th><th class="text-right" style="min-width:65px">エラー</th><th class="text-center" style="min-width:90px">状態</th><th style="min-width:120px">詳細</th><th style="min-width:100px"></th>
   </tr></thead><tbody>
   {% for l in logs %}
   <tr>
@@ -393,12 +393,39 @@ document.addEventListener('DOMContentLoaded', function() {
     <td class="text-right">{{ l.rows_err|format_number }}</td>
     <td class="text-center">{% if l.status=='ok' %}<span class="badge badge-green">成功</span>
         {% elif l.status=='partial' %}<span class="badge badge-yellow">一部エラー</span>
+        {% elif l.status=='partial_skip' %}<span class="badge badge-orange">未登録スキップ</span>
         {% elif l.status=='skip' %}<span class="badge badge-gray">スキップ</span>
         {% else %}<span class="badge badge-red">エラー</span>{% endif %}</td>
     <td style="font-size:11px;color:#6b7280">{{ l.detail }}</td>
     <td style="text-align:center">
       {% if l.filename %}
       <a href="/csv/import_detail?source_file={{ l.filename|urlencode }}" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">📄 明細確認</a>
+      {% endif %}
+      {% if l.status=='partial_skip' and l.filename %}
+        {% if l.filename.startswith('month_end_') %}
+          {# 月末月次再取込 #}
+          {% set ym_part = l.filename.split('_')[2] if l.filename.split('_')|length > 2 else '' %}
+          {% if ym_part|length == 6 %}
+          <form method="post" action="/csv/{{ l.setting_id }}/reimport_month_end" style="display:inline;margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="target_ym" value="{{ ym_part }}">
+            <button type="submit" class="btn btn-warning btn-sm" style="font-size:11px;padding:2px 8px"
+                    onclick="return confirm('{{ ym_part }} の月末月次データを再取込します。商品登録済みのJANのみ処理されます。よろしいですか？')">
+              🔄 再取込
+            </button>
+          </form>
+          {% endif %}
+        {% else %}
+          {# 日次再取込 #}
+          <form method="post" action="/csv/{{ l.setting_id }}/reimport_daily" style="display:inline;margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="filename" value="{{ l.filename }}">
+            <button type="submit" class="btn btn-warning btn-sm" style="font-size:11px;padding:2px 8px"
+                    onclick="return confirm('{{ l.filename }} を再取込します。商品登録済みのJANのみ処理されます。よろしいですか？')">
+              🔄 再取込
+            </button>
+          </form>
+        {% endif %}
       {% endif %}
     </td>
   </tr>

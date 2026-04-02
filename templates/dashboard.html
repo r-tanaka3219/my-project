@@ -41,19 +41,19 @@
     <div class="card-title" style="color:#dc2626">発注が必要な商品一覧</div>
     {% if low_stock_rows %}
     <div class="table-wrap">
-<table style="table-layout:fixed;width:100%">
+<table>
       <thead>
         <tr>
-          <th style="width:10%">仕入先CD</th>
-          <th style="width:10%">仕入先名</th>
-          <th style="width:10%">商品CD</th>
-          <th style="width:10%">JANコード</th>
-          <th style="width:10%">商品名</th>
-          <th style="width:10%">入数</th>
-          <th class="text-right" style="width:10%">現在庫</th>
-          <th class="text-right" style="width:10%">発注点</th>
-          <th class="text-right" style="width:10%">発注数</th>
-          <th style="width:10%"></th>
+          <th style="min-width:70px">仕入先CD</th>
+          <th style="min-width:90px;max-width:150px">仕入先名</th>
+          <th style="min-width:70px">商品CD</th>
+          <th style="min-width:110px">JANコード</th>
+          <th style="min-width:140px;max-width:220px">商品名</th>
+          <th style="min-width:80px">入数</th>
+          <th class="text-right" style="min-width:70px">現在庫</th>
+          <th class="text-right" style="min-width:70px">発注点</th>
+          <th class="text-right" style="min-width:70px">発注数</th>
+          <th style="min-width:70px"></th>
         </tr>
       </thead>
       <tbody>
@@ -84,18 +84,18 @@
     <div class="card-title">最近の発注履歴</div>
     {% if recent_orders %}
     <div class="table-wrap">
-<table style="table-layout:fixed;width:100%">
+<table>
       <thead>
         <tr>
-          <th style="width:10%">日付</th>
-          <th style="width:6%">仕入先CD</th>
-          <th style="width:15%">仕入先名</th>
-          <th style="width:7%">商品CD</th>
-          <th style="width:13%">JANコード</th>
-          <th style="width:28%">商品名</th>
-          <th class="text-right" style="width:7%">数量</th>
-          <th class="text-center" style="width:7%">区分</th>
-          <th class="text-center" style="width:7%">メール</th>
+          <th style="min-width:100px">日付</th>
+          <th style="min-width:70px">仕入先CD</th>
+          <th style="min-width:90px;max-width:150px">仕入先名</th>
+          <th style="min-width:70px">商品CD</th>
+          <th style="min-width:110px">JANコード</th>
+          <th style="min-width:140px;max-width:220px">商品名</th>
+          <th class="text-right" style="min-width:65px">数量</th>
+          <th class="text-center" style="min-width:75px">区分</th>
+          <th class="text-center" style="min-width:75px">メール</th>
         </tr>
       </thead>
       <tbody>

@@ -122,14 +122,14 @@
   </div>
   <form method="post" action="/reports/forecast/promotions/bulk_delete" id="promo-bulk-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="table-wrap"><table style="table-layout:fixed;width:100%">
+    <div class="table-wrap"><table>
       <thead><tr>
-        <th style="width:4%"></th>
-        <th style="width:12%">販促日</th>
-        <th style="width:14%">仕入先</th>
-        <th style="width:36%">商品</th>
-        <th style="width:22%">販促名</th>
-        <th style="width:12%;text-align:center">係数</th>
+        <th style="min-width:36px"></th>
+        <th style="min-width:95px">販促日</th>
+        <th style="min-width:110px">仕入先</th>
+        <th style="min-width:190px">商品</th>
+        <th style="min-width:130px">販促名</th>
+        <th style="min-width:65px;text-align:center">係数</th>
       </tr></thead>
       <tbody>
       {% if promo_rows %}
@@ -228,15 +228,15 @@
   </div>
   <form method="post" action="/reports/forecast/demands/selected_delete" id="demand-bulk-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="table-wrap"><table style="table-layout:fixed;width:100%">
+    <div class="table-wrap"><table>
       <thead><tr>
-        <th style="width:4%"></th>
-        <th style="width:11%">受注日</th>
-        <th style="width:13%">仕入先</th>
-        <th style="width:22%">商品</th>
-        <th style="width:16%">得意先</th>
-        <th class="text-right" style="width:10%">数量</th>
-        <th style="width:24%;text-align:center">備考</th>
+        <th style="min-width:36px"></th>
+        <th style="min-width:95px">受注日</th>
+        <th style="min-width:110px">仕入先</th>
+        <th style="min-width:190px">商品</th>
+        <th style="min-width:110px">得意先</th>
+        <th class="text-right" style="min-width:65px">数量</th>
+        <th style="min-width:110px;text-align:center">備考</th>
       </tr></thead>
       <tbody>
       {% if demand_rows %}
@@ -264,8 +264,8 @@
 
 <div class="card">
   <div class="card-title">商品別 予測一覧 <span class="badge badge-{% if forecast_mode == 'ai' %}blue{% else %}yellow{% endif %}" style="font-size:11px;vertical-align:middle">{% if forecast_mode == 'ai' %}🤖 AIモード{% else %}📅 前年実績モード{% endif %}</span></div>
-  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:17%">仕入先</th><th style="width:7%">商品</th><th class="text-right" style="width:5%">現在庫</th><th class="text-right" style="width:6%">平均日販</th><th class="text-right" style="width:5%">季節指数</th><th class="text-right" style="width:5%">販促日数</th><th class="text-right" style="width:6%">販促上振れ</th><th class="text-right" style="width:6%">受注数量</th><th class="text-right" style="width:7%">30日予測</th><th class="text-right" style="width:7%">推奨発注点</th><th class="text-right" style="width:6%">発注数</th><th class="text-right" style="width:7%">P80/P90</th><th class="text-right" style="width:5%">σ</th><th class="text-right" style="width:5%">補正</th><th class="text-right" style="width:6%">カバー日数</th>
+  <div class="table-wrap"><table><thead><tr>
+    <th style="min-width:100px;max-width:160px">仕入先</th><th style="min-width:140px;max-width:220px">商品</th><th class="text-right" style="min-width:70px">現在庫</th><th class="text-right" style="min-width:75px">平均日販</th><th class="text-right" style="min-width:70px">季節指数</th><th class="text-right" style="min-width:70px">販促日数</th><th class="text-right" style="min-width:80px">販促上振れ</th><th class="text-right" style="min-width:70px">受注数量</th><th class="text-right" style="min-width:80px">30日予測</th><th class="text-right" style="min-width:110px">推奨発注点</th><th class="text-right" style="min-width:80px">発注数</th><th class="text-right" style="min-width:80px">P80/P90</th><th class="text-right" style="min-width:55px">σ</th><th class="text-right" style="min-width:60px">補正</th><th class="text-right" style="min-width:85px">カバー日数</th>
   </tr></thead><tbody>
   {% for r in rows %}
   <tr>

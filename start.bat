@@ -1,87 +1,71 @@
 @echo off
-chcp 65001 > nul
 setlocal enableextensions enabledelayedexpansion
-title 在庫管理システム
+title Inventory System
 
 set "APP=%~dp0"
 if "%APP:~-1%"=="\" set "APP=%APP:~0,-1%"
 
 echo.
 echo  ============================================================
-echo   在庫管理システム  起動中...
+echo   Inventory System  Starting...
 echo  ============================================================
-echo.
 
-rem ── app.py 確認 ──────────────────────────────────────────────
+rem -- app.py check
 if not exist "%APP%\app.py" (
-    echo  [ERROR] app.py が見つかりません: %APP%\app.py
+    echo  [ERROR] app.py not found.
     pause & exit /b 1
 )
 
-rem ── .env 確認 ─────────────────────────────────────────────────
+rem -- .env check
 if not exist "%APP%\.env" (
-    echo  [ERROR] .env が見つかりません。先に setup.bat を実行してください。
+    echo  [ERROR] .env not found. Run setup.bat first.
     pause & exit /b 1
 )
 
-rem ── Python 検索 ──────────────────────────────────────────────
+rem -- Find Python
 set "PY="
-where python >nul 2>&1
-if not errorlevel 1 (
-    for /f "delims=" %%X in ('where python 2^>nul') do (
-        if "!PY!"=="" set "PY=%%X"
-    )
-)
-if "!PY!"=="" (
-    for %%P in (
-        "%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
-        "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
-        "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-        "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-        "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
-        "%ProgramFiles%\Python314\python.exe"
-        "%ProgramFiles%\Python313\python.exe"
-        "%ProgramFiles%\Python312\python.exe"
-        "%ProgramFiles%\Python311\python.exe"
-        "%ProgramFiles%\Python310\python.exe"
-    ) do (
-        if exist %%~P (
-            if "!PY!"=="" set "PY=%%~P"
+for %%V in (314 313 312 311 310 39) do (
+    if "!PY!"=="" (
+        if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
+            set "PY=%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
         )
     )
 )
 if "!PY!"=="" (
-    echo  [ERROR] Python が見つかりません。setup.bat を先に実行してください。
+    where python >NUL 2>&1
+    if not errorlevel 1 (
+        for /f "delims=" %%X in ('where python 2^>NUL') do (
+            if "!PY!"=="" set "PY=%%X"
+        )
+    )
+)
+if "!PY!"=="" (
+    echo  [ERROR] Python not found. Run setup.bat first.
     pause & exit /b 1
 )
 
-rem ── 必須パッケージ確認（未インストールなら自動インストール）──
-"!PY!" -c "import flask, dotenv, psycopg2, openpyxl, apscheduler, waitress" >nul 2>&1
+rem -- Install / update packages from requirements.txt
+echo  Checking packages...
+"!PY!" -m pip install -r "%APP%\requirements.txt" --quiet --disable-pip-version-check --no-warn-script-location
 if errorlevel 1 (
-    echo  必要パッケージが不足しています。インストール中...
-    "!PY!" -m pip install -r "%APP%\requirements.txt" --quiet
-    if errorlevel 1 (
-        echo  [ERROR] パッケージのインストールに失敗しました。
-        pause & exit /b 1
-    )
+    echo  [ERROR] Package install failed. Check requirements.txt.
+    pause & exit /b 1
 )
 
-rem ── PORT 取得 ─────────────────────────────────────────────────
+rem -- Get PORT
 set "PORT=5000"
 for /f "usebackq tokens=1,* delims==" %%A in ("%APP%\.env") do (
     if /i "%%~A"=="PORT" set "PORT=%%~B"
 )
 
-rem ── サーバー起動 ──────────────────────────────────────────────
-echo  Python: !PY!
-echo  ポート: !PORT!
-echo  アプリ: %APP%\app.py
+echo  Python : !PY!
+echo  Port   : !PORT!
 echo.
-echo  停止するにはこのウィンドウを閉じてください。
+echo  Press Ctrl+C or close this window to stop.
 echo.
 cd /d "%APP%"
 "!PY!" app.py
 
 echo.
-echo  サーバーが停止しました。
+echo  [Inventory System] Server stopped.
 pause

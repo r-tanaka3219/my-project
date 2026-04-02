@@ -231,9 +231,10 @@ tr:hover td.table-actions-cell {
   text-overflow: clip  !important;
 }
 
-/* ── テーブルの最小幅保証（画面が狭くても列が潰れすぎない） ── */
+/* ── テーブルの最小幅保証：自然幅で表示、最低コンテナ幅を確保 ── */
 .table-wrap table {
-  min-width: max-content;
+  width: auto !important;
+  min-width: 100%;
 }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='ui_layout_patch.css') }}">

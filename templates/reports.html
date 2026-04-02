@@ -65,12 +65,12 @@
   <div class="card-title">📦 在庫一覧（在庫あり商品：{{ stock_summary|length }}件）</div>
   {% if stock_summary %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:19%">商品名</th>
-    <th class="text-right" style="width:5%">入数</th><th class="text-right" style="width:6%">在庫数</th>
-    <th class="text-center" style="width:6%">発注点</th>
-    <th class="text-center" style="width:9%">最古期限</th><th class="text-center" style="width:9%">最新期限</th>
-    <th class="text-center" style="width:8%">原価(円)</th><th class="text-center" style="width:11%">在庫原価額</th>
+<table><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th>
+    <th class="text-right" style="min-width:60px">入数</th><th class="text-right" style="min-width:70px">在庫数</th>
+    <th class="text-center" style="min-width:70px">発注点</th>
+    <th class="text-center" style="min-width:90px">最古期限</th><th class="text-center" style="min-width:90px">最新期限</th>
+    <th class="text-center" style="min-width:80px">原価(円)</th><th class="text-center" style="min-width:100px">在庫原価額</th>
   </tr></thead><tbody>
   {% for s in stock_summary %}
   <tr {% if s.total_qty <= s.reorder_point %}style="background:#fff7ed"{% endif %}>
@@ -98,10 +98,10 @@
   <div class="card-title">⚠️ 賞味期限アラート（{{ expiry_soon|length }}件）</div>
   {% if expiry_soon %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:5%">仕入先CD</th><th style="width:9%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:10%">JAN</th><th style="width:15%">商品名</th>
-    <th class="text-center" style="width:12%">賞味期限</th><th class="text-right" style="width:10%">残日数</th>
-    <th class="text-center" style="width:10%">ロット</th><th class="text-right" style="width:8%">数量</th><th class="text-center" style="width:16%">状態</th>
+<table><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:150px">商品名</th>
+    <th class="text-center" style="min-width:95px">賞味期限</th><th class="text-right" style="min-width:80px">残日数</th>
+    <th class="text-center" style="min-width:90px">ロット</th><th class="text-right" style="min-width:65px">数量</th><th class="text-center" style="min-width:90px">状態</th>
   </tr></thead><tbody>
   {% for s in expiry_soon %}
   <tr>
@@ -133,11 +133,11 @@
   <div class="card-title">🔴 発注点以下（在庫あり）（{{ low_stock|length }}件）</div>
   {% if low_stock %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:6%">仕入先CD</th><th style="width:11%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:12%">JAN</th><th style="width:18%">商品名</th>
-    <th class="text-right" style="width:10%">在庫数</th><th class="text-center" style="width:10%">発注点</th>
-    <th class="text-right" style="width:10%">発注数</th><th class="text-center" style="width:17%">発注状況</th>
-  </tr></thead>ead><tbody>
+<table><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th>
+    <th class="text-right" style="min-width:70px">在庫数</th><th class="text-center" style="min-width:70px">発注点</th>
+    <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:130px">発注状況</th>
+  </tr></thead><tbody><tbody>
   {% for s in low_stock %}
   <tr>
     <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
@@ -162,10 +162,10 @@
   <div class="card-title">❌ 在庫なし商品（{{ zero_stock|length }}件）</div>
   {% if zero_stock %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:9%">仕入先CD</th><th style="width:13%">仕入先名</th><th style="width:9%">商品CD</th><th style="width:14%">JAN</th><th style="width:20%">商品名</th>
-    <th class="text-center" style="width:14%">発注点</th><th class="text-center" style="width:21%">発注状況</th>
-  </tr></thead>></thead><tbody>
+<table><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th>
+    <th class="text-center" style="min-width:75px">発注点</th><th class="text-center" style="min-width:130px">発注状況</th>
+  </tr></thead><tbody><tbody>
   {% for s in zero_stock %}
   <tr>
     <td style="font-family:monospace;font-size:12px">{{ s.supplier_cd }}</td>
@@ -188,10 +188,10 @@
   <div class="card-title">🏭 仕入先別在庫集計</div>
   {% if supplier_stock %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:15%">仕入先CD</th><th style="width:35%">仕入先名</th>
-    <th class="text-right" style="width:15%">商品数</th><th class="text-right" style="width:15%">総在庫数</th>
-    <th class="text-right" style="width:20%">在庫原価額(円)</th>
+<table><thead><tr>
+    <th style="min-width:80px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th>
+    <th class="text-right" style="min-width:80px">商品数</th><th class="text-right" style="min-width:90px">総在庫数</th>
+    <th class="text-right" style="min-width:110px">在庫原価額(円)</th>
   </tr></thead><tbody>
   {% set total_cost = supplier_stock|sum(attribute='stock_cost') %}
   {% for s in supplier_stock %}
@@ -217,9 +217,9 @@
   <div class="card-title">📋 月別発注集計（直近12ヶ月）</div>
   {% if monthly_order %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:20%">月</th><th class="text-right" style="width:25%">発注件数</th>
-    <th class="text-right" style="width:25%">発注商品数</th><th class="text-right" style="width:30%">発注数量合計</th>
+<table><thead><tr>
+    <th style="min-width:90px">月</th><th class="text-right" style="min-width:80px">発注件数</th>
+    <th class="text-right" style="min-width:90px">発注商品数</th><th class="text-right" style="min-width:100px">発注数量合計</th>
   </tr></thead><tbody>
   {% for m in monthly_order %}
   <tr>
@@ -242,9 +242,9 @@
       <div style="font-size:13px;font-weight:bold;color:#374151;margin-bottom:8px">月別集計</div>
       {% if loss_monthly %}
       <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-        <th style="width:20%">月</th><th class="text-right" style="width:25%">件数</th>
-        <th class="text-right" style="width:25%">数量</th><th class="text-right" style="width:30%">ロス金額(円)</th>
+<table><thead><tr>
+        <th style="min-width:90px">月</th><th class="text-right" style="min-width:70px">件数</th>
+        <th class="text-right" style="min-width:70px">数量</th><th class="text-right" style="min-width:100px">ロス金額(円)</th>
       </tr></thead><tbody>
       {% for l in loss_monthly %}
       <tr>
@@ -267,9 +267,9 @@
       <div style="font-size:13px;font-weight:bold;color:#374151;margin-bottom:8px">仕入先別集計（上位20件）</div>
       {% if loss_supplier %}
       <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-        <th style="width:40%">仕入先名</th><th class="text-right" style="width:20%">件数</th>
-        <th class="text-right" style="width:15%">数量</th><th class="text-right" style="width:25%">ロス金額(円)</th>
+<table><thead><tr>
+        <th style="min-width:150px">仕入先名</th><th class="text-right" style="min-width:70px">件数</th>
+        <th class="text-right" style="min-width:70px">数量</th><th class="text-right" style="min-width:100px">ロス金額(円)</th>
       </tr></thead><tbody>
       {% for l in loss_supplier %}
       <tr>
@@ -308,7 +308,7 @@
   {% set months = ['01','02','03','04','05','06','07','08','09','10','11','12'] %}
   <div class="table-wrap">
 <table style="table-layout:auto;width:100%;font-size:12px"><thead><tr>
-    <th style="min-width:70px">仕入先CD</th><th style="min-width:100px">仕入先名</th><th style="min-width:65px">商品CD</th><th style="min-width:120px">JAN</th><th style="min-width:160px;max-width:240px;width:180px">商品名</th>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:65px">商品CD</th><th style="min-width:120px">JAN</th><th style="min-width:160px;max-width:240px;width:180px">商品名</th>
     {% for m in months %}<th class="text-right" style="min-width:60px">{{ m }}月</th>{% endfor %}
     <th class="text-right" style="min-width:50px">合計</th>
   </tr></thead><tbody>
@@ -342,20 +342,20 @@
   </p>
   {% if order_settings %}
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%;font-size:12px"><thead><tr>
-    <th style="width:5%">仕入先CD</th><th style="width:7%">仕入先名</th><th style="width:5%">商品CD</th><th style="width:25%">商品名</th>
-    <th class="text-right" style="width:4%">入数</th>
-    <th class="text-right" style="width:5%">現在庫</th>
-    <th class="text-right" style="width:5%">発注点</th>
-    <th class="text-right" style="width:5%">発注数</th>
-    <th class="text-right" style="width:6%">リードタイム</th>
-    <th class="text-right" style="width:5%">安全係数</th>
-    <th class="text-right" style="width:6%">期限アラート</th>
-    <th class="text-center" style="width:7%">混載グループ</th>
-    <th class="text-center" style="width:5%">自動更新</th>
-    <th class="text-center" style="width:4%">確認</th>
-    <th class="text-center" style="width:6%">操作</th>
-  </tr></thead>r></thead><tbody>
+<table style="font-size:12px"><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:140px;max-width:220px">商品名</th>
+    <th class="text-right" style="min-width:55px">入数</th>
+    <th class="text-right" style="min-width:65px">現在庫</th>
+    <th class="text-right" style="min-width:65px">発注点</th>
+    <th class="text-right" style="min-width:65px">発注数</th>
+    <th class="text-right" style="min-width:80px">リードタイム</th>
+    <th class="text-right" style="min-width:70px">安全係数</th>
+    <th class="text-right" style="min-width:80px">期限アラート</th>
+    <th class="text-center" style="min-width:90px">混載グループ</th>
+    <th class="text-center" style="min-width:70px">自動更新</th>
+    <th class="text-center" style="min-width:55px">確認</th>
+    <th class="text-center" style="min-width:70px">操作</th>
+  </tr></thead><tbody><tbody>
   {% for s in order_settings %}
   {% set warn = (s.lead_time_days == 0 or s.lead_time_days is none or s.safety_factor == 0 or s.safety_factor is none or s.reorder_point == 0) %}
   <tr {% if warn %}style="background:#fffbeb"{% endif %}>

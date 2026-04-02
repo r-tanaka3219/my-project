@@ -72,20 +72,17 @@
     {% for r in rows %}
     <input type="hidden" name="jan" value="{{ r.jan }}">
     {% endfor %}
-    <table style="table-layout:fixed;width:100%" id="stocktake-table">
-<colgroup>
-  <col><col><col><col><col><col><col><col><col><col>
-</colgroup>
+    <table id="stocktake-table">
 <thead><tr>
-      <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th>
-      <th style="width:5%">商品CD</th><th style="width:9%">JAN</th><th style="width:18%">商品名</th>
-      <th class="text-right" style="width:6%">入数</th>
-      <th class="text-right" style="width:8%">理論在庫</th>
-      <th class="text-right" style="width:9%">実棚数</th>
-      <th class="text-right" style="width:6%">差異</th>
-      <th class="text-right print-hide" style="width:8%">原価(円)</th>
-      <th class="print-hide" style="width:6%">調整</th>
-      <th style="width:12%">備考</th>
+      <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th>
+      <th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th>
+      <th class="text-right" style="min-width:60px">入数</th>
+      <th class="text-right" style="min-width:85px">理論在庫</th>
+      <th class="text-right" style="min-width:115px">実棚数</th>
+      <th class="text-right" style="min-width:65px">差異</th>
+      <th class="text-right print-hide" style="min-width:80px">原価(円)</th>
+      <th class="print-hide" style="min-width:55px">調整</th>
+      <th style="min-width:110px">備考</th>
     </tr></thead><tbody>
     {% for r in rows %}
     <tr id="row_{{ loop.index }}"

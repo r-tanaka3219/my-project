@@ -12,8 +12,8 @@
 </div>
 <div class="card">
   <div class="card-title">ピッキング明細</div>
-  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:12%">仕入先</th><th style="width:11%">商品</th><th style="width:11%">ロケーション</th><th style="width:11%">賞味期限</th><th style="width:11%">ロット</th><th class="text-right" style="width:11%">在庫</th><th class="text-right" style="width:11%">必要数</th><th class="text-right" style="width:11%">ピック数</th><th class="text-right" style="width:11%">残必要数</th>
+  <div class="table-wrap"><table><thead><tr>
+    <th style="min-width:120px">仕入先</th><th style="min-width:140px;max-width:220px">商品</th><th style="min-width:105px">ロケーション</th><th style="min-width:100px">賞味期限</th><th style="min-width:85px">ロット</th><th class="text-right" style="min-width:70px">在庫</th><th class="text-right" style="min-width:70px">必要数</th><th class="text-right" style="min-width:75px">ピック数</th><th class="text-right" style="min-width:80px">残必要数</th>
   </tr></thead><tbody>
   {% for r in rows %}
   <tr {% if r.remaining_after == 0 %}style="background:#f0fdf4"{% endif %}>

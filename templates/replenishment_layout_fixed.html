@@ -37,7 +37,7 @@
 
 <div class="card">
   <div class="card-title">補充対象一覧</div>
-  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:7%">状態</th><th style="width:9%">仕入先</th><th style="width:15%">商品</th><th style="width:9%">棚ロケーション</th><th class="text-right" style="width:6%">棚在庫</th><th class="text-right" style="width:6%">補充点</th><th class="text-right" style="width:6%">棚目標</th><th class="text-right" style="width:9%">引当可能在庫</th><th class="text-right" style="width:8%">推奨補充数</th><th style="width:8%">最古期限</th><th style="width:17%">実行</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th style="min-width:75px">状態</th><th style="min-width:110px">仕入先</th><th style="min-width:140px;max-width:220px">商品</th><th style="min-width:105px">棚ロケーション</th><th class="text-right" style="min-width:65px">棚在庫</th><th class="text-right" style="min-width:65px">補充点</th><th class="text-right" style="min-width:65px">棚目標</th><th class="text-right" style="min-width:90px">引当可能在庫</th><th class="text-right" style="min-width:85px">推奨補充数</th><th style="min-width:90px">最古期限</th><th style="min-width:200px">実行</th></tr></thead><tbody>
   {% for r in rows %}
   <tr>
     <td>{% if r.status == '欠品' %}<span class="badge badge-red">{{ r.status }}</span>{% elif r.status == '要補充' %}<span class="badge badge-yellow">{{ r.status }}</span>{% else %}<span class="badge badge-blue">{{ r.status }}</span>{% endif %}</td>
@@ -69,7 +69,7 @@
 <div class="card">
   <div class="card-title">補充指示・完了実績</div>
   {% if tasks %}
-  <div class="table-wrap"><table style="table-layout:fixed;width:100%"><thead><tr><th style="width:13%">作業日</th><th style="width:18%">商品</th><th style="width:11%">棚</th><th style="width:12%">補充元</th><th class="text-right" style="width:9%">指示数</th><th class="text-right" style="width:9%">完了数</th><th style="width:14%">状態</th><th style="width:14%">完了登録</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th style="min-width:100px">作業日</th><th style="min-width:140px;max-width:220px">商品</th><th style="min-width:90px">棚</th><th style="min-width:90px">補充元</th><th class="text-right" style="min-width:70px">指示数</th><th class="text-right" style="min-width:70px">完了数</th><th style="min-width:80px">状態</th><th style="min-width:150px">完了登録</th></tr></thead><tbody>
   {% for t in tasks %}
   <tr>
     <td>{{ t.task_date }}</td>

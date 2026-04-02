@@ -57,8 +57,8 @@
 
     <div class="card">
       <div class="card-title">送信区分の説明</div>
-      <table style="table-layout:fixed;width:100%;font-size:12px"><thead>
-        <tr><th style="width:35%">区分</th><th style="width:32%">発注</th><th style="width:33%">期限</th></tr>
+      <table style="font-size:12px"><thead>
+        <tr><th style="min-width:100px">区分</th><th style="min-width:60px">発注</th><th style="min-width:60px">期限</th></tr>
       </thead><tbody>
         <tr><td>両方</td><td class="text-center">✅</td><td class="text-center">✅</td></tr>
         <tr><td>発注のみ</td><td class="text-center">✅</td><td class="text-center">❌</td></tr>
@@ -73,13 +73,13 @@
 
   <div class="card">
     <div class="card-title">登録済み受信者（{{ recipients|length }}件）</div>
-    <table style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:12%">名前</th>
-      <th style="width:18%">メールアドレス</th>
-      <th class="text-center" style="width:10%">送信区分</th>
-      <th style="width:26%">仕入先CD</th>
-      <th class="text-center" style="width:6%">状態</th>
-      <th style="width:28%">操作</th>
+    <table><thead><tr>
+      <th style="min-width:100px">名前</th>
+      <th style="min-width:160px">メールアドレス</th>
+      <th class="text-center" style="min-width:90px">送信区分</th>
+      <th style="min-width:150px">仕入先CD</th>
+      <th class="text-center" style="min-width:60px">状態</th>
+      <th style="min-width:180px">操作</th>
     </tr></thead><tbody>
     {% for r in recipients %}
     <tr style="{% if not r.is_active %}opacity:0.5{% endif %}">

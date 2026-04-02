@@ -114,11 +114,11 @@
   <form method="post" action="/orders/send">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:3%"><input type="checkbox" id="ca" onclick="document.querySelectorAll('.chk').forEach(c=>c.checked=this.checked)"></th>
-    <th style="width:6%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:10%">JAN</th><th style="width:30%">商品名</th><th class="text-right" style="width:7%">在庫</th>
-    <th class="text-center" style="width:8%">発注点</th><th class="text-center" style="width:8%">発注数</th>
-    <th style="width:12%">混載グループ</th>
+<table><thead><tr>
+    <th style="min-width:36px"><input type="checkbox" id="ca" onclick="document.querySelectorAll('.chk').forEach(c=>c.checked=this.checked)"></th>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th><th class="text-right" style="min-width:65px">在庫</th>
+    <th class="text-center" style="min-width:75px">発注点</th><th class="text-center" style="min-width:75px">発注数</th>
+    <th style="min-width:120px">混載グループ</th>
   </tr></thead><tbody>
   {% for p in low_stock %}
   <tr>
@@ -157,9 +157,9 @@
 <div class="card" style="border-left:4px solid #2563eb">
   <div class="card-title" style="color:#2563eb">📦 発注済み（納品待ち）（{{ ordered_list|length }}件）</div>
   <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:6%">仕入先CD</th><th style="width:10%">仕入先名</th><th style="width:6%">商品CD</th><th style="width:10%">JAN</th><th style="width:32%">商品名</th><th class="text-right" style="width:7%">在庫</th>
-    <th class="text-center" style="width:9%">発注点</th><th class="text-center" style="width:9%">発注数</th><th class="text-center" style="width:11%">発注日</th>
+<table><thead><tr>
+    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:70px">商品CD</th><th style="min-width:110px">JAN</th><th style="min-width:140px;max-width:220px">商品名</th><th class="text-right" style="min-width:65px">在庫</th>
+    <th class="text-center" style="min-width:75px">発注点</th><th class="text-center" style="min-width:75px">発注数</th><th class="text-center" style="min-width:100px">発注日</th>
   </tr></thead><tbody>
   {% for p in ordered_list %}
   <tr style="color:#6b7280">

@@ -419,8 +419,28 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
             suggested_rp = int(max(0, next_daily * lt * sf + 0.9999))
             algorithm = 'sma'
 
-        # 推奨発注数 = (LT + 14) × 日次予測
-        suggested_oq = int(max(0, next_daily * (lt + 14) + 0.9999))
+        # 推奨発注数 = (LT + 14) × 日次予測（生の計算値）
+        raw_oq = max(0, next_daily * (lt + 14))
+
+        # ── ロット単位への丸め処理 ────────────────────────────────
+        # unit_qty  : 入数（ケースあたりの個数）→ 発注数はこの倍数
+        # order_unit: 発注単位（個数ベースの最小発注単位）→ 発注点はこの倍数
+        _unit_qty   = max(1, int(p.get('unit_qty')   or 1))
+        _order_unit = max(1, int(p.get('order_unit') or 1))
+
+        # 推奨発注点: order_unit の倍数に切り上げ
+        # 例: raw_rp=180, order_unit=200 → 200
+        #     raw_rp=210, order_unit=200 → 400
+        if _order_unit > 1 and suggested_rp > 0:
+            suggested_rp = math.ceil(suggested_rp / _order_unit) * _order_unit
+
+        # 推奨発注数: unit_qty(入数)の倍数に切り上げ（ケース単位発注）
+        # 例: raw_oq=350, unit_qty=200 → 400（2ケース）
+        #     raw_oq=50,  unit_qty=200 → 200（1ケース最低）
+        if _unit_qty > 1:
+            suggested_oq = max(_unit_qty, math.ceil(raw_oq / _unit_qty) * _unit_qty)
+        else:
+            suggested_oq = int(max(0, raw_oq + 0.9999))
 
         # 在庫消化日数
         stock_qty = float(p['stock_qty'] or 0)
