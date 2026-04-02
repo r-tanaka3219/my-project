@@ -248,7 +248,7 @@
           <td><div>{{ d.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ d.product_cd }} / {{ d.jan }}</div></td>
           <td>{{ d.customer_name or '-' }}</td>
           <td class="text-right">{{ d.demand_qty }}</td>
-          <td style="text-align:center">{{ d.note or '-' }}</td>
+          <td class="td-wrap" style="text-align:center">{{ d.note or '-' }}</td>
         </tr>
         {% endfor %}
       {% else %}

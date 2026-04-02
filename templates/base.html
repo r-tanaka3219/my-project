@@ -197,6 +197,44 @@ td.table-actions-cell {
 tr:hover td.table-actions-cell {
   overflow: visible !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   全テーブル: 隣接列へのテキストはみ出し・列重なり防止
+   ─ table-layout:fixed でセル幅が固定されていても
+     overflow:hidden がないと文字が隣列に飛び出すため
+     .table-wrap 内の全 td にデフォルト適用する
+   ═══════════════════════════════════════════════════════════ */
+.table-wrap td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 除外①: 操作列・ボタン・入力要素・フォームを含むセル */
+.table-wrap td.table-actions-cell,
+.table-wrap td:has(button),
+.table-wrap td:has(input),
+.table-wrap td:has(select),
+.table-wrap td:has(textarea),
+.table-wrap td:has(a.btn),
+.table-wrap td:has(form),
+.table-wrap td:has(label) {
+  overflow: visible !important;
+  white-space: normal  !important;
+  text-overflow: clip  !important;
+}
+
+/* 除外②: 複数行表示が必要なセルに付与するユーティリティクラス */
+.td-wrap {
+  white-space: normal  !important;
+  overflow:    visible !important;
+  text-overflow: clip  !important;
+}
+
+/* ── テーブルの最小幅保証（画面が狭くても列が潰れすぎない） ── */
+.table-wrap table {
+  min-width: max-content;
+}
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='ui_layout_patch.css') }}">
 </head>

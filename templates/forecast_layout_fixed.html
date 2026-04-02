@@ -166,7 +166,7 @@
     <td><div>{{ d.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ d.product_cd }} / {{ d.jan }}</div></td>
     <td>{{ d.customer_name or '-' }}</td>
     <td class="text-right">{{ d.demand_qty }}</td>
-    <td>{{ d.note or '-' }}</td>
+    <td class="td-wrap">{{ d.note or '-' }}</td>
     <td class="inline-delete"><form method="post" action="/reports/forecast/demands/{{ d.id }}/delete" onsubmit="return confirm('削除しますか？')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline btn-sm">削除</button></form></td>
   </tr>

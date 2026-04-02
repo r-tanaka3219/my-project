@@ -55,7 +55,7 @@
       {% elif r.reason_type == '自主回収' %}<span class="badge badge-red">{{ r.reason_type }}</span>
       {% else %}<span class="badge badge-gray">{{ r.reason_type }}</span>{% endif %}
     </td>
-    <td style="font-size:12px;color:#6b7280">{{ r.reason_note or '' }}</td>
+    <td class="td-wrap" style="font-size:12px;color:#6b7280">{{ r.reason_note or '' }}</td>
     <td>
       <form method="post" action="/inventory/disposed/{{ r.id }}/restore"
             onsubmit="return confirm('「{{ r.product_name }}」を在庫に戻しますか？')">
