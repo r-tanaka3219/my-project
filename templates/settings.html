@@ -631,6 +631,19 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
           </div>
         </div>
       </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}var(--color-border-tertiary){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}var(--color-background-secondary){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+        <input type="radio" name="reorder_auto_mode" value="manual"
+               {% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}checked{% endif %}
+               style="margin-top:3px;flex-shrink:0">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--color-text-secondary)">🚫 手動（自動更新しない）</div>
+          <div style="font-size:12px;margin-top:4px;line-height:1.8;color:var(--color-text-secondary)">
+            新規インポート商品の発注点を<br>
+            自動更新しない設定でデフォルト登録<br>
+            個別商品で後からモードを変更可能
+          </div>
+        </div>
+      </label>
     </div>
     <div class="help" style="margin-top:8px">
       毎月1日の自動実行では、<strong>商品ごとに設定されたモード</strong>（マスタ管理 → 商品編集 → 発注点自動更新モード）で個別に計算されます。<br>

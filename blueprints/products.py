@@ -238,6 +238,11 @@ def product_import():
     cnt_add = cnt_upd = cnt_skip = cnt_err = 0
     errors = []
 
+    # グローバル設定から新規商品のデフォルト自動更新モードを取得
+    _mode_row = db.execute("SELECT value FROM settings WHERE key='reorder_auto_mode'").fetchone()
+    _mode_val = _mode_row['value'] if _mode_row else 'ai'
+    _reorder_auto_default = {'ai': 1, 'ly': 2}.get(_mode_val, 0)  # manual=0, ai=1, ly=2
+
     for ri, row in enumerate(rows_data, 1):
         # テンプレートの説明行スキップ
         jan_raw = str(row.get('JANコード') or row.get('jan') or '').strip()
@@ -294,7 +299,7 @@ def product_import():
             # NULLのデフォルト値を補完
             defaults = {
                 'unit_qty':1,'order_unit':1,'order_qty':1,'reorder_point':0,
-                'reorder_auto':0,'lead_time_days':3,'safety_factor':1.3,
+                'reorder_auto':_reorder_auto_default,'lead_time_days':3,'safety_factor':1.3,
                 'lot_size':0,'shelf_life_days':365,'expiry_alert_days':30,
                 'mixed_group':'','mixed_lot_mode':'gte','mixed_lot_cases':3,'mixed_force_days':3,
                 'cost_price':0,'sell_price':0,

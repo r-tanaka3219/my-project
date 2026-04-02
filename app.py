@@ -3752,6 +3752,8 @@ def settings_save():
             raw = f.get(key, 'sf') or 'sf'
         elif key == 'reorder_auto_mode':
             raw = f.get(key, 'ai') or 'ai'
+            if raw not in ('ai', 'ly', 'manual'):
+                raw = 'ai'
         else:
             raw = f.get(key, default) or default
         if key in int_keys:
