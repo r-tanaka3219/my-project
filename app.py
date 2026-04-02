@@ -3774,8 +3774,20 @@ def settings_save():
         else:
             db.execute("INSERT INTO settings (key, value) VALUES (%s,%s)", [key, val])
     db.commit()
+
+    # reorder_auto_mode が manual の場合、全商品を手動（reorder_auto=0）に一括更新
+    new_ram = f.get('reorder_auto_mode', 'ai') or 'ai'
+    if new_ram == 'manual':
+        result = db.execute("UPDATE products SET reorder_auto=0 WHERE is_active=1")
+        db.commit()
+        bulk_cnt = result.rowcount if hasattr(result, 'rowcount') else '?'
+        logger.info(f'[settings] reorder_auto_mode=manual: 全{bulk_cnt}商品を手動モードに一括更新')
+
     invalidate_forecast_cache()   # 設定変更でモードが変わる可能性があるためキャッシュ破棄
-    flash('設定を保存しました。再起動後に反映されます。', 'success')
+    if new_ram == 'manual':
+        flash(f'設定を保存しました。全商品の発注点自動更新を「手動」に切り替えました。', 'success')
+    else:
+        flash('設定を保存しました。再起動後に反映されます。', 'success')
     return redirect(url_for('settings'))
 
 
