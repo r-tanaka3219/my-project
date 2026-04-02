@@ -3806,25 +3806,59 @@ def settings_save():
     return redirect(url_for('settings'))
 
 
+def _bulk_set_reorder_auto(mode_val, mode_label):
+    """全商品の reorder_auto を一括更新する共通処理"""
+    import psycopg2 as _pg2
+    from database import get_dsn as _get_dsn
+    _conn = _pg2.connect(**_get_dsn())
+    _conn.autocommit = False
+    _cur = _conn.cursor()
+    _cur.execute("UPDATE products SET reorder_auto=%s WHERE is_active=1", [mode_val])
+    cnt = _cur.rowcount
+    _conn.commit()
+    _cur.close()
+    _conn.close()
+    return cnt
+
+
 @app.route('/settings/apply_manual_all', methods=['POST'])
 @admin_required
 def settings_apply_manual_all():
-    """全商品の reorder_auto を 0（手動）に一括更新する専用エンドポイント"""
+    """全商品の reorder_auto を 0（手動）に一括更新"""
     try:
-        import psycopg2 as _pg2
-        from database import get_dsn as _get_dsn
-        _conn = _pg2.connect(**_get_dsn())
-        _conn.autocommit = False
-        _cur = _conn.cursor()
-        _cur.execute("UPDATE products SET reorder_auto=0 WHERE is_active=1")
-        cnt = _cur.rowcount
-        _conn.commit()
-        _cur.close()
-        _conn.close()
+        cnt = _bulk_set_reorder_auto(0, '手動')
         logger.info(f'[apply_manual_all] {cnt}商品を手動モードに一括更新')
-        flash(f'✅ 全 {cnt} 商品の発注点自動更新を「手動」に切り替えました。', 'success')
+        flash(f'✅ 全 {cnt} 商品の発注点自動更新を「🚫 手動」に切り替えました。', 'success')
     except Exception as e:
         logger.error(f'[apply_manual_all] エラー: {e}')
+        flash(f'❌ 一括更新エラー: {e}', 'danger')
+    return redirect(url_for('settings'))
+
+
+@app.route('/settings/apply_ai_all', methods=['POST'])
+@admin_required
+def settings_apply_ai_all():
+    """全商品の reorder_auto を 1（AIモード）に一括更新"""
+    try:
+        cnt = _bulk_set_reorder_auto(1, 'AIモード')
+        logger.info(f'[apply_ai_all] {cnt}商品をAIモードに一括更新')
+        flash(f'✅ 全 {cnt} 商品の発注点自動更新を「🤖 AIモード」に切り替えました。', 'success')
+    except Exception as e:
+        logger.error(f'[apply_ai_all] エラー: {e}')
+        flash(f'❌ 一括更新エラー: {e}', 'danger')
+    return redirect(url_for('settings'))
+
+
+@app.route('/settings/apply_ly_all', methods=['POST'])
+@admin_required
+def settings_apply_ly_all():
+    """全商品の reorder_auto を 2（前年実績モード）に一括更新"""
+    try:
+        cnt = _bulk_set_reorder_auto(2, '前年実績')
+        logger.info(f'[apply_ly_all] {cnt}商品を前年実績モードに一括更新')
+        flash(f'✅ 全 {cnt} 商品の発注点自動更新を「📅 前年実績モード」に切り替えました。', 'success')
+    except Exception as e:
+        logger.error(f'[apply_ly_all] エラー: {e}')
         flash(f'❌ 一括更新エラー: {e}', 'danger')
     return redirect(url_for('settings'))
 
