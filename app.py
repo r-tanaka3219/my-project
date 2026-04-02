@@ -3806,6 +3806,29 @@ def settings_save():
     return redirect(url_for('settings'))
 
 
+@app.route('/settings/apply_manual_all', methods=['POST'])
+@admin_required
+def settings_apply_manual_all():
+    """全商品の reorder_auto を 0（手動）に一括更新する専用エンドポイント"""
+    try:
+        import psycopg2 as _pg2
+        from database import get_dsn as _get_dsn
+        _conn = _pg2.connect(**_get_dsn())
+        _conn.autocommit = False
+        _cur = _conn.cursor()
+        _cur.execute("UPDATE products SET reorder_auto=0 WHERE is_active=1")
+        cnt = _cur.rowcount
+        _conn.commit()
+        _cur.close()
+        _conn.close()
+        logger.info(f'[apply_manual_all] {cnt}商品を手動モードに一括更新')
+        flash(f'✅ 全 {cnt} 商品の発注点自動更新を「手動」に切り替えました。', 'success')
+    except Exception as e:
+        logger.error(f'[apply_manual_all] エラー: {e}')
+        flash(f'❌ 一括更新エラー: {e}', 'danger')
+    return redirect(url_for('settings'))
+
+
 @app.route('/settings/test_pg', methods=['POST'])
 @admin_required
 def test_pg():
