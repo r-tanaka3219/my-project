@@ -448,9 +448,35 @@ def weather_import():
 @permission_required('reports')
 def weather_recalc_sensitivity():
     db = get_db()
-    n  = recalc_temp_sensitivity(db)
-    _save_sens_log(db, n, 'manual')
-    flash(f'気温感応度を {n} 商品分 再計算しました。', 'success')
+
+    # 事前チェック：原因診断
+    weather_cnt = db.execute(
+        "SELECT COUNT(*) AS c FROM weather_data WHERE avg_temp IS NOT NULL"
+    ).fetchone()['c']
+    sales_cnt = db.execute(
+        "SELECT COUNT(DISTINCT jan) AS c FROM sales_history "
+        "WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'"
+    ).fetchone()['c']
+
+    n = recalc_temp_sensitivity(db)
+
+    if n > 0:
+        _save_sens_log(db, n, 'manual')
+        flash(f'気温感応度を {n} 商品分 再計算しました。', 'success')
+    elif weather_cnt < 10:
+        flash(
+            f'再計算できませんでした。気象データが {weather_cnt} 件しかありません（10件以上必要）。'
+            f' まず「気象データ取得」で地点を選択して取得してください。',
+            'warning'
+        )
+    elif sales_cnt == 0:
+        flash('再計算できませんでした。過去365日の売上データがありません。', 'warning')
+    else:
+        flash(
+            f'再計算対象なし（0商品）。気象データ {weather_cnt} 件・売上商品 {sales_cnt} 種ありますが、'
+            f' 日付が10日以上重複する商品がありません。気象データの期間と売上期間を合わせてください。',
+            'warning'
+        )
     return redirect(url_for('forecast.weather_data'))
 
 
