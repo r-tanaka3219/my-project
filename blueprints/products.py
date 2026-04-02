@@ -11,6 +11,8 @@ logger = logging.getLogger('inventory.products')
 bp = Blueprint('products', __name__)
 
 
+_REORDER_AUTO_LABEL = {0: '0 手動', 1: '1 AIモード', 2: '2 前年実績'}
+
 @bp.route('/products/export')
 @admin_required
 def product_export():
@@ -27,12 +29,18 @@ def product_export():
     headers = [c[1] for c in _PRODUCT_COLS]
     keys    = [c[0] for c in _PRODUCT_COLS]
 
+    def _cell_val(k, v):
+        """reorder_auto はラベル付き文字列で出力（インポート時も 0/1/2 数値として認識）"""
+        if k == 'reorder_auto' and v is not None:
+            return _REORDER_AUTO_LABEL.get(int(v), str(v))
+        return v if v is not None else ''
+
     if fmt == 'csv':
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(headers)
         for r in rows:
-            w.writerow([r[k] if r[k] is not None else '' for k in keys])
+            w.writerow([_cell_val(k, r[k]) for k in keys])
         buf.seek(0)
         _db2 = get_db()
         _exp_name = _db2.execute("SELECT value FROM settings WHERE key='product_export_name'").fetchone()
@@ -46,6 +54,7 @@ def product_export():
     else:
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.worksheet.datavalidation import DataValidation
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = '商品マスタ'
@@ -57,6 +66,9 @@ def product_export():
         bdr    = Border(
             left=Side(style='thin'), right=Side(style='thin'),
             top=Side(style='thin'),  bottom=Side(style='thin')
+        )
+        reorder_auto_col = next(
+            (ci for ci, c in enumerate(_PRODUCT_COLS, 1) if c[0] == 'reorder_auto'), None
         )
         for ci, h in enumerate(headers, 1):
             cell = ws.cell(1, ci, h)
@@ -72,17 +84,28 @@ def product_export():
         for ri, r in enumerate(rows, 2):
             fill = rfill_even if ri % 2 == 0 else rfill_odd
             for ci, k in enumerate(keys, 1):
-                cell = ws.cell(ri, ci, r[k])
+                cell = ws.cell(ri, ci, _cell_val(k, r[k]))
                 cell.font   = rfont
                 cell.fill   = fill
                 cell.border = bdr
                 cell.alignment = Alignment(vertical='center')
-                # JAN列は数値書式で13桁表示
                 if ci == 1:
                     cell.number_format = '0'
 
+        # 発注点自動更新列にドロップダウン検証
+        if reorder_auto_col:
+            col_letter = openpyxl.utils.get_column_letter(reorder_auto_col)
+            dv = DataValidation(
+                type='list',
+                formula1='"0 手動,1 AIモード,2 前年実績"',
+                allow_blank=True,
+                showErrorMessage=False,
+            )
+            dv.sqref = f'{col_letter}2:{col_letter}100000'
+            ws.add_data_validation(dv)
+
         # 列幅
-        col_widths = [16,14,30,14,20,8,8,8,8,10,10,8,8,10,10,18,14,10,10,10,10]
+        col_widths = [16,14,30,14,20,8,8,8,8,12,12,8,8,10,10,18,14,10,10,10,10]
         for i, w_val in enumerate(col_widths, 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w_val
         ws.row_dimensions[1].height = 20
@@ -108,6 +131,8 @@ def product_template():
     """インポート用テンプレートExcelをダウンロード"""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.comments import Comment
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = '商品マスタ'
@@ -123,7 +148,7 @@ def product_template():
         '発注単位':        '何ケース単位で発注するか',
         '発注数量':        '1回の発注ケース数',
         '発注点':          '在庫がこの数以下で自動発注',
-        '発注点自動更新':  '1=する / 0=しない',
+        '発注点自動更新':  '0=手動 / 1=AIモード / 2=前年実績',
         'リードタイム日数':'仕入先から納品までの日数',
         '安全係数':        '例: 1.3 = 30%の余裕',
         'メーカーロット数':'0=未使用',
@@ -146,6 +171,11 @@ def product_template():
         top=Side(style='thin'),  bottom=Side(style='thin')
     )
 
+    # 発注点自動更新列のインデックスを特定
+    reorder_auto_col = next(
+        (ci for ci, c in enumerate(_PRODUCT_COLS, 1) if c[0] == 'reorder_auto'), None
+    )
+
     for ci, h in enumerate(headers, 1):
         c1 = ws.cell(1, ci, h)
         c1.font = hfont; c1.fill = hfill
@@ -156,12 +186,54 @@ def product_template():
         c2.alignment = Alignment(wrap_text=True, vertical='center')
         c2.border = bdr
 
-    col_widths = [16,14,30,14,20,8,8,8,8,10,10,8,8,10,10,18,14,10,10,10,10]
+    # 発注点自動更新列にドロップダウン検証を追加（データ行 3行目〜）
+    if reorder_auto_col:
+        col_letter = openpyxl.utils.get_column_letter(reorder_auto_col)
+        dv = DataValidation(
+            type='list',
+            formula1='"0,1,2"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle='入力エラー',
+            error='0=手動 / 1=AIモード / 2=前年実績 のいずれかを入力してください',
+            showInputMessage=True,
+            promptTitle='発注点自動更新モード',
+            prompt='0=手動（自動更新しない）\n1=AIモード自動更新\n2=前年実績モード自動更新'
+        )
+        dv.sqref = f'{col_letter}3:{col_letter}10000'
+        ws.add_data_validation(dv)
+
+    col_widths = [16,14,30,14,20,8,8,8,8,12,12,8,8,10,10,18,14,10,10,10,10]
     for i, w_val in enumerate(col_widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w_val
     ws.row_dimensions[1].height = 20
-    ws.row_dimensions[2].height = 32
+    ws.row_dimensions[2].height = 36
     ws.freeze_panes = 'A3'
+
+    # 凡例シートを追加
+    ws_legend = wb.create_sheet('凡例')
+    legend_data = [
+        ('列名', '値', '説明'),
+        ('発注点自動更新', '0', '手動（自動更新しない）'),
+        ('発注点自動更新', '1', 'AIモード自動更新（毎月1日、AI予測値で発注点を自動計算）'),
+        ('発注点自動更新', '2', '前年実績モード自動更新（毎月1日、前年同月実績で発注点を自動計算）'),
+        ('', '', ''),
+        ('混載ロットルール', 'gte', '合計ケース数が混載ケース数以上になったら発注'),
+        ('混載ロットルール', 'unit', '混載ケース数の倍数単位で発注'),
+    ]
+    lfill_h = PatternFill('solid', fgColor='1E3A8A')
+    lfont_h = Font(bold=True, color='FFFFFF', name='Meiryo UI', size=10)
+    lfont   = Font(name='Meiryo UI', size=10)
+    for ri, row in enumerate(legend_data, 1):
+        for ci, val in enumerate(row, 1):
+            cell = ws_legend.cell(ri, ci, val)
+            cell.font = lfont_h if ri == 1 else lfont
+            if ri == 1:
+                cell.fill = lfill_h
+                cell.alignment = Alignment(horizontal='center')
+    ws_legend.column_dimensions['A'].width = 18
+    ws_legend.column_dimensions['B'].width = 8
+    ws_legend.column_dimensions['C'].width = 55
 
     buf = io.BytesIO()
     wb.save(buf); buf.seek(0)
@@ -222,10 +294,25 @@ def product_import():
     col_map = {c[1]: c[0] for c in _PRODUCT_COLS}
     type_map = {c[0]: c[2] for c in _PRODUCT_COLS}
 
+    # 発注点自動更新のテキストラベル → 数値マッピング
+    _reorder_auto_map = {
+        '0': 0, '手動': 0, 'manual': 0, '0 手動': 0, '自動更新しない': 0,
+        '1': 1, 'ai': 1, 'aiモード': 1, 'aiモード自動': 1, '1 aiモード': 1,
+        '前年実績': 2, '2': 2, 'ly': 2, '前年実績モード': 2, '2 前年実績': 2,
+        '前年実績自動': 2, '前年実績モード自動': 2,
+    }
+
     def cast(key, val):
         t = type_map.get(key, 'text')
         if val == '' or val is None:
             return None
+        # 発注点自動更新はテキストラベルも受け付ける
+        if key == 'reorder_auto':
+            s = str(val).strip().lower()
+            if s in _reorder_auto_map:
+                return _reorder_auto_map[s]
+            try: return int(float(s.replace(',','')))
+            except: return None
         if t == 'int':
             try: return int(float(str(val).replace(',','')))
             except: return None
