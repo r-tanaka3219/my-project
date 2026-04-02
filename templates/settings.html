@@ -650,17 +650,6 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
       🤖 AIモード設定の商品はAI予測値で、📅 前年実績モード設定の商品は前年同月実績で発注点を更新します。手動設定の商品は自動更新されません。<br>
       需要予測画面の「一括反映」ボタンでもAI・前年実績モードを選択して即時反映できます。
     </div>
-    <div style="margin-top:12px;padding:12px 14px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:8px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--color-text-secondary)">▼ 全商品を今すぐ一括切替</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="btn btn-sm" style="background:#2563eb;color:#fff"
-                onclick="submitBulkMode('ai')">🤖 全商品をAIモードに切替</button>
-        <button type="button" class="btn btn-sm" style="background:#d97706;color:#fff"
-                onclick="submitBulkMode('ly')">📅 全商品を前年実績モードに切替</button>
-        <button type="button" class="btn btn-danger btn-sm"
-                onclick="submitBulkMode('manual')">🚫 全商品を手動に切替</button>
-      </div>
-    </div>
   </div>
 
   <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
@@ -793,33 +782,6 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
 </div>
 </form>
 
-{# 一括切替フォーム群（メインフォームの外に配置 ※ネストフォーム回避） #}
-<form method="post" action="/settings/apply_manual_all" id="bulk-manual-form" style="display:none">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-</form>
-<form method="post" action="/settings/apply_ai_all" id="bulk-ai-form" style="display:none">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-</form>
-<form method="post" action="/settings/apply_ly_all" id="bulk-ly-form" style="display:none">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-</form>
-<script>
-var _bulkLabels = {
-  'manual': '全商品の発注点自動更新を「手動」に切り替えます。\nよろしいですか？',
-  'ai':     '全商品の発注点自動更新を「AIモード」に切り替えます。\nよろしいですか？',
-  'ly':     '全商品の発注点自動更新を「前年実績モード」に切り替えます。\nよろしいですか？'
-};
-var _bulkForms = {
-  'manual': 'bulk-manual-form',
-  'ai':     'bulk-ai-form',
-  'ly':     'bulk-ly-form'
-};
-function submitBulkMode(mode) {
-  if (confirm(_bulkLabels[mode])) {
-    document.getElementById(_bulkForms[mode]).submit();
-  }
-}
-</script>
 
 {# テスト送信フォーム（別フォーム・メインフォームの外に配置） #}
 <form method="post" action="/settings/test_mail" id="test-form" style="display:none">
