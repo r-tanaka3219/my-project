@@ -183,8 +183,8 @@
         </td>
         <td class="col-name" title="{{ r.product_name }}">
           <span style="font-size:12px">{{ r.product_name|truncate(14,true,'…') }}</span><br>
-          <span class="algo-tag" style="{% if r.algorithm == 'last_year' %}background:#fff7ed;color:#92400e;border-color:#f59e0b{% elif r.algorithm == 'holt_winters+quantile' %}background:#eff6ff;color:#1e40af;border-color:#93c5fd{% endif %}">
-            {% if r.algorithm == 'last_year' %}📅前年実績{% elif r.algorithm == 'holt_winters+quantile' %}🤖AI予測{% else %}📊移動平均{% endif %}
+          <span class="algo-tag" style="{% if r.algorithm == 'last_year' %}background:#fff7ed;color:#92400e;border-color:#f59e0b{% elif r.algorithm == 'holt_winters+quantile' %}background:#eff6ff;color:#1e40af;border-color:#93c5fd{% elif r.abc_rank == 'A' %}background:#fef9c3;color:#854d0e;border-color:#fde047{% endif %}">
+            {% if r.algorithm == 'last_year' %}📅前年実績{% elif r.algorithm == 'holt_winters+quantile' %}🤖AI予測{% elif r.abc_rank == 'A' %}📊移動平均(データ不足){% else %}📊移動平均{% endif %}
           </span>
         </td>
         <td class="col-abc"><span class="abc-badge abc-{{ r.abc_rank }}">{{ r.abc_rank }}</span></td>
@@ -198,14 +198,14 @@
         </td>
         <td class="col-fc" style="font-weight:600">{{ r.forecast_30d }}</td>
         <td class="col-quantile">
-          {% if r.abc_rank == 'A' and r.q50_daily > 0 %}
+          {% if r.algorithm == 'holt_winters+quantile' and r.q50_daily > 0 %}
             <span class="q-val">{{ r.q25_daily }}<br><span class="q-mid">{{ r.q50_daily }}</span><br>{{ r.q75_daily }}</span>
           {% else %}
-            <span style="color:#94a3b8;font-size:11px">SMA</span>
+            <span style="color:#94a3b8;font-size:11px">移動平均</span>
           {% endif %}
         </td>
         <td class="col-dss">
-          {% if r.abc_rank == 'A' and r.dynamic_safety_stock > 0 %}
+          {% if r.algorithm == 'holt_winters+quantile' and r.dynamic_safety_stock > 0 %}
             <span style="color:#d97706;font-weight:600">{{ r.dynamic_safety_stock|int }}</span><br>
             {% if r.iqr_std > 0 %}<span style="font-size:10px;color:#94a3b8">σ={{ r.iqr_std }}</span>{% endif %}
           {% else %}
