@@ -603,6 +603,42 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 
   <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
+    <label style="font-weight:500;font-size:14px;display:block;margin-bottom:10px">🔄 発注点・発注数 自動更新モード（毎月1日 自動実行）</label>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}var(--color-border-info){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}var(--color-background-info){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+        <input type="radio" name="reorder_auto_mode" value="ai"
+               {% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}checked{% endif %}
+               style="margin-top:3px;flex-shrink:0">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--color-text-info)">🤖 AIモード（推奨）</div>
+          <div style="font-size:12px;margin-top:4px;line-height:1.8;color:var(--color-text-secondary)">
+            需要予測AIエンジンの計算結果を使用<br>
+            WMA・季節指数・曜日指数・販促を反映<br>
+            ダンピング（±50〜200%）＋ロット丸め適用
+          </div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}var(--color-border-warning){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}var(--color-background-warning){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+        <input type="radio" name="reorder_auto_mode" value="ly"
+               {% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}checked{% endif %}
+               style="margin-top:3px;flex-shrink:0">
+        <div>
+          <div style="font-weight:500;font-size:13px;color:var(--color-text-warning)">📅 前年実績モード</div>
+          <div style="font-size:12px;margin-top:4px;line-height:1.8;color:var(--color-text-secondary)">
+            前年同月の実績のみを使用<br>
+            計算式: 前年実績 ÷ 月日数 × LT × 安全係数<br>
+            ダンピング（±50〜200%）＋ロット丸め適用
+          </div>
+        </div>
+      </label>
+    </div>
+    <div class="help" style="margin-top:8px">
+      商品ごとに「前年実績ベースで自動更新する」チェックがONの商品のみ更新されます。<br>
+      需要予測画面の「一括反映」ボタンでも同等の操作が可能です。
+    </div>
+  </div>
+
+  <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
     <label style="font-weight:500;font-size:13px;display:block;margin-bottom:8px">問屋向けAI設定</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:560px">
       <div>
@@ -657,13 +693,13 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
     </select>
 
     <div style="margin-top:10px;border:1px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;font-size:12px">
-      <table style="table-layout:fixed;width:100%;border-collapse:collapse">
+      <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:var(--color-background-secondary)">
-            <th style="width:14%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">モード</th>
-            <th style="width:30%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">推奨場面</th>
-            <th style="width:28%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">AIモード時（WMA）の計算式</th>
-            <th style="width:28%;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">前年実績モード時の計算式</th>
+            <th style="min-width:90px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">モード</th>
+            <th style="min-width:160px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">推奨場面</th>
+            <th style="min-width:180px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">AIモード時（WMA）の計算式</th>
+            <th style="min-width:180px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--color-border-tertiary)">前年実績モード時の計算式</th>
           </tr>
         </thead>
         <tbody>

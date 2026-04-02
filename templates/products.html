@@ -8,12 +8,6 @@
     <a href="/products/export?fmt=xlsx" class="btn btn-outline btn-sm">📤 Excel出力</a>
     <a href="/products/export?fmt=csv" class="btn btn-outline btn-sm">📤 CSV出力</a>
     <a href="/products/inactive" class="btn btn-outline btn-sm">🗄 無効商品</a>
-    <form method="post" action="/reorder_update" style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-purple btn-sm" onclick="return confirm('発注点を前年実績ベースで自動更新しますか？')">
-        📈 発注点を前年実績で更新
-      </button>
-    </form>
   </div>
 </div>
 <div class="card" style="padding:10px 16px;margin-bottom:0">
@@ -26,11 +20,11 @@
 </div>
 <div class="card">
 <div class="table-wrap">
-<table style="table-layout:fixed;width:100%"><thead><tr>
-  <th style="width:5%">仕入先CD</th><th style="width:8%">仕入先名</th><th style="width:9%">JAN</th><th style="width:5%">商品CD</th><th style="width:19%">商品名</th>
-  <th class="text-right" style="width:5%">在庫</th><th class="text-right" style="width:5%">入数</th>
-  <th class="text-right" style="width:5%">発注点</th><th class="text-right" style="width:5%">ロット</th>
-  <th class="text-right" style="width:5%">発注数</th><th class="text-center" style="width:4%">LT</th><th class="text-center" style="width:6%">安全係数</th><th class="text-center" style="width:5%">自動</th><th class="text-center" style="width:14%">操作</th>
+<table><thead><tr>
+  <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:110px">JAN</th><th style="min-width:70px">商品CD</th><th style="min-width:140px;max-width:220px">商品名</th>
+  <th class="text-right" style="min-width:65px">在庫</th><th class="text-right" style="min-width:60px">入数</th>
+  <th class="text-right" style="min-width:70px">発注点</th><th class="text-right" style="min-width:60px">ロット</th>
+  <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:55px">LT</th><th class="text-center" style="min-width:75px">安全係数</th><th class="text-center" style="min-width:60px">自動</th><th class="text-center" style="min-width:110px">操作</th>
 </tr></thead><tbody>
 {% for p in products %}
 <tr>

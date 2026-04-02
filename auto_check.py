@@ -276,7 +276,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
             log_key = f"month_end_{ym_str}_{csv_path.name}"
             if not all_dates:
                 done = db.execute(
-                    "SELECT COUNT(*) AS _cnt FROM import_logs WHERE filename=%s AND status='ok'",
+                    "SELECT COUNT(*) AS _cnt FROM import_logs WHERE filename=%s AND status IN ('ok','partial_skip')",
                     [log_key]
                 ).fetchone()['_cnt']
                 if done:
@@ -286,7 +286,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                     })
                     continue
 
-            rows_ok = rows_err = rows_skip = 0
+            rows_ok = rows_err = rows_skip = rows_skip_unrg = 0
             errors = []
             import_type = cfg['import_type'] or 'sales'
 
@@ -397,8 +397,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                                     continue
                             elif import_type == 'sales':
                                 if not product:
-                                    errors.append(f"行{i}: JAN {jan} 未登録")
-                                    rows_err += 1
+                                    rows_skip_unrg += 1
                                     continue
                                 _deduct_stock(db, product, qty, row_date, log_key)
                                 result_me = db.execute("""
@@ -412,8 +411,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                                     continue
                             else:
                                 if not product:
-                                    errors.append(f"行{i}: JAN {jan} 未登録")
-                                    rows_err += 1
+                                    rows_skip_unrg += 1
                                     continue
                                 _add_stock(db, product, qty, expiry, log_key)
 
@@ -435,11 +433,17 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                     skip_note = f" スキップ{rows_skip}行(重複)" if rows_skip else ""
                 else:
                     skip_note = f" スキップ{rows_skip}行(月末日以外)" if rows_skip else ""
+                unrg_note = f" 未登録商品スキップ{rows_skip_unrg}行(商品登録後に再取込可)" if rows_skip_unrg else ""
                 detail = (
-                    f"月末月次取込({month_end_date}) 成功{rows_ok}行{skip_note}"
+                    f"月末月次取込({month_end_date}) 成功{rows_ok}行{skip_note}{unrg_note}"
                     + (f" エラー{rows_err}行: {'; '.join(errors[:3])}" if errors else "")
                 )
-                status = 'ok' if rows_err == 0 else 'partial'
+                if rows_skip_unrg > 0 and rows_err == 0:
+                    status = 'partial_skip'
+                elif rows_err == 0:
+                    status = 'ok'
+                else:
+                    status = 'partial'
 
                 # ログキーで記録（all_dates=Trueの場合は既存ログを削除して上書き）
                 if all_dates:
@@ -475,6 +479,17 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                 })
 
         _net_use_disconnect(connected_unc)
+
+    # 売上・在庫データが更新されたため予測関連を更新（遅延インポートで循環参照を回避）
+    try:
+        import sys as _sys
+        if 'app' in _sys.modules:
+            _app = _sys.modules['app']
+            # sales_daily_agg を再集計してからキャッシュを無効化・再構築
+            threading.Thread(target=_app._bg_refresh_sales_daily_agg, daemon=True).start()
+            _app.invalidate_forecast_cache(background_refresh=True)
+    except Exception:
+        pass
 
     return all_results
 
@@ -540,8 +555,7 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
             continue
 
         for csv_path in files:
-            rows_ok = rows_err = 0
-            rows_skip = 0
+            rows_ok = rows_err = rows_skip = rows_skip_unrg = 0
             errors = []
             import_type = cfg['import_type'] or 'sales'
             # チェーンCD・店舗CD除外キャッシュ（DB問い合わせ削減）
@@ -689,8 +703,11 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                     exclude = _store_exclude_cache[store_cd]
                                 if import_type == 'record_only':
                                     pass  # 引き当てなし
-                                elif product and not exclude and import_type == 'sales':
-                                    _deduct_stock(db, product, qty, sale_date, csv_path.name)
+                                elif import_type == 'sales':
+                                    if not product:
+                                        rows_skip_unrg += 1
+                                    elif not exclude:
+                                        _deduct_stock(db, product, qty, sale_date, csv_path.name)
                                 result = db.execute("""
                                     INSERT INTO sales_history
                                     (jan,product_name,quantity,sale_date,source_file,row_hash,
@@ -703,7 +720,9 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                     rows_skip += 1
                                     rows_ok -= 1
                             else:
-                                if product:
+                                if not product:
+                                    rows_skip_unrg += 1
+                                else:
                                     _add_stock(db, product, qty, expiry, csv_path.name)
 
                             rows_ok += 1
@@ -722,8 +741,14 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
 
                 db.commit()
                 skip_note = f" スキップ{rows_skip}行(重複・フィルター)" if rows_skip else ""
-                detail = f"成功{rows_ok}行{skip_note}" + (f" エラー{rows_err}行: {'; '.join(errors[:3])}" if errors else "")
-                status = 'ok' if rows_err == 0 else 'partial'
+                unrg_note = f" 未登録商品スキップ{rows_skip_unrg}行(商品登録後に再取込可)" if rows_skip_unrg else ""
+                detail = f"成功{rows_ok}行{skip_note}{unrg_note}" + (f" エラー{rows_err}行: {'; '.join(errors[:3])}" if errors else "")
+                if rows_skip_unrg > 0 and rows_err == 0:
+                    status = 'partial_skip'
+                elif rows_err == 0:
+                    status = 'ok'
+                else:
+                    status = 'partial'
                 db.execute("""
                     INSERT INTO import_logs (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type)
                     VALUES (%s,%s,%s,%s,%s,%s,%s)
@@ -755,6 +780,16 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
 
         # UNC接続を切断
         _net_use_disconnect(connected_unc)
+
+    # 売上・在庫データが更新されたため予測関連を更新（遅延インポートで循環参照を回避）
+    try:
+        import sys as _sys
+        if 'app' in _sys.modules:
+            _app = _sys.modules['app']
+            threading.Thread(target=_app._bg_refresh_sales_daily_agg, daemon=True).start()
+            _app.invalidate_forecast_cache(background_refresh=True)
+    except Exception:
+        pass
 
     return all_results
 
@@ -1142,14 +1177,138 @@ def run_expiry_check():
     return alert_items
 
 
-# ─── 発注点自動更新（前年実績ベース）────────────────────────────
+# ─── 発注点自動更新（モード切替対応）────────────────────────────
 def update_reorder_points():
     """
-    発注点自動計算（前年同月実績ベース）
-    計算式: 前年同月 合計出荷数 ÷ 月日数 × リードタイム日数 × 安全係数
-    賞味期限考慮: 期限切れ間近の在庫を除いた有効在庫に基づき判定
+    発注点・発注数自動計算（毎月1日 自動実行）
+
+    モード:
+      'ai' = 需要予測AIモード（app._build_forecast_rows_raw を使用）
+      'ly' = 前年実績モード（前年同月実績ベース）
+    設定: settings.reorder_auto_mode（デフォルト: 'ai'）
     """
     db = get_db_long()
+    mode_row = db.execute("SELECT value FROM settings WHERE key='reorder_auto_mode'").fetchone()
+    auto_mode = (mode_row['value'] if mode_row else 'ai') or 'ai'
+    logger.info(f'[update_reorder_points] モード={auto_mode}')
+
+    if auto_mode == 'ai':
+        return _update_reorder_points_ai(db)
+    else:
+        return _update_reorder_points_ly(db)
+
+
+def _update_reorder_points_ai(db):
+    """
+    AIモード: app._build_forecast_rows_raw() の予測結果を元に発注点・発注数を更新。
+    ダンピング（50%〜200%）・ロット丸め・変動閾値チェックを適用。
+    """
+    import sys as _sys
+
+    # app モジュールから予測行を取得（遅延インポートで循環参照を回避）
+    try:
+        if 'app' not in _sys.modules:
+            logger.warning('[update_reorder_points] app未ロード → 前年実績モードで代替実行')
+            return _update_reorder_points_ly(db)
+        _app = _sys.modules['app']
+        forecast_rows = _app._build_forecast_rows_raw(db)
+    except Exception as e:
+        logger.warning(f'[update_reorder_points] AI予測取得エラー: {e} → 前年実績モードで代替実行')
+        return _update_reorder_points_ly(db)
+
+    # reorder_auto=1 の商品セットを取得
+    auto_jans = {r['jan'] for r in db.execute(
+        "SELECT jan FROM products WHERE is_active=1 AND reorder_auto=1"
+    ).fetchall()}
+
+    updated = 0
+    for r in forecast_rows:
+        if r['jan'] not in auto_jans:
+            continue
+
+        new_rp = int(r.get('suggested_reorder_point') or 0)
+        new_oq = int(r.get('suggested_order_qty')     or 0)
+        if new_rp == 0 and new_oq == 0:
+            continue   # 売上データなし
+
+        unit_qty   = max(1, int(r.get('unit_qty')    or 1))
+        order_unit = max(1, int(r.get('order_unit')  or unit_qty))
+        current_rp = int(r.get('reorder_point') or 0)
+        current_oq = int(r.get('order_qty')     or 0)
+
+        # ── 急激な変動を抑制（50%〜200% の範囲に制限）──
+        if current_rp > 0:
+            clamped = max(current_rp * 0.5, min(current_rp * 2.0, new_rp))
+            new_rp = math.ceil(clamped / order_unit) * order_unit if order_unit > 1 else int(clamped + 0.9999)
+            new_rp = max(order_unit, new_rp)
+        if current_oq > 0:
+            clamped = max(current_oq * 0.5, min(current_oq * 2.0, new_oq))
+            new_oq = math.ceil(clamped / unit_qty) * unit_qty if unit_qty > 1 else int(clamped + 0.9999)
+            new_oq = max(unit_qty, new_oq)
+
+        # ── 変動幅が小さすぎる場合はスキップ（5% 未満かつ unit 未満の差）──
+        rp_changed = (new_rp != current_rp) and (
+            current_rp == 0
+            or abs(new_rp - current_rp) / max(current_rp, 1) >= 0.05
+            or abs(new_rp - current_rp) >= order_unit
+        )
+        oq_changed = (new_oq != current_oq) and (
+            current_oq == 0
+            or abs(new_oq - current_oq) / max(current_oq, 1) >= 0.05
+            or abs(new_oq - current_oq) >= unit_qty
+        )
+        if not rp_changed and not oq_changed:
+            continue
+
+        changes       = []
+        update_fields = []
+        update_vals   = []
+        if rp_changed:
+            update_fields.append("reorder_point=%s")
+            update_vals.append(new_rp)
+            changes.append(f"発注点 {current_rp}→{new_rp}")
+        if oq_changed:
+            update_fields.append("order_qty=%s")
+            update_vals.append(new_oq)
+            changes.append(f"発注数 {current_oq}→{new_oq}")
+
+        update_vals.append(r['product_id'])
+        db.execute(
+            f"UPDATE products SET {', '.join(update_fields)} WHERE id=%s",
+            update_vals
+        )
+        mode_label = r.get('rp_mode_label', 'AI')
+        daily = round(float(r.get('next_daily_forecast') or 0), 2)
+        db.execute("""
+            INSERT INTO alert_logs (alert_type, jan, product_name, message)
+            VALUES ('発注点更新', %s, %s, %s)
+        """, [r['jan'], r['product_name'],
+              f"AIモード({mode_label}) 日次予測{daily}個/日"
+              f" LT{r.get('lead_time_days') or 3}日"
+              f" ロット{order_unit}/入数{unit_qty}"
+              f" → {' / '.join(changes)}"])
+        updated += 1
+
+    db.commit()
+    db.close()
+    return updated
+
+
+def _update_reorder_points_ly(db):
+    """
+    前年実績モード: 前年同月実績ベースで発注点・発注数を更新（従来ロジック）
+
+    計算式:
+      発注点  = 日次平均 × リードタイム × 安全係数 → order_unit の倍数に切り上げ
+      発注数  = 日次平均 × (リードタイム + 14日)   → unit_qty の倍数に切り上げ
+
+    急激な変動抑制:
+      - 現行値の 50%〜200% の範囲に制限
+      - 変動幅が 5% 未満かつ unit 単位未満の場合は更新スキップ
+
+    賞味期限考慮:
+      - 期限切れ間近の在庫がある場合は計算値を 10% 上乗せ
+    """
     today = date.today()
     last_year = today.year - 1
     month = today.month
@@ -1170,40 +1329,85 @@ def update_reorder_points():
         if total == 0:
             continue
 
-        # 計算式: 合計出荷 ÷ 月日数 × リードタイム × 安全係数
-        lead   = p['lead_time_days'] or 3
-        safety = p['safety_factor'] or 1.3
+        lead     = max(1, int(p['lead_time_days'] or 3))
+        safety   = max(1.0, float(p['safety_factor'] or 1.3))
+        unit_qty  = max(1, int(p['unit_qty']   or 1))
+        order_unit = max(1, int(p['order_unit'] or unit_qty))
         daily_avg = total / days_in_month
-        # 基本計算: 合計出荷 ÷ 月日数 × リードタイム × 安全係数
-        raw_rp = daily_avg * lead * safety
 
-        # 賞味期限考慮: 期限切れ間近在庫がある場合は10%上乗せ
+        # 基本計算
+        raw_rp = daily_avg * lead * safety
+        raw_oq = daily_avg * (lead + 14)
+
+        # 賞味期限考慮: 期限切れ間近在庫がある場合は 10% 上乗せ
         alert_days = p['expiry_alert_days'] or 30
         expiry_risk_qty = db.execute("""
             SELECT COALESCE(SUM(quantity),0) AS _sum FROM stocks
             WHERE jan=%s AND quantity>0 AND expiry_date!=''
             AND expiry_date::date <= (CURRENT_DATE + INTERVAL '1 day' * %s)
         """, [p['jan'], alert_days]).fetchone()['_sum']
-
         if expiry_risk_qty > 0:
-            raw_rp *= 1.1  # 期限リスク在庫あり → 早めに発注
+            raw_rp *= 1.1
+            raw_oq *= 1.1
 
-        # 発注単位（order_unit）の倍数に切り上げ
-        # 例: order_unit=200 で raw_rp=180 → 200、raw_rp=210 → 400
-        unit = p['order_unit'] or 1
-        new_rp = math.ceil(raw_rp / unit) * unit
+        # ── 急激な変動を抑制（現行値の 50%〜200% の範囲に制限）──
+        current_rp = int(p['reorder_point'] or 0)
+        current_oq = int(p['order_qty'] or 0)
+        if current_rp > 0:
+            raw_rp = max(current_rp * 0.5, min(current_rp * 2.0, raw_rp))
+        if current_oq > 0:
+            raw_oq = max(current_oq * 0.5, min(current_oq * 2.0, raw_oq))
 
-        if new_rp > 0 and new_rp != p['reorder_point']:
-            old_rp = p['reorder_point']
-            db.execute("UPDATE products SET reorder_point=%s WHERE id=%s", [new_rp, p['id']])
-            expiry_note = f"（期限リスク在庫{expiry_risk_qty}個あり+10%）" if expiry_risk_qty > 0 else ""
-            db.execute("""
-                INSERT INTO alert_logs (alert_type,jan,product_name,message)
-                VALUES ('発注点更新',%s,%s,%s)
-            """, [p['jan'], p['product_name'],
-                  f"前年{last_year}/{month:02d}実績{total}個÷{days_in_month}日×LT{lead}日×安全{safety}"
-                  f"→発注点 {old_rp}→{new_rp}{expiry_note}"])
-            updated += 1
+        # ── ロット単位に切り上げ ──
+        # 発注点: order_unit の倍数（例: raw_rp=180, order_unit=200 → 200）
+        new_rp = math.ceil(raw_rp / order_unit) * order_unit if order_unit > 1 else int(raw_rp + 0.9999)
+        new_rp = max(order_unit, new_rp)
+
+        # 発注数: unit_qty の倍数（例: raw_oq=350, unit_qty=200 → 400）
+        new_oq = math.ceil(raw_oq / unit_qty) * unit_qty if unit_qty > 1 else int(raw_oq + 0.9999)
+        new_oq = max(unit_qty, new_oq)
+
+        # ── 変動幅が小さすぎる場合はスキップ（5% 未満かつ unit 未満の差）──
+        rp_changed = (new_rp != current_rp) and (
+            current_rp == 0 or abs(new_rp - current_rp) / current_rp >= 0.05
+            or abs(new_rp - current_rp) >= order_unit
+        )
+        oq_changed = (new_oq != current_oq) and (
+            current_oq == 0 or abs(new_oq - current_oq) / max(current_oq, 1) >= 0.05
+            or abs(new_oq - current_oq) >= unit_qty
+        )
+
+        if not rp_changed and not oq_changed:
+            continue
+
+        expiry_note = f"（期限リスク在庫{expiry_risk_qty}個+10%）" if expiry_risk_qty > 0 else ""
+        changes = []
+        update_fields = []
+        update_vals   = []
+
+        if rp_changed:
+            update_fields.append("reorder_point=%s")
+            update_vals.append(new_rp)
+            changes.append(f"発注点 {current_rp}→{new_rp}")
+
+        if oq_changed:
+            update_fields.append("order_qty=%s")
+            update_vals.append(new_oq)
+            changes.append(f"発注数 {current_oq}→{new_oq}")
+
+        update_vals.append(p['id'])
+        db.execute(
+            f"UPDATE products SET {', '.join(update_fields)} WHERE id=%s",
+            update_vals
+        )
+        db.execute("""
+            INSERT INTO alert_logs (alert_type,jan,product_name,message)
+            VALUES ('発注点更新',%s,%s,%s)
+        """, [p['jan'], p['product_name'],
+              f"前年実績 {last_year}/{month:02d} 合計{total}個÷{days_in_month}日"
+              f" LT{lead}日 安全{safety} ロット{order_unit}/入数{unit_qty}"
+              f" → {' / '.join(changes)}{expiry_note}"])
+        updated += 1
 
     db.commit()
     db.close()
@@ -1573,7 +1777,7 @@ def start_scheduler():
                             last_month = first_of_this_month - timedelta(days=1)
                             prev_ym = last_month.strftime('%Y%m')
                             logger.info(f'[Scheduler] 月末月次取込開始: {prev_ym}')
-                            run_month_end_import(target_ym=prev_ym)
+                            run_month_end_import(target_ym=prev_ym, trigger_type='auto')
                             logger.info(f'[Scheduler] 月末月次取込完了: {prev_ym}')
             except Exception as e:
                 logger.info(f"[Scheduler] MonthEnd: {e}")
@@ -1626,6 +1830,31 @@ def start_scheduler():
                         logger.info(f'[Scheduler] 52週MDプラン自動生成スレッド起動')
             except Exception as _e:
                 logger.warning(f'[Scheduler] WeeklyMD annual: {_e}')
+            # 毎日 03:30 に予測キャッシュを事前ウォームアップ（朝の初回アクセスを高速化）
+            try:
+                if now.hour == 3 and now.minute == 30 and last_run.get('fc_warmup') != today:
+                    with _scheduler_lock:
+                        if last_run.get('fc_warmup') == today:
+                            pass
+                        elif _scheduler_already_ran('fc_warmup', str(today)):
+                            last_run['fc_warmup'] = today
+                        else:
+                            last_run['fc_warmup'] = today
+                            def _warmup():
+                                try:
+                                    import sys as _sys
+                                    if 'app' in _sys.modules:
+                                        _app = _sys.modules['app']
+                                        _app.invalidate_forecast_cache()
+                                        _wdb = get_db_long()
+                                        _app._build_forecast_rows_raw(_wdb)
+                                        _wdb.close()
+                                        logger.info('[Scheduler] 予測キャッシュ ウォームアップ完了')
+                                except Exception as _we:
+                                    logger.warning(f'[Scheduler] 予測キャッシュ ウォームアップエラー: {_we}')
+                            threading.Thread(target=_warmup, daemon=True).start()
+            except Exception as _e:
+                logger.warning(f'[Scheduler] FcWarmup: {_e}')
             # 毎日 設定時刻 に Open-Meteo から気温データを自動取得
             try:
                 try:

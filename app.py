@@ -1,5 +1,5 @@
 """在庫管理・自動発注システム"""
-import sys, os, csv, io, hashlib, hmac, threading, queue, json, time as _time, logging
+import sys, os, csv, io, hashlib, hmac, threading, queue, json, time as _time, logging, math
 
 # Windows CP932 環境でも UTF-8 で出力できるよう stdout/stderr を再設定
 if hasattr(sys.stdout, 'reconfigure'):
@@ -39,6 +39,7 @@ from auto_check import (run_order_check, run_expiry_check, run_csv_import,
                         get_pending_orders)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 _sk = os.getenv('SECRET_KEY', '')
 if not _sk:
     import warnings
@@ -91,6 +92,100 @@ def close_db(error):
             db.close()
         except Exception:
             pass
+
+
+# ── 予測キャッシュ & バックグラウンド事前計算 ──────────────────────────
+# ・TTL内は即座にメモリから返す（最速パス）
+# ・キャッシュ失効／無効化時は背景スレッドで再構築し、ユーザーを待たせない
+# ・起動時・CSV取込後にも背景スレッドで事前計算してウォームアップ
+_fc_lock      = threading.Lock()
+_fc_store:    dict  = {}           # {'rows': list, 'ts': datetime, 'mode_key': str}
+_FC_TTL       = 7200               # 2時間（最長キャッシュ有効期間）
+_fc_computing = False              # 背景計算進行中フラグ
+_fc_event     = threading.Event()  # 計算完了通知
+_fc_event.set()                    # 初期値: 「計算中でない」= set 済み
+
+_agg_lock    = threading.Lock()
+_agg_running = False               # sales_daily_agg 更新進行中フラグ
+
+
+def _refresh_sales_daily_agg(db):
+    """sales_history を日次集計して sales_daily_agg へ UPSERT（過去365日分）"""
+    db.execute("""
+        INSERT INTO sales_daily_agg (jan, sale_dt, dow, qty)
+        SELECT
+            jan,
+            sale_date::date                               AS sale_dt,
+            EXTRACT(ISODOW FROM sale_date::date)::int     AS dow,
+            SUM(quantity)                                 AS qty
+        FROM sales_history
+        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
+        GROUP BY jan, sale_date::date, EXTRACT(ISODOW FROM sale_date::date)::int
+        ON CONFLICT (jan, sale_dt) DO UPDATE
+            SET qty = EXCLUDED.qty, dow = EXCLUDED.dow
+    """)
+    db.commit()
+    logger.info('[PerfOpt] sales_daily_agg UPSERT 完了')
+
+
+def _bg_refresh_sales_daily_agg():
+    """バックグラウンドで sales_daily_agg を更新する（重複実行防止付き）"""
+    global _agg_running
+    with _agg_lock:
+        if _agg_running:
+            return
+        _agg_running = True
+    try:
+        from database import get_dsn, DBConn
+        import psycopg2 as _pg2
+        conn = _pg2.connect(**get_dsn(long_timeout=True))
+        conn.autocommit = False
+        _db = DBConn(conn)
+        _refresh_sales_daily_agg(_db)
+        _db.close()
+    except Exception as _e:
+        logger.warning(f'[PerfOpt] sales_daily_agg 更新エラー: {_e}')
+    finally:
+        with _agg_lock:
+            _agg_running = False
+
+
+def _bg_rebuild_forecast_cache():
+    """バックグラウンドで予測キャッシュを再構築（ユーザーを待たせない）"""
+    global _fc_computing, _fc_store
+    with _fc_lock:
+        if _fc_computing:
+            return
+        _fc_computing = True
+        _fc_event.clear()
+    try:
+        from database import get_dsn, DBConn
+        import psycopg2 as _pg2
+        conn = _pg2.connect(**get_dsn(long_timeout=True))
+        conn.autocommit = False
+        _db = DBConn(conn)
+        flags    = _get_forecast_feature_flags(_db)
+        mode_key = f"{flags['forecast_ai_mode']}_{flags['forecast_reorder_mode']}"
+        rows     = _build_forecast_rows_raw(_db, flags)
+        _db.close()
+        with _fc_lock:
+            _fc_store = {'rows': rows, 'ts': datetime.now(), 'mode_key': mode_key}
+        logger.info(f'[ForecastCache] 背景再構築完了: {len(rows)}商品')
+    except Exception as _e:
+        logger.warning(f'[ForecastCache] 背景再構築エラー: {_e}')
+    finally:
+        with _fc_lock:
+            _fc_computing = False
+        _fc_event.set()
+
+
+def invalidate_forecast_cache(background_refresh: bool = True):
+    """商品・在庫・設定変更時に呼び出してキャッシュを破棄し、背景で再構築する"""
+    global _fc_store
+    with _fc_lock:
+        _fc_store = {}
+    if background_refresh:
+        threading.Thread(target=_bg_rebuild_forecast_cache, daemon=True).start()
 
 
 # ── Blueprint 登録 ─────────────────────────────────────────────
@@ -255,13 +350,25 @@ def _abc_rank_from_ratio(ratio):
         return 'B'
     return 'C'
 
+def _get_settings_all(db) -> dict:
+    """settingsテーブルを丸ごとリクエストスコープでキャッシュ（1リクエスト中の重複クエリを防ぐ）"""
+    try:
+        if not hasattr(g, '_settings_cache'):
+            rows = db.execute("SELECT key, value FROM settings").fetchall()
+            g._settings_cache = {r['key']: (r['value'] or '') for r in rows}
+        return g._settings_cache
+    except RuntimeError:
+        # Flaskアプリコンテキスト外（スケジューラ等）ではキャッシュしない
+        rows = db.execute("SELECT key, value FROM settings").fetchall()
+        return {r['key']: (r['value'] or '') for r in rows}
+
+
 def _get_forecast_feature_flags(db):
+    s = _get_settings_all(db)
     # forecast_ai_mode: '1'=AIモードON(全機能) / '0'=前年実績モード(シンプル)
-    row_ai = db.execute("SELECT value FROM settings WHERE key=%s", ['forecast_ai_mode']).fetchone()
-    ai_mode = str(row_ai['value'] if row_ai else '1').strip() in ('1','true','True','on','yes')
+    ai_mode      = str(s.get('forecast_ai_mode', '1')).strip() in ('1','true','True','on','yes')
     # P2発注点モード: sf/p80/p90（AIモードON/OFF共通で有効）
-    row_rm = db.execute("SELECT value FROM settings WHERE key=%s", ['forecast_reorder_mode']).fetchone()
-    reorder_mode = (row_rm['value'] if row_rm else 'sf') or 'sf'
+    reorder_mode = s.get('forecast_reorder_mode', 'sf') or 'sf'
     return {
         'forecast_ai_mode':      ai_mode,
         'forecast_reorder_mode': reorder_mode,
@@ -270,7 +377,45 @@ def _get_forecast_feature_flags(db):
 
 
 def _build_forecast_rows(db, q=''):
-    flags = _get_forecast_feature_flags(db)
+    """キャッシュラッパー: TTL内ならメモリから即返却。背景計算中は完了を待機。"""
+    global _fc_store
+    flags    = _get_forecast_feature_flags(db)
+    mode_key = f"{flags['forecast_ai_mode']}_{flags['forecast_reorder_mode']}"
+    now      = datetime.now()
+
+    def _apply_q(rows):
+        if not q:
+            return rows
+        ql = q.strip().lower()
+        return [r for r in rows if any(ql in str(r.get(k) or '').lower()
+                                       for k in ('jan','product_cd','product_name','supplier_cd','supplier_name'))]
+
+    # ── 最速パス: キャッシュヒット ──────────────────────────────────────
+    with _fc_lock:
+        c = _fc_store
+        if (c and c.get('mode_key') == mode_key
+                and (now - c['ts']).total_seconds() < _FC_TTL):
+            return _apply_q(c['rows'])
+
+    # ── 背景スレッドが計算中なら最大 60 秒待つ ────────────────────────
+    if _fc_computing:
+        _fc_event.wait(timeout=60)
+        with _fc_lock:
+            c = _fc_store
+            if c and c.get('mode_key') == mode_key:
+                return _apply_q(c['rows'])
+
+    # ── フォールバック: 同期計算（通常は起動直後のごく短時間のみ）──────
+    rows = _build_forecast_rows_raw(db, flags)
+    with _fc_lock:
+        _fc_store = {'rows': rows, 'ts': datetime.now(), 'mode_key': mode_key}
+    return _apply_q(rows)
+
+
+def _build_forecast_rows_raw(db, flags=None):
+    """実際の予測計算（重いCTEクエリ）。キャッシュから呼び出されるため q フィルタなし"""
+    if flags is None:
+        flags = _get_forecast_feature_flags(db)
     ai_mode      = flags['forecast_ai_mode']      # True=AIモード / False=前年実績モード
     reorder_mode = flags['forecast_reorder_mode']  # sf/p80/p90
 
@@ -296,20 +441,44 @@ def _build_forecast_rows(db, q=''):
     else:
         _ly_map = {}
 
-    rows = db.execute("""
-        WITH daily AS (
+    # ── daily CTE のデータソースを選択 ───────────────────────────────────
+    # sales_daily_agg に直近7日分のデータがあれば使用（高速インデックス読み込み）
+    # なければ sales_history を直接スキャンしつつ、背景スレッドで集計テーブルを構築する
+    try:
+        _agg_cnt = db.execute(
+            "SELECT COUNT(*) AS c FROM sales_daily_agg "
+            "WHERE sale_dt >= CURRENT_DATE - INTERVAL '7 days'"
+        ).fetchone()['c']
+        _use_agg = int(_agg_cnt or 0) > 0
+    except Exception:
+        _use_agg = False
+
+    if _use_agg:
+        _daily_cte = """daily AS (
+            SELECT jan, sale_dt, dow, qty
+            FROM   sales_daily_agg
+            WHERE  sale_dt >= CURRENT_DATE - INTERVAL '180 days'
+        )"""
+    else:
+        # 初回起動 or 集計テーブル未構築 → sales_history を直接使い、背景で集計
+        threading.Thread(target=_bg_refresh_sales_daily_agg, daemon=True).start()
+        _daily_cte = """daily AS (
             SELECT sh.jan,
-                   sh.sale_date::date AS sale_dt,
-                   EXTRACT(ISODOW FROM sh.sale_date::date)::int AS dow,
-                   SUM(sh.quantity) AS qty
+                   sh.sale_date::date                            AS sale_dt,
+                   EXTRACT(ISODOW FROM sh.sale_date::date)::int  AS dow,
+                   SUM(sh.quantity)                              AS qty
             FROM sales_history sh
             WHERE sh.sale_date::date >= CURRENT_DATE - INTERVAL '180 days'
             GROUP BY sh.jan, sh.sale_date::date, dow
-        ), monthly AS (
+        )"""
+
+    rows = db.execute(f"""
+        WITH {_daily_cte},
+        monthly AS (
             SELECT jan,
                    EXTRACT(MONTH FROM sale_dt)::int AS mon,
-                   DATE_TRUNC('month', sale_dt) AS ym,
-                   SUM(qty) AS qty
+                   DATE_TRUNC('month', sale_dt)      AS ym,
+                   SUM(qty)                          AS qty
             FROM daily
             WHERE sale_dt >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '12 months'
             GROUP BY jan, mon, ym
@@ -318,9 +487,8 @@ def _build_forecast_rows(db, q=''):
             FROM monthly GROUP BY jan
         ), season AS (
             SELECT m.jan, m.mon,
-                   AVG(m.qty) AS mon_avg,
-                   a.avg_monthly,
-                   CASE WHEN COALESCE(a.avg_monthly,0)=0 THEN 1 ELSE AVG(m.qty)/a.avg_monthly END AS season_idx
+                   CASE WHEN COALESCE(a.avg_monthly,0)=0 THEN 1
+                        ELSE AVG(m.qty)/a.avg_monthly END AS season_idx
             FROM monthly m
             JOIN avg_all a ON a.jan=m.jan
             GROUP BY m.jan, m.mon, a.avg_monthly
@@ -330,7 +498,6 @@ def _build_forecast_rows(db, q=''):
             WHERE sale_dt >= CURRENT_DATE - INTERVAL '84 days'
             GROUP BY jan, dow
         ), wma_daily AS (
-            -- P1改善: 加重移動平均(WMA-30日) 直近ほど重視
             SELECT jan,
                    SUM(qty * day_weight) / NULLIF(SUM(day_weight), 0) AS avg_daily
             FROM (
@@ -341,54 +508,71 @@ def _build_forecast_rows(db, q=''):
             ) w
             GROUP BY jan
         ), base_daily AS (
-            -- WMAが取れない場合(データ不足)は従来の84日単純平均にフォールバック
             SELECT d.jan,
                    COALESCE(w.avg_daily, plain.avg_daily) AS avg_daily
             FROM (SELECT DISTINCT jan FROM daily) d
             LEFT JOIN wma_daily w ON w.jan = d.jan
             LEFT JOIN (
-                SELECT jan, AVG(qty) AS avg_daily
-                FROM daily
+                SELECT jan, AVG(qty) AS avg_daily FROM daily
                 WHERE sale_dt >= CURRENT_DATE - INTERVAL '84 days'
                 GROUP BY jan
             ) plain ON plain.jan = d.jan
-        ), dow_idx AS (
-            SELECT d.jan, d.dow,
-                   CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1 ELSE d.dow_qty / b.avg_daily END AS dow_idx
+        ), dow_pivot AS (
+            -- 7曜日インデックスを1回の GROUP BY で横展開（従来の7 LEFT JOIN を削減）
+            SELECT d.jan,
+                   COALESCE(MAX(CASE WHEN d.dow=1 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_1,
+                   COALESCE(MAX(CASE WHEN d.dow=2 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_2,
+                   COALESCE(MAX(CASE WHEN d.dow=3 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_3,
+                   COALESCE(MAX(CASE WHEN d.dow=4 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_4,
+                   COALESCE(MAX(CASE WHEN d.dow=5 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_5,
+                   COALESCE(MAX(CASE WHEN d.dow=6 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_6,
+                   COALESCE(MAX(CASE WHEN d.dow=7 THEN
+                       CASE WHEN COALESCE(b.avg_daily,0)=0 THEN 1.0
+                            ELSE d.dow_qty/b.avg_daily END END), 1.0) AS dow_idx_7
             FROM dow_avg d
-            JOIN base_daily b ON b.jan=d.jan
+            JOIN base_daily b ON b.jan = d.jan
+            GROUP BY d.jan
         ), stock AS (
             SELECT jan, SUM(quantity) AS stock_qty FROM stocks WHERE quantity>0 GROUP BY jan
         )
         SELECT p.id AS product_id, p.supplier_cd, p.supplier_name, p.product_cd, p.jan, p.product_name,
-               p.reorder_point, p.order_unit, p.order_qty, p.lead_time_days, p.safety_factor,
-               p.shelf_face_qty, p.shelf_replenish_point,
-               COALESCE(s.stock_qty,0) AS stock_qty,
-               ROUND(COALESCE(a.avg_monthly,0),1) AS avg_monthly,
-               ROUND(COALESCE(b.avg_daily,0),2) AS avg_daily,
-               ROUND(COALESCE(b.avg_daily,0),2) AS avg_daily_wma,
+               p.reorder_point, p.order_unit, p.order_qty, p.unit_qty, p.lead_time_days, p.safety_factor,
+               p.reorder_auto, p.shelf_face_qty, p.shelf_replenish_point,
+               COALESCE(s.stock_qty,0)              AS stock_qty,
+               ROUND(COALESCE(a.avg_monthly,0),1)   AS avg_monthly,
+               ROUND(COALESCE(b.avg_daily,0),2)     AS avg_daily,
+               ROUND(COALESCE(b.avg_daily,0),2)     AS avg_daily_wma,
                ROUND(COALESCE(se_this.season_idx,1),4) AS season_idx_this,
                ROUND(COALESCE(se_next.season_idx,1),4) AS season_idx_next,
-               ROUND(COALESCE(di1.dow_idx,1),4) AS dow_idx_1,
-               ROUND(COALESCE(di2.dow_idx,1),4) AS dow_idx_2,
-               ROUND(COALESCE(di3.dow_idx,1),4) AS dow_idx_3,
-               ROUND(COALESCE(di4.dow_idx,1),4) AS dow_idx_4,
-               ROUND(COALESCE(di5.dow_idx,1),4) AS dow_idx_5,
-               ROUND(COALESCE(di6.dow_idx,1),4) AS dow_idx_6,
-               ROUND(COALESCE(di7.dow_idx,1),4) AS dow_idx_7
+               ROUND(COALESCE(dp.dow_idx_1,1),4)   AS dow_idx_1,
+               ROUND(COALESCE(dp.dow_idx_2,1),4)   AS dow_idx_2,
+               ROUND(COALESCE(dp.dow_idx_3,1),4)   AS dow_idx_3,
+               ROUND(COALESCE(dp.dow_idx_4,1),4)   AS dow_idx_4,
+               ROUND(COALESCE(dp.dow_idx_5,1),4)   AS dow_idx_5,
+               ROUND(COALESCE(dp.dow_idx_6,1),4)   AS dow_idx_6,
+               ROUND(COALESCE(dp.dow_idx_7,1),4)   AS dow_idx_7
         FROM products p
-        LEFT JOIN avg_all a ON a.jan=p.jan
-        LEFT JOIN season se_this ON se_this.jan=p.jan AND se_this.mon=EXTRACT(MONTH FROM CURRENT_DATE)::int
-        LEFT JOIN season se_next ON se_next.jan=p.jan AND se_next.mon=EXTRACT(MONTH FROM CURRENT_DATE + INTERVAL '1 month')::int
-        LEFT JOIN base_daily b ON b.jan=p.jan
-        LEFT JOIN dow_idx di1 ON di1.jan=p.jan AND di1.dow=1
-        LEFT JOIN dow_idx di2 ON di2.jan=p.jan AND di2.dow=2
-        LEFT JOIN dow_idx di3 ON di3.jan=p.jan AND di3.dow=3
-        LEFT JOIN dow_idx di4 ON di4.jan=p.jan AND di4.dow=4
-        LEFT JOIN dow_idx di5 ON di5.jan=p.jan AND di5.dow=5
-        LEFT JOIN dow_idx di6 ON di6.jan=p.jan AND di6.dow=6
-        LEFT JOIN dow_idx di7 ON di7.jan=p.jan AND di7.dow=7
-        LEFT JOIN stock s ON s.jan=p.jan
+        LEFT JOIN avg_all   a        ON a.jan=p.jan
+        LEFT JOIN season    se_this  ON se_this.jan=p.jan
+                                    AND se_this.mon=EXTRACT(MONTH FROM CURRENT_DATE)::int
+        LEFT JOIN season    se_next  ON se_next.jan=p.jan
+                                    AND se_next.mon=EXTRACT(MONTH FROM CURRENT_DATE
+                                                            + INTERVAL '1 month')::int
+        LEFT JOIN base_daily b       ON b.jan=p.jan
+        LEFT JOIN dow_pivot  dp      ON dp.jan=p.jan
+        LEFT JOIN stock      s       ON s.jan=p.jan
         WHERE p.is_active=1
         ORDER BY p.supplier_cd, p.product_cd
     """).fetchall()
@@ -427,12 +611,8 @@ def _build_forecast_rows(db, q=''):
         pass
 
     out = []
-    q = (q or '').strip().lower()
     today = date.today()
     for r in rows:
-        if q and not any(q in str(r.get(k) or '').lower() for k in ('jan','product_cd','product_name','supplier_cd','supplier_name')):
-            continue
-
         r = dict(r)
 
         manual_adj = 1.0  # デフォルト値（前年実績モード時はP3無効のため1.0固定）
@@ -545,6 +725,23 @@ def _build_forecast_rows(db, q=''):
                 suggested_rp = int(max(0, next_daily * lt * sf + 0.9999))
                 rp_mode_label = 'SF'
 
+        # ロットサイズ考慮: order_unit / unit_qty の倍数に切り上げ
+        _order_unit = max(1, int(r.get('order_unit') or 1))
+        _unit_qty   = max(1, int(r.get('unit_qty')   or 1))
+
+        # 発注点: order_unit の倍数に切り上げ
+        if _order_unit > 1 and suggested_rp > 0:
+            suggested_rp = math.ceil(suggested_rp / _order_unit) * _order_unit
+        else:
+            suggested_rp = max(0, suggested_rp)
+
+        # 推奨発注数 = (LT + 14) × 日次予測 → unit_qty の倍数に切り上げ
+        raw_oq = max(0, next_daily * (lt + 14))
+        if _unit_qty > 1:
+            suggested_oq = max(_unit_qty, math.ceil(raw_oq / _unit_qty) * _unit_qty)
+        else:
+            suggested_oq = int(max(0, raw_oq + 0.9999))
+
         r['season_idx']         = round(season_idx_display, 2)
         r['avg_dow_idx']        = round(dow_idx_display, 2)
         r['manual_adj_factor']  = round(manual_adj, 2)          # P3
@@ -562,8 +759,7 @@ def _build_forecast_rows(db, q=''):
         r['p80_daily']          = p80_daily                     # P2
         r['p90_daily']          = p90_daily                     # P2
         r['daily_std']          = round(daily_std, 2) if daily_std is not None else None  # P2
-        # 推奨発注数 = (LT + 14) × 日次予測
-        r['suggested_order_qty']= int(max(0, next_daily * (lt + 14) + 0.9999))
+        r['suggested_order_qty']= suggested_oq
         out.append(r)
     return out
 
@@ -620,10 +816,15 @@ def _build_shortage_rows(db, q=''):
     inbound_rows = db.execute("""
         SELECT oh.jan,
                COALESCE(NULLIF(oh.expected_receipt_date,''), TO_CHAR((oh.order_date::date + (COALESCE(p.lead_time_days,3) || ' days')::interval)::date, 'YYYY-MM-DD')) AS eta,
-               GREATEST(oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0),0) AS outstanding_qty
+               GREATEST(oh.order_qty - COALESCE(rcpt.total_received, 0), 0) AS outstanding_qty
         FROM order_history oh
-        JOIN products p ON p.jan=oh.jan
-        WHERE GREATEST(oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0),0) > 0
+        JOIN products p ON p.jan = oh.jan
+        LEFT JOIN (
+            SELECT order_history_id, SUM(received_qty) AS total_received
+            FROM order_receipts
+            GROUP BY order_history_id
+        ) rcpt ON rcpt.order_history_id = oh.id
+        WHERE oh.order_qty - COALESCE(rcpt.total_received, 0) > 0
     """).fetchall()
     inbound = {}
     for r in inbound_rows:
@@ -655,9 +856,16 @@ def _build_shortage_rows(db, q=''):
 
     delay_rows = db.execute("""
         SELECT oh.jan,
-               COUNT(*) FILTER (WHERE GREATEST(oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0),0) > 0
-                                AND COALESCE(NULLIF(oh.expected_receipt_date,''), oh.order_date) < CURRENT_DATE::text) AS overdue_count
+               COUNT(*) FILTER (
+                   WHERE oh.order_qty - COALESCE(rcpt.total_received, 0) > 0
+                   AND COALESCE(NULLIF(oh.expected_receipt_date,''), oh.order_date) < CURRENT_DATE::text
+               ) AS overdue_count
         FROM order_history oh
+        LEFT JOIN (
+            SELECT order_history_id, SUM(received_qty) AS total_received
+            FROM order_receipts
+            GROUP BY order_history_id
+        ) rcpt ON rcpt.order_history_id = oh.id
         GROUP BY oh.jan
     """).fetchall()
     delay_map = {r['jan']: r for r in delay_rows}
@@ -1827,6 +2035,103 @@ def csv_run_month_end(sid):
     t.start()
     return redirect(url_for('csv_progress_page', job_id=job_id))
 
+@app.route('/csv/<int:sid>/reimport_month_end', methods=['POST'])
+@login_required
+def csv_reimport_month_end(sid):
+    """未登録商品スキップ分の月末月次CSV再取込（商品登録後に使用）"""
+    import uuid
+    job_id = str(uuid.uuid4())
+    target_ym = request.form.get('target_ym', '').strip()
+    if not (len(target_ym) == 6 and target_ym.isdigit()):
+        flash('対象年月(YYYYMM)が不正です。', 'error')
+        return redirect(url_for('csv_settings'))
+
+    def _run():
+        with _csv_lock:
+            _csv_progress[job_id] = []
+        def cb(ev):
+            _csv_progress_push(job_id, ev)
+        # all_dates=True で重複チェックをスキップ（row_hashで二重取込防止）
+        results = run_month_end_import(
+            setting_id=sid, target_ym=target_ym,
+            all_dates=False, progress_cb=cb,
+            trigger_type='manual'
+        )
+        # partial_skip ログを削除して再登録（再取込できるようにリセット）
+        _run.results = results
+        _csv_progress_push(job_id, {'phase': 'finished', 'results': results})
+
+    # 既存の partial_skip ログを削除して再取込可能にする
+    db = get_db()
+    ym_str = target_ym
+    try:
+        yr, mo = int(ym_str[:4]), int(ym_str[4:6])
+        import calendar as _cal2
+        last_day2 = _cal2.monthrange(yr, mo)[1]
+        from datetime import date as _date2
+        me_date2 = _date2(yr, mo, last_day2)
+        log_key_pat = f"month_end_{ym_str}_%"
+        db.execute(
+            "DELETE FROM import_logs WHERE setting_id=%s AND filename LIKE %s AND status='partial_skip'",
+            [sid, log_key_pat]
+        )
+        db.commit()
+    except Exception:
+        pass
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return redirect(url_for('csv_progress_page', job_id=job_id))
+
+@app.route('/csv/<int:sid>/reimport_daily', methods=['POST'])
+@login_required
+def csv_reimport_daily(sid):
+    """未登録商品スキップ分の日次CSV再取込（商品登録後に使用）"""
+    import uuid
+    filename = request.form.get('filename', '').strip()
+    if not filename:
+        flash('ファイル名が指定されていません。', 'error')
+        return redirect(url_for('csv_settings'))
+
+    job_id = str(uuid.uuid4())
+
+    def _run():
+        with _csv_lock:
+            _csv_progress[job_id] = []
+        def cb(ev):
+            _csv_progress_push(job_id, ev)
+        # partial_skip ログを削除して再取込可能にする
+        db2 = get_db()
+        try:
+            db2.execute(
+                "DELETE FROM import_logs WHERE setting_id=%s AND filename=%s AND status='partial_skip'",
+                [sid, filename]
+            )
+            db2.commit()
+        except Exception:
+            pass
+        # ファイル名から日付を推測して run_csv_import を呼ぶ
+        # ファイル名中の8桁数字を日付として使用
+        import re as _re
+        m = _re.search(r'(\d{4})(\d{2})(\d{2})', filename)
+        if m:
+            from datetime import date as _date3
+            try:
+                tdate = _date3(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                tdate = None
+        else:
+            tdate = None
+        results = run_csv_import(
+            setting_id=sid, target_date=tdate,
+            progress_cb=cb, trigger_type='manual', all_files=True
+        )
+        _csv_progress_push(job_id, {'phase': 'finished', 'results': results})
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return redirect(url_for('csv_progress_page', job_id=job_id))
+
 @app.route('/csv/run_all_month_end', methods=['POST'])
 def csv_run_all_month_end():
     """全設定の月末月次CSV手動取込"""
@@ -2177,6 +2482,7 @@ def stocktake_apply():
         applied += 1
 
     db.commit()
+    invalidate_forecast_cache()   # 在庫変更でカバー日数等が変わるためキャッシュ破棄
     flash(f'棚卸差異を在庫に反映しました（{applied}件）。', 'success')
     return redirect(url_for('stocktake', date=count_date))
 
@@ -2577,15 +2883,6 @@ def expiry_check():
     else:
         flash('期限アラートなし。', 'success')
     return redirect(url_for('reports'))
-
-@app.route('/reorder_update', methods=['POST'])
-@login_required
-def reorder_update():
-    n = update_reorder_points()
-    flash(f'発注点を前年実績ベースで更新しました（{n}件）。', 'success')
-    return redirect(url_for('products.products'))
-
-
 
 # ─── ユーザー管理（管理者専用）────────────────────────────────────
 @app.route('/users')
@@ -3341,6 +3638,7 @@ def settings():
     forecast_flags = {
         'forecast_ai_mode':      get_setting('forecast_ai_mode', 1),
         'forecast_reorder_mode': get_setting('forecast_reorder_mode', 'sf'),
+        'reorder_auto_mode':     get_setting('reorder_auto_mode', 'ai'),
         'safety_level_z':        get_setting('safety_level_z', '1.65'),
         'abc_a_threshold':       get_setting('abc_a_threshold', '0.70'),
         'abc_b_threshold':       get_setting('abc_b_threshold', '0.90'),
@@ -3407,6 +3705,7 @@ def settings_save():
         ('product_setting_template_name', '商品CD設定_テンプレート'),
         ('forecast_ai_mode', 1),
         ('forecast_reorder_mode', 'sf'),
+        ('reorder_auto_mode', 'ai'),
         ('safety_level_z', '1.65'),
         ('abc_a_threshold', '0.70'),
         ('abc_b_threshold', '0.90'),
@@ -3422,6 +3721,8 @@ def settings_save():
             raw = '1' if f.get(key) else '0'
         elif key == 'forecast_reorder_mode':
             raw = f.get(key, 'sf') or 'sf'
+        elif key == 'reorder_auto_mode':
+            raw = f.get(key, 'ai') or 'ai'
         else:
             raw = f.get(key, default) or default
         if key in int_keys:
@@ -3442,6 +3743,7 @@ def settings_save():
         else:
             db.execute("INSERT INTO settings (key, value) VALUES (%s,%s)", [key, val])
     db.commit()
+    invalidate_forecast_cache()   # 設定変更でモードが変わる可能性があるためキャッシュ破棄
     flash('設定を保存しました。再起動後に反映されます。', 'success')
     return redirect(url_for('settings'))
 
@@ -3563,6 +3865,7 @@ def reports_forecast_apply():
                 if i % 50 == 0 or i == total:
                     _csv_progress_push(job_id, {'phase': 'progress', 'current': i, 'total': total, 'ok': updated, 'skip': 0, 'err': i - updated})
             db.commit()
+            invalidate_forecast_cache()   # 発注点/発注数更新後にキャッシュを破棄
             _csv_progress_push(job_id, {'phase': 'done', 'file': '需要予測 一括反映', 'ok': updated, 'skip': 0, 'err': 0,
                                         'detail': f'{updated}/{total}件 更新完了'})
         except Exception as e:
@@ -4083,6 +4386,14 @@ if __name__ == '__main__':
         start_scheduler()
     except Exception as e:
         logger.warning(f"  [WARN] Scheduler failed to start: {e}")
+    # ── 起動時バックグラウンドウォームアップ ──────────────────────────────
+    # DB接続成功後のみ実行。ユーザーの最初のアクセスまでにキャッシュを温める
+    try:
+        threading.Thread(target=_bg_refresh_sales_daily_agg,  daemon=True).start()
+        threading.Thread(target=_bg_rebuild_forecast_cache,    daemon=True).start()
+        logger.info("  [PerfOpt] バックグラウンドで予測キャッシュ・集計テーブルをウォームアップ中...")
+    except Exception as _we:
+        logger.warning(f"  [WARN] Warmup start failed: {_we}")
     logger.info(f"  Starting web server on port {port}...")
     logger.info(f"  Open browser: http://localhost:{port}")
     logger.info("  Press Ctrl+C to stop\n")

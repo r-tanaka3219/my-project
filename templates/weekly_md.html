@@ -2,7 +2,7 @@
 {% block title %}52週MDプラン{% endblock %}
 {% block content %}
 <style>
-.week-cell{width:52px;min-width:52px;text-align:center;font-size:11px;padding:4px 2px !important}
+.week-cell{width:52px;min-width:52px;text-align:center;font-size:11px;padding:4px 2px !important;white-space:nowrap}
 .week-plan{color:#1e40af;font-weight:600}
 .week-actual{color:#166534}
 .week-ach{font-size:10px}
@@ -11,10 +11,63 @@
 .ach-bad{color:#dc2626}
 .current-week{background:#fef9c3 !important}
 .year-nav{display:flex;gap:8px;align-items:center}
-/* 固定列（横スクロール時に左に固定） */
-.col-fix-1,.col-fix-2,.col-fix-3{position:sticky;background:#fff;z-index:2;overflow:hidden;text-overflow:ellipsis}
-thead .col-fix-1,thead .col-fix-2,thead .col-fix-3{background:#f8fafc;z-index:3}
-.col-fix-3{border-right:2px solid #e2e8f0 !important}
+
+/* ── 固定列 ── */
+.col-fix-1,.col-fix-2,.col-fix-3{
+  position:sticky;
+  background:#fff;
+  z-index:2;
+}
+.col-fix-3{border-right:2px solid #cbd5e1 !important}
+
+/* ── テーブルラッパー：画面内でスクロール ── */
+.weekly-md-wrap{
+  max-height:calc(100vh - 260px);
+  overflow:auto;
+  border:1px solid #e2e8f0;
+  border-radius:6px;
+}
+/* スクロールバーを常に表示（macOSで消えないよう） */
+.weekly-md-wrap::-webkit-scrollbar{height:10px;width:10px}
+.weekly-md-wrap::-webkit-scrollbar-track{background:#f1f5f9;border-radius:4px}
+.weekly-md-wrap::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px}
+.weekly-md-wrap::-webkit-scrollbar-thumb:hover{background:#64748b}
+.weekly-md-wrap::-webkit-scrollbar-corner{background:#f1f5f9}
+
+/* ── ヘッダー行を縦スクロール時に固定 ── */
+.weekly-md-wrap thead th{
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:#f8fafc;
+}
+/* ヘッダーの固定列：横・縦どちらのスクロールでも最前面 */
+.weekly-md-wrap thead .col-fix-1,
+.weekly-md-wrap thead .col-fix-2,
+.weekly-md-wrap thead .col-fix-3{
+  z-index:5;
+  background:#f8fafc;
+}
+
+/* ── 固定列のtd ── */
+.weekly-md-wrap tbody .col-fix-1,
+.weekly-md-wrap tbody .col-fix-2,
+.weekly-md-wrap tbody .col-fix-3{
+  background:#fff;
+  z-index:2;
+}
+.weekly-md-wrap tbody tr:hover .col-fix-1,
+.weekly-md-wrap tbody tr:hover .col-fix-2,
+.weekly-md-wrap tbody tr:hover .col-fix-3{
+  background:#ffedd5;
+}
+
+/* ── テーブル本体はスクロール内で自然幅 ── */
+.weekly-md-wrap table{
+  width:auto !important;
+  min-width:100%;
+  border-collapse:collapse;
+}
 </style>
 
 <div class="page-title">
@@ -60,14 +113,14 @@ thead .col-fix-1,thead .col-fix-2,thead .col-fix-3{background:#f8fafc;z-index:3}
 </div>
 
 {% if prod_list %}
-<div class="card">
-  <div class="table-wrap">
+<div class="card" style="padding:8px 12px">
+  <div class="weekly-md-wrap">
     <table>
       <thead>
         <tr>
-          <th class="col-fix-1" style="left:0;width:95px;min-width:95px;max-width:95px">仕入先</th>
-          <th class="col-fix-2" style="left:95px;width:85px;min-width:85px;max-width:85px">商品CD / JAN</th>
-          <th class="col-fix-3" style="left:180px;width:200px;min-width:200px;max-width:200px">商品名</th>
+          <th class="col-fix-1" style="left:0;width:120px;min-width:120px;max-width:120px">仕入先</th>
+          <th class="col-fix-2" style="left:120px;width:140px;min-width:140px;max-width:140px">商品CD / JAN</th>
+          <th class="col-fix-3" style="left:260px;width:220px;min-width:220px;max-width:220px">商品名</th>
           {% for w in weeks %}
           <th class="week-cell {% if w == current_week %}current-week{% endif %}">
             W{{ w }}{% if w == current_week %}<br><span style="font-size:9px;color:#92400e">今週</span>{% endif %}
@@ -78,9 +131,17 @@ thead .col-fix-1,thead .col-fix-2,thead .col-fix-3{background:#f8fafc;z-index:3}
       <tbody>
       {% for p in prod_list %}
       <tr>
-        <td class="col-fix-1" style="left:0;width:95px;min-width:95px;max-width:95px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.supplier_cd }}<br><span style="color:#6b7280">{{ p.supplier_name|truncate(10,true,'…') }}</span></td>
-        <td class="col-fix-2" style="left:95px;width:85px;min-width:85px;max-width:85px;font-size:11px;overflow:hidden;white-space:nowrap">{{ p.product_cd }}<br><span style="color:#6b7280;font-size:10px">{{ p.jan }}</span></td>
-        <td class="col-fix-3" style="left:180px;width:200px;min-width:200px;max-width:200px;font-size:11px">{{ p.product_name|truncate(22,true,'…') }}</td>
+        <td class="col-fix-1" style="left:0;width:120px;min-width:120px;max-width:120px;font-size:11px;word-break:break-all">
+          <span style="font-family:monospace;color:#374151">{{ p.supplier_cd }}</span><br>
+          <span style="color:#6b7280">{{ p.supplier_name }}</span>
+        </td>
+        <td class="col-fix-2" style="left:120px;width:140px;min-width:140px;max-width:140px;font-size:11px;font-family:monospace;white-space:nowrap;overflow:hidden">
+          {{ p.product_cd }}<br>
+          <span style="color:#6b7280;font-size:10px;letter-spacing:0">{{ p.jan }}</span>
+        </td>
+        <td class="col-fix-3" style="left:260px;width:220px;min-width:220px;max-width:220px;font-size:11px;word-break:break-all">
+          {{ p.product_name }}
+        </td>
         {% for w in weeks %}
         {% set wd = p.weeks.get(w, {}) %}
         <td class="week-cell {% if w == current_week %}current-week{% endif %}">

@@ -497,6 +497,45 @@ _MIGRATIONS = [
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_product_cd_settings ON product_cd_settings(chain_cd, store_cd, COALESCE(product_cd,''), COALESCE(jan,''))",
     # mail_recipients に仕入先CD列追加
     "ALTER TABLE mail_recipients ADD COLUMN IF NOT EXISTS supplier_cd TEXT DEFAULT ''",
+
+    # 発注点自動更新モード設定（'ai'=AIモード / 'ly'=前年実績モード）
+    "INSERT INTO settings(key,value) SELECT 'reorder_auto_mode','ai' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='reorder_auto_mode')",
+
+    # ─── 売上日次事前集計テーブル（予測クエリ高速化）────────────────────────
+    # sales_history を日次集計済みにしておくことで、予測CTEのスキャン量を激減させる
+    """CREATE TABLE IF NOT EXISTS sales_daily_agg (
+        jan     TEXT    NOT NULL,
+        sale_dt DATE    NOT NULL,
+        dow     INTEGER NOT NULL,
+        qty     NUMERIC NOT NULL DEFAULT 0,
+        PRIMARY KEY (jan, sale_dt)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_sda_sale_dt ON sales_daily_agg(sale_dt DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_sda_jan     ON sales_daily_agg(jan)",
+
+    # ─── パフォーマンス最適化: 主要テーブルにインデックスを追加 ──────────────
+    # sales_history: 売上集計・予測計算で最もスキャン頻度が高いテーブル
+    "CREATE INDEX IF NOT EXISTS ix_sales_history_jan         ON sales_history(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_sales_history_sale_date   ON sales_history(sale_date DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_sales_history_jan_date    ON sales_history(jan, sale_date DESC)",
+    # stocks: 在庫集計・予測用
+    "CREATE INDEX IF NOT EXISTS ix_stocks_jan                ON stocks(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_stocks_jan_qty            ON stocks(jan, quantity) WHERE quantity > 0",
+    # order_receipts: 相関サブクエリ → JOIN で使用
+    "CREATE INDEX IF NOT EXISTS ix_order_receipts_order_id   ON order_receipts(order_history_id)",
+    # order_history: 欠品・遅延チェックで使用
+    "CREATE INDEX IF NOT EXISTS ix_order_history_jan         ON order_history(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_order_history_date        ON order_history(order_date DESC)",
+    # products: is_active フィルタ・仕入先ソートで使用
+    "CREATE INDEX IF NOT EXISTS ix_products_is_active        ON products(is_active) WHERE is_active=1",
+    "CREATE INDEX IF NOT EXISTS ix_products_supplier_cd      ON products(supplier_cd)",
+    # 52週MDプラン・販促・受注予定
+    "CREATE INDEX IF NOT EXISTS ix_weekly_md_plans_jan_year  ON weekly_md_plans(jan, fiscal_year)",
+    "CREATE INDEX IF NOT EXISTS ix_promotion_plans_jan_date  ON promotion_plans(jan, promo_date)",
+    "CREATE INDEX IF NOT EXISTS ix_demand_plans_jan_date     ON demand_plans(jan, demand_date)",
+    # 気温データ・感応度
+    "CREATE INDEX IF NOT EXISTS ix_weather_data_obs_date     ON weather_data(obs_date DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_temp_sensitivity_jan      ON temp_sensitivity(jan)",
 ]
 
 def migrate_db():

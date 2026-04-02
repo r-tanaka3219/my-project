@@ -248,11 +248,9 @@ def weekly_md():
 
     # 商品ごとに週次データを集約
     products_md: dict = {}
-    weeks_set: set = set()
     for r in rows:
         jan = r['jan']
         wn  = int(r['week_no'])
-        weeks_set.add(wn)
         if jan not in products_md:
             products_md[jan] = {
                 'jan': jan, 'product_cd': r['product_cd'],
@@ -266,7 +264,8 @@ def weekly_md():
             'actual': int(r['actual_qty'] or 0),
         }
 
-    weeks = sorted(weeks_set)
+    # 検索絞り込みに関わらず W1〜W52 を常に全列表示
+    weeks     = list(range(1, 53))
     prod_list = sorted(products_md.values(), key=lambda x: (x['supplier_cd'], x['product_cd']))
 
     return render_template('weekly_md.html',
