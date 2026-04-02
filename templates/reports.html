@@ -286,51 +286,27 @@
   </div>
 </div>
 
-{# ══ ⑧前年実績 ══ #}
+{# ══ ⑧前年実績（AJAX遅延ロード）══ #}
 <div id="pane-sales" class="card" style="display:none">
   <div class="card-title">
   <div class="card-toolbar">
     <span>📈 前年実績（{{ last_year }}年）月別売上数量</span>
     <div class="right">
-      <form method="get" class="filter-form" style="grid-template-columns:minmax(220px,1fr) auto auto;margin:0">
+      <form method="get" class="filter-form" id="sales-search-form" style="grid-template-columns:minmax(220px,1fr) auto auto;margin:0">
         <input type="hidden" name="tab" value="sales">
-        <input type="hidden" name="sales_mode" value="{{ sales_mode }}">
-        <input type="text" name="sales_q" value="{{ sales_q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
-        <button type="submit" class="btn btn-outline btn-sm">🔍</button>
-        {% if sales_q %}<a href="?tab=sales&sales_mode={{ sales_mode }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
+        <input type="hidden" name="sales_mode" id="sales-mode-input" value="{{ sales_mode }}">
+        <input type="text" id="sales-q-input" name="sales_q" value="{{ sales_q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
+        <button type="button" onclick="loadSalesData(true)" class="btn btn-outline btn-sm">🔍</button>
+        {% if sales_q %}<button type="button" onclick="clearSalesSearch()" class="btn btn-outline btn-sm">✕</button>{% endif %}
       </form>
-      <a href="?tab=sales&sales_mode=master{% if sales_q %}&sales_q={{ sales_q }}{% endif %}" onclick="switchTab('sales')" class="btn btn-sm {% if sales_mode=='master' %}btn-primary{% else %}btn-outline{% endif %}">📦 商品マスタのみ</a>
-      <a href="?tab=sales&sales_mode=all{% if sales_q %}&sales_q={{ sales_q }}{% endif %}" onclick="switchTab('sales')" class="btn btn-sm {% if sales_mode=='all' %}btn-primary{% else %}btn-outline{% endif %}">📋 全件表示</a>
+      <button type="button" onclick="setSalesMode('master')" id="btn-sales-master" class="btn btn-sm {% if sales_mode=='master' %}btn-primary{% else %}btn-outline{% endif %}">📦 商品マスタのみ</button>
+      <button type="button" onclick="setSalesMode('all')"    id="btn-sales-all"    class="btn btn-sm {% if sales_mode=='all' %}btn-primary{% else %}btn-outline{% endif %}">📋 全件表示</button>
     </div>
   </div>
 </div>
-  {% if sales_summary %}
-  {% set months = ['01','02','03','04','05','06','07','08','09','10','11','12'] %}
-  <div class="table-wrap">
-<table style="table-layout:auto;width:100%;font-size:12px"><thead><tr>
-    <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:65px">商品CD</th><th style="min-width:120px">JAN</th><th style="min-width:160px;max-width:240px;width:180px">商品名</th>
-    {% for m in months %}<th class="text-right" style="min-width:60px">{{ m }}月</th>{% endfor %}
-    <th class="text-right" style="min-width:50px">合計</th>
-  </tr></thead><tbody>
-  {% for jan, rows in sales_grouped.items() %}
-  {% set row_dict = {} %}
-  {% for r in rows %}{% set _ = row_dict.update({r.month: r.total}) %}{% endfor %}
-  {% set first_row = rows|first %}
-  <tr>
-    <td style="font-family:monospace;font-size:11px">{{ first_row.supplier_cd or '-' }}</td>
-    <td style="font-size:11px">{{ first_row.supplier_name or '-' }}</td>
-    <td style="font-family:monospace;font-size:11px">{{ first_row.product_cd or '-' }}</td>
-    <td style="font-family:monospace;font-size:11px">{{ jan }}</td>
-    <td>{{ first_row.product_name }}</td>
-    {% for m in months %}
-    <td class="text-right">{{ '{:,}'.format(row_dict[m]|int) if row_dict.get(m) else '' }}</td>
-    {% endfor %}
-    <td class="text-right" style="font-weight:bold">{{ '{:,}'.format(rows|sum(attribute='total')|int) }}</td>
-  </tr>
-  {% endfor %}
-  </tbody></table>
-</div><!-- /table-wrap -->
-  {% else %}<p style="color:#9ca3af;padding:20px 0">{{ last_year }}年の実績データなし</p>{% endif %}
+  <div id="sales-table-container">
+    <p style="color:#9ca3af;padding:20px 0;text-align:center">⏳ データを読み込み中...</p>
+  </div>
 </div>
 
 {# ══ ⑨発注設定確認 ══ #}
@@ -413,6 +389,7 @@
 </div>
 
 <script>
+// ── タブ切替 ──────────────────────────────────────────────────────────
 function switchTab(tab) {
   const tabs = ['stock','expiry','low','zero','supplier','order','loss','sales','order_settings'];
   tabs.forEach(t => {
@@ -421,12 +398,90 @@ function switchTab(tab) {
     btn.style.color = t === tab ? '#1d4ed8' : '#6b7280';
     btn.style.borderBottom = t === tab ? '2px solid #1d4ed8' : '2px solid transparent';
   });
+  if (tab === 'sales') loadSalesData(false);
 }
-// URLパラメータでタブを自動切替
+
+// ── 前年実績 AJAX ─────────────────────────────────────────────────────
+let _salesLoaded = false;
+let _salesMode   = '{{ sales_mode }}';
+let _salesQ      = '{{ sales_q | e }}';
+
+function loadSalesData(forceReload) {
+  if (_salesLoaded && !forceReload) return;
+  _salesLoaded = true;
+  _salesQ    = document.getElementById('sales-q-input')   ? document.getElementById('sales-q-input').value   : _salesQ;
+  _salesMode = document.getElementById('sales-mode-input') ? document.getElementById('sales-mode-input').value : _salesMode;
+
+  const container = document.getElementById('sales-table-container');
+  container.innerHTML = '<p style="color:#9ca3af;padding:20px 0;text-align:center">⏳ データを読み込み中...</p>';
+
+  fetch('/reports/sales_data?mode=' + encodeURIComponent(_salesMode) + '&q=' + encodeURIComponent(_salesQ))
+    .then(r => r.json())
+    .then(data => {
+      if (!data.rows || data.rows.length === 0) {
+        container.innerHTML = '<p style="color:#9ca3af;padding:20px 0">' + data.year + '年の実績データなし</p>';
+        return;
+      }
+      const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+      let html = '<div class="table-wrap"><table style="table-layout:auto;width:100%;font-size:12px"><thead><tr>';
+      html += '<th style="min-width:70px">仕入先CD</th>';
+      html += '<th style="min-width:90px;max-width:150px">仕入先名</th>';
+      html += '<th style="min-width:65px">商品CD</th>';
+      html += '<th style="min-width:120px">JAN</th>';
+      html += '<th style="min-width:160px;max-width:240px">商品名</th>';
+      months.forEach(m => { html += '<th class="text-right" style="min-width:55px">' + m + '月</th>'; });
+      html += '<th class="text-right" style="min-width:55px">合計</th></tr></thead><tbody>';
+
+      data.rows.forEach(r => {
+        html += '<tr>';
+        html += '<td style="font-family:monospace;font-size:11px">' + esc(r.supplier_cd  || '-') + '</td>';
+        html += '<td style="font-size:11px">'                       + esc(r.supplier_name || '-') + '</td>';
+        html += '<td style="font-family:monospace;font-size:11px">' + esc(r.product_cd   || '-') + '</td>';
+        html += '<td style="font-family:monospace;font-size:11px">' + esc(r.jan)                  + '</td>';
+        html += '<td>'                                               + esc(r.product_name || '')   + '</td>';
+        months.forEach(m => {
+          const v = r.months[m];
+          html += '<td class="text-right">' + (v ? v.toLocaleString() : '') + '</td>';
+        });
+        html += '<td class="text-right" style="font-weight:bold">' + (r.total || 0).toLocaleString() + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<p style="color:#9ca3af;font-size:12px;margin-top:6px">' + data.count.toLocaleString() + '商品 / ' + data.year + '年実績</p>';
+      container.innerHTML = html;
+    })
+    .catch(e => {
+      _salesLoaded = false;
+      container.innerHTML = '<p style="color:#dc2626;padding:20px 0">読み込みエラー: ' + e.message + '</p>';
+    });
+}
+
+function setSalesMode(mode) {
+  _salesMode = mode;
+  document.getElementById('sales-mode-input').value = mode;
+  document.getElementById('btn-sales-master').className = 'btn btn-sm ' + (mode === 'master' ? 'btn-primary' : 'btn-outline');
+  document.getElementById('btn-sales-all').className    = 'btn btn-sm ' + (mode === 'all'    ? 'btn-primary' : 'btn-outline');
+  _salesLoaded = false;
+  loadSalesData(true);
+}
+
+function clearSalesSearch() {
+  document.getElementById('sales-q-input').value = '';
+  _salesQ = '';
+  _salesLoaded = false;
+  loadSalesData(true);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── URLパラメータでタブを自動切替 ────────────────────────────────────
 (function() {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab');
   if (tab) switchTab(tab);
+  else if ('{{ sales_q }}') { switchTab('sales'); }
 })();
 </script>
 {% endblock %}

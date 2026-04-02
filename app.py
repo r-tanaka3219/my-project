@@ -100,7 +100,7 @@ def close_db(error):
 # ・起動時・CSV取込後にも背景スレッドで事前計算してウォームアップ
 _fc_lock      = threading.Lock()
 _fc_store:    dict  = {}           # {'rows': list, 'ts': datetime, 'mode_key': str}
-_FC_TTL       = 7200               # 2時間（最長キャッシュ有効期間）
+_FC_TTL       = 86400              # 24時間（サーバー再起動がなければほぼ再計算不要）
 _fc_computing = False              # 背景計算進行中フラグ
 _fc_event     = threading.Event()  # 計算完了通知
 _fc_event.set()                    # 初期値: 「計算中でない」= set 済み
@@ -430,13 +430,15 @@ def _build_forecast_rows_raw(db, flags=None):
         _last_year  = _today.year - 1
         _this_month = _today.month
         _days_in_month = _cal.monthrange(_last_year, _this_month)[1]
+        # sale_date は TEXT 型 'YYYY-MM-DD' → キャスト不要で文字列 BETWEEN により ix_sales_history_sale_date を使用
+        _ly_start = f'{_last_year}-{_this_month:02d}-01'
+        _ly_end   = f'{_last_year}-{_this_month:02d}-{_days_in_month:02d}'
         _ly_rows = db.execute("""
             SELECT jan, COALESCE(SUM(quantity),0) AS total_qty
             FROM sales_history
-            WHERE to_char(sale_date::date,'YYYY')=%s
-              AND to_char(sale_date::date,'MM')=%s
+            WHERE sale_date BETWEEN %s AND %s
             GROUP BY jan
-        """, [str(_last_year), f"{_this_month:02d}"]).fetchall()
+        """, [_ly_start, _ly_end]).fetchall()
         _ly_map = {r['jan']: float(r['total_qty'] or 0) / _days_in_month for r in _ly_rows}
     else:
         _ly_map = {}
@@ -582,21 +584,23 @@ def _build_forecast_rows_raw(db, flags=None):
     reorder_mode = flags.get('forecast_reorder_mode', 'sf')  # P2: 'sf'/'p80'/'p90'
 
     # P2: 分位点計算のために過去30日の日次売上を取得
+    # sale_date は TEXT 型 → ::date キャストを除去し文字列比較でインデックスを活用
     quantile_map = {}
+    _q30_start = (date.today() - timedelta(days=30)).strftime('%Y-%m-%d')
     try:
         qrows = db.execute("""
             SELECT jan,
                    array_agg(qty ORDER BY sale_dt) AS daily_qtys
             FROM (
                 SELECT jan,
-                       sale_date::date AS sale_dt,
+                       sale_date AS sale_dt,
                        SUM(quantity) AS qty
                 FROM sales_history
-                WHERE sale_date::date >= CURRENT_DATE - INTERVAL '30 days'
-                GROUP BY jan, sale_date::date
+                WHERE sale_date >= %s
+                GROUP BY jan, sale_date
             ) d
             GROUP BY jan
-        """).fetchall()
+        """, [_q30_start]).fetchall()
         for qr in qrows:
             qtys = sorted([int(x) for x in (qr['daily_qtys'] or []) if x is not None])
             if len(qtys) >= 5:  # 前日データのみ取込環境を考慮して5件以上で算出
@@ -2799,63 +2803,11 @@ def reports():
         ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST
     """).fetchall()
 
-    # ⑪ 前年実績サマリー
-    last_year = today.year - 1
-    sales_mode = request.args.get('sales_mode', 'master')  # master=商品マスタのみ / all=全件
-    sales_q = request.args.get('sales_q', '').strip()
-    if sales_mode == 'all':
-        sales_summary = db.execute("""
-            SELECT sh.jan,
-                   COALESCE(p.product_name, sh.product_name, sh.jan) as product_name,
-                   COALESCE(p.supplier_cd, '') as supplier_cd,
-                   COALESCE(p.supplier_name, '') as supplier_name,
-                   COALESCE(p.product_cd, '') as product_cd,
-                   to_char(sh.sale_date::date,'MM') as month,
-                   SUM(sh.quantity) as total
-            FROM sales_history sh
-            LEFT JOIN products p ON sh.jan = p.jan AND p.is_active = 1
-            WHERE to_char(sh.sale_date::date,'YYYY')=%s
-            GROUP BY sh.jan, p.product_name, sh.product_name,
-                     p.supplier_cd, p.supplier_name, p.product_cd, month
-            ORDER BY CAST(NULLIF(regexp_replace(COALESCE(p.supplier_cd,''),'[^0-9]','','g'),'') AS BIGINT) NULLS LAST,
-                     CAST(NULLIF(regexp_replace(COALESCE(p.product_cd,''),'[^0-9]','','g'),'') AS BIGINT) NULLS LAST,
-                     sh.jan, month
-        """, [str(last_year)]).fetchall()
-    else:
-        # 商品マスタに存在するアイテムのみ
-        sales_summary = db.execute("""
-            SELECT sh.jan,
-                   p.product_name,
-                   p.supplier_cd,
-                   p.supplier_name,
-                   p.product_cd,
-                   to_char(sh.sale_date::date,'MM') as month,
-                   SUM(sh.quantity) as total
-            FROM sales_history sh
-            INNER JOIN products p ON sh.jan = p.jan AND p.is_active = 1
-            WHERE to_char(sh.sale_date::date,'YYYY')=%s
-            GROUP BY sh.jan, p.product_name, p.supplier_cd, p.supplier_name, p.product_cd, month
-            ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST,
-                     CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST,
-                     sh.jan, month
-        """, [str(last_year)]).fetchall()
-    if sales_q:
-        sql = sales_q.lower()
-        sales_summary = [r for r in sales_summary if
-                         sql in (r['jan'] or '').lower()
-                         or sql in (r['product_cd'] or '').lower()
-                         or sql in (r['product_name'] or '').lower()
-                         or sql in (r['supplier_cd'] or '').lower()
-                         or sql in (r['supplier_name'] or '').lower()]
-
-    # groupby('jan')はアルファベット順になるためPython側でグループ化（順序維持）
-    from collections import OrderedDict
-    sales_grouped = OrderedDict()
-    for r in sales_summary:
-        jan = r['jan']
-        if jan not in sales_grouped:
-            sales_grouped[jan] = []
-        sales_grouped[jan].append(dict(r))
+    # ⑪ 前年実績サマリーは AJAX で遅延ロード（/reports/sales_data）
+    # → ページ初期表示時に重いクエリを実行せず、即座にレンダリング
+    last_year  = today.year - 1
+    sales_mode = request.args.get('sales_mode', 'master')
+    sales_q    = request.args.get('sales_q', '').strip()
 
     return render_template('reports.html',
         expiry_soon=expiry_soon,
@@ -2868,10 +2820,87 @@ def reports():
         loss_supplier=loss_supplier,
         stock_total=stock_total,
         order_settings=order_settings,
-        sales_summary=sales_summary,
         last_year=last_year, today=today,
-        sales_mode=sales_mode, q=q, sales_q=sales_q,
-        sales_grouped=sales_grouped)
+        sales_mode=sales_mode, q=q, sales_q=sales_q)
+
+
+@app.route('/reports/sales_data')
+@permission_required('reports')
+def reports_sales_data():
+    """前年実績サマリーを JSON で返す AJAX エンドポイント。
+    sale_date は TEXT 型 'YYYY-MM-DD' → BETWEEN で文字列比較しインデックスを活用。"""
+    db = get_db()
+    today      = date.today()
+    last_year  = today.year - 1
+    sales_mode = request.args.get('mode', 'master')
+    sales_q    = request.args.get('q', '').strip()
+
+    yr_start = f'{last_year}-01-01'
+    yr_end   = f'{last_year}-12-31'
+
+    if sales_mode == 'all':
+        rows = db.execute("""
+            SELECT sh.jan,
+                   COALESCE(p.product_name, sh.product_name, sh.jan) AS product_name,
+                   COALESCE(p.supplier_cd,   '') AS supplier_cd,
+                   COALESCE(p.supplier_name, '') AS supplier_name,
+                   COALESCE(p.product_cd,    '') AS product_cd,
+                   SUBSTRING(sh.sale_date, 6, 2) AS month,
+                   SUM(sh.quantity) AS total
+            FROM sales_history sh
+            LEFT JOIN products p ON sh.jan = p.jan AND p.is_active = 1
+            WHERE sh.sale_date BETWEEN %s AND %s
+            GROUP BY sh.jan, p.product_name, sh.product_name,
+                     p.supplier_cd, p.supplier_name, p.product_cd, month
+            ORDER BY supplier_cd, product_cd, sh.jan, month
+        """, [yr_start, yr_end]).fetchall()
+    else:
+        rows = db.execute("""
+            SELECT sh.jan,
+                   p.product_name,
+                   p.supplier_cd,
+                   p.supplier_name,
+                   p.product_cd,
+                   SUBSTRING(sh.sale_date, 6, 2) AS month,
+                   SUM(sh.quantity) AS total
+            FROM sales_history sh
+            INNER JOIN products p ON sh.jan = p.jan AND p.is_active = 1
+            WHERE sh.sale_date BETWEEN %s AND %s
+            GROUP BY sh.jan, p.product_name, p.supplier_cd, p.supplier_name, p.product_cd, month
+            ORDER BY p.supplier_cd, p.product_cd, sh.jan, month
+        """, [yr_start, yr_end]).fetchall()
+
+    if sales_q:
+        ql = sales_q.lower()
+        rows = [r for r in rows if
+                ql in (r['jan']          or '').lower()
+                or ql in (r['product_cd']   or '').lower()
+                or ql in (r['product_name'] or '').lower()
+                or ql in (r['supplier_cd']  or '').lower()
+                or ql in (r['supplier_name'] or '').lower()]
+
+    # JAN ごとにグループ化（順序維持）
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for r in rows:
+        jan = r['jan']
+        if jan not in grouped:
+            grouped[jan] = {
+                'jan': jan,
+                'product_name': r['product_name'],
+                'supplier_cd':  r['supplier_cd'],
+                'supplier_name': r['supplier_name'],
+                'product_cd':   r['product_cd'],
+                'months': {}
+            }
+        grouped[jan]['months'][r['month']] = int(r['total'] or 0)
+
+    result = []
+    for d in grouped.values():
+        d['total'] = sum(d['months'].values())
+        result.append(d)
+
+    return jsonify({'rows': result, 'year': last_year, 'count': len(result)})
 
 
 @app.route('/expiry_check', methods=['POST'])
