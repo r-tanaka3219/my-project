@@ -746,7 +746,7 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                 db.execute("""
                     INSERT INTO import_logs (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type)
                     VALUES (%s,%s,0,0,'error',%s,%s)
-                """, [cfg['id'], csv_path.name, str(e)])
+                """, [cfg['id'], csv_path.name, str(e), trigger_type])
                 db.commit()
                 all_results.append({
                     'name': cfg['name'], 'file': csv_path.name,
@@ -1482,20 +1482,46 @@ def start_scheduler():
             today = now.date()
 
             # CSV設定ごとの時刻チェック（1日複数回対応）
+            # まずIDのみ取得（文字化けフィールドがあっても整数IDは安全）
             try:
-                db = get_db_long()
-                settings = db.execute(
-                    "SELECT * FROM csv_import_settings WHERE is_active=1"
-                ).fetchall()
-                db.close()
-                for cfg in settings:
+                _db_ids = get_db_long()
+                _csv_ids = [r['id'] for r in _db_ids.execute(
+                    "SELECT id FROM csv_import_settings WHERE is_active=1"
+                ).fetchall()]
+                _db_ids.close()
+            except Exception as _e:
+                logger.warning(f"[Scheduler] CSV設定ID取得エラー: {_e}")
+                _csv_ids = []
+
+            for _csv_sid in _csv_ids:
+                # 設定を1件ずつ取得してエンコードエラーを個別にキャッチ
+                try:
+                    _db_cfg = get_db_long()
+                    _cfg_row = _db_cfg.execute(
+                        "SELECT * FROM csv_import_settings WHERE id=%s", [_csv_sid]
+                    ).fetchone()
+                    _db_cfg.close()
+                    if not _cfg_row:
+                        continue
+                    cfg = dict(_cfg_row)
+                except UnicodeDecodeError as _ude:
+                    logger.warning(
+                        f"[Scheduler] CSV設定ID={_csv_sid} エンコードエラー（Shift-JIS文字が含まれている可能性）: {_ude} "
+                        f"― 設定画面で該当設定を開き直して保存してください"
+                    )
+                    continue
+                except Exception as _e:
+                    logger.warning(f"[Scheduler] CSV設定ID={_csv_sid} 読込エラー: {_e}")
+                    continue
+
+                try:
                     # run_times="06:00,12:00,18:00" 形式を解析
                     # 旧フィールド(run_hour/run_minute)との後方互換も維持
-                    run_times_raw = (cfg['run_times'] or '').strip()
+                    run_times_raw = (cfg.get('run_times') or '').strip()
                     if run_times_raw:
                         time_slots = [t.strip() for t in run_times_raw.replace('、',',').split(',') if t.strip()]
                     else:
-                        time_slots = [f"{int(cfg['run_hour'] or 6):02d}:{int(cfg['run_minute'] or 0):02d}"]
+                        time_slots = [f"{int(cfg.get('run_hour') or 6):02d}:{int(cfg.get('run_minute') or 0):02d}"]
 
                     for slot in time_slots:
                         try:
@@ -1514,8 +1540,8 @@ def start_scheduler():
                             logger.info(f'[Scheduler] CSV実行開始: setting_id={cfg["id"]} key={key} {now}')
                             run_csv_import(setting_id=cfg['id'], all_files=False, trigger_type='auto', target_date=today)
                             logger.info(f'[Scheduler] CSV実行完了: setting_id={cfg["id"]} key={key}')
-            except Exception as e:
-                logger.info(f"[Scheduler] CSV: {e}")
+                except Exception as _e:
+                    logger.warning(f"[Scheduler] CSV setting_id={cfg.get('id')} 処理エラー: {_e}")
             # 毎日 設定時刻 に発注・期限チェック
             try:
                 daily_h = int(os.getenv('DAILY_MAIL_HOUR',   '8'))
