@@ -367,7 +367,8 @@
     <td class="text-right">{{ s.expiry_alert_days }}日前</td>
     <td class="text-center" style="font-size:11px">{{ s.mixed_group or '-' }}</td>
     <td class="text-center">
-      {% if s.reorder_auto %}<span class="badge badge-green">自動</span>
+      {% if s.reorder_auto == 1 %}<span class="badge badge-green">🤖 AI</span>
+      {% elif s.reorder_auto == 2 %}<span class="badge badge-blue">📅 前年</span>
       {% else %}<span class="badge badge-gray">手動</span>{% endif %}
     </td>
     <td class="text-center">

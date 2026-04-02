@@ -1182,20 +1182,21 @@ def update_reorder_points():
     """
     発注点・発注数自動計算（毎月1日 自動実行）
 
-    モード:
-      'ai' = 需要予測AIモード（app._build_forecast_rows_raw を使用）
-      'ly' = 前年実績モード（前年同月実績ベース）
-    設定: settings.reorder_auto_mode（デフォルト: 'ai'）
+    商品ごとの reorder_auto 値に応じてモードを振り分ける:
+      reorder_auto=1 → AIモード（需要予測AIエンジンを使用）
+      reorder_auto=2 → 前年実績モード（前年同月実績ベース）
+      reorder_auto=0 → 手動（更新しない）
     """
     db = get_db_long()
-    mode_row = db.execute("SELECT value FROM settings WHERE key='reorder_auto_mode'").fetchone()
-    auto_mode = (mode_row['value'] if mode_row else 'ai') or 'ai'
-    logger.info(f'[update_reorder_points] モード={auto_mode}')
+    ai_cnt  = db.execute("SELECT COUNT(*) AS c FROM products WHERE is_active=1 AND reorder_auto=1").fetchone()['c']
+    ly_cnt  = db.execute("SELECT COUNT(*) AS c FROM products WHERE is_active=1 AND reorder_auto=2").fetchone()['c']
+    logger.info(f'[update_reorder_points] AIモード={ai_cnt}商品 / 前年実績モード={ly_cnt}商品')
 
-    if auto_mode == 'ai':
-        return _update_reorder_points_ai(db)
-    else:
-        return _update_reorder_points_ly(db)
+    updated_ai = _update_reorder_points_ai(db) if ai_cnt > 0 else 0
+    # _update_reorder_points_ly は自前で DB 接続を開くため、ai 側で使った db は閉じる
+    # ただし ai が db.close() 済みのため、ly 用に新規接続
+    updated_ly = _update_reorder_points_ly() if ly_cnt > 0 else 0
+    return (updated_ai or 0) + (updated_ly or 0)
 
 
 def _update_reorder_points_ai(db):
@@ -1216,7 +1217,7 @@ def _update_reorder_points_ai(db):
         logger.warning(f'[update_reorder_points] AI予測取得エラー: {e} → 前年実績モードで代替実行')
         return _update_reorder_points_ly(db)
 
-    # reorder_auto=1 の商品セットを取得
+    # reorder_auto=1（AIモード）の商品セットを取得
     auto_jans = {r['jan'] for r in db.execute(
         "SELECT jan FROM products WHERE is_active=1 AND reorder_auto=1"
     ).fetchall()}
@@ -1294,9 +1295,9 @@ def _update_reorder_points_ai(db):
     return updated
 
 
-def _update_reorder_points_ly(db):
+def _update_reorder_points_ly(db=None):
     """
-    前年実績モード: 前年同月実績ベースで発注点・発注数を更新（従来ロジック）
+    前年実績モード: reorder_auto=2 の商品を前年同月実績ベースで更新。
 
     計算式:
       発注点  = 日次平均 × リードタイム × 安全係数 → order_unit の倍数に切り上げ
@@ -1309,22 +1310,25 @@ def _update_reorder_points_ly(db):
     賞味期限考慮:
       - 期限切れ間近の在庫がある場合は計算値を 10% 上乗せ
     """
+    if db is None:
+        db = get_db_long()
     today = date.today()
     last_year = today.year - 1
     month = today.month
     days_in_month = calendar.monthrange(last_year, month)[1]
+    # sale_date は TEXT 型 → BETWEEN 文字列比較でインデックスを活用
+    ly_start = f'{last_year}-{month:02d}-01'
+    ly_end   = f'{last_year}-{month:02d}-{days_in_month:02d}'
     updated = 0
 
     for p in db.execute(
-        "SELECT * FROM products WHERE is_active=1 AND reorder_auto=1"
+        "SELECT * FROM products WHERE is_active=1 AND reorder_auto=2"
     ).fetchall():
-        # 前年同月の合計出荷数
+        # 前年同月の合計出荷数（インデックス有効な BETWEEN 比較）
         total = db.execute("""
             SELECT COALESCE(SUM(quantity),0) AS _sum FROM sales_history
-            WHERE jan=%s
-            AND to_char(sale_date::date,'YYYY')=%s
-            AND to_char(sale_date::date,'MM')=%s
-        """, [p['jan'], str(last_year), f"{month:02d}"]).fetchone()['_sum']
+            WHERE jan=%s AND sale_date BETWEEN %s AND %s
+        """, [p['jan'], ly_start, ly_end]).fetchone()['_sum']
 
         if total == 0:
             continue

@@ -40,16 +40,20 @@
 </div>
 
 <div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b">
-  <form method="post" action="/reports/forecast/apply" class="forecast-apply-row" style="margin:0">
+  <form method="post" action="/reports/forecast/apply" class="forecast-apply-row" style="margin:0;flex-wrap:wrap;gap:8px">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="q" value="{{ q or '' }}">
     <div class="apply-label">予測値を設定へ反映</div>
+    <select name="calc_mode" style="min-width:160px">
+      <option value="ai">🤖 AIモード</option>
+      <option value="ly">📅 前年実績モード</option>
+    </select>
     <select name="mode">
       <option value="reorder_point">発注点のみ更新</option>
       <option value="order_qty">基準発注数のみ更新</option>
       <option value="both">発注点 + 基準発注数</option>
     </select>
-    <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('表示中の商品設定を予測値で更新します。よろしいですか？')">⚙️ 一括反映</button>
+    <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('表示中の商品設定を選択したモードの予測値で更新します。よろしいですか？')">⚙️ 一括反映</button>
   </form>
 </div>
 

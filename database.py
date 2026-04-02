@@ -498,8 +498,15 @@ _MIGRATIONS = [
     # mail_recipients に仕入先CD列追加
     "ALTER TABLE mail_recipients ADD COLUMN IF NOT EXISTS supplier_cd TEXT DEFAULT ''",
 
-    # 発注点自動更新モード設定（'ai'=AIモード / 'ly'=前年実績モード）
+    # 発注点自動更新モード設定（グローバル設定 → 現在は商品ごとのreorder_autoで管理）
     "INSERT INTO settings(key,value) SELECT 'reorder_auto_mode','ai' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='reorder_auto_mode')",
+
+    # ─── 商品ごとの発注点自動更新モード（reorder_auto の値域拡張）─────────────
+    # 0 = 手動（自動更新しない）
+    # 1 = AIモード自動更新（毎月1日、需要予測AIエンジンを使用）← 旧 reorder_auto=1 と互換
+    # 2 = 前年実績モード自動更新（毎月1日、前年同月実績ベース）
+    # INTEGER 型はすでに 0/1/2 を格納可能。スキーマ変更不要。
+    # 既存の reorder_auto=1 はすべてAIモード相当として扱う（後方互換）。
 
     # ─── 売上日次事前集計テーブル（予測クエリ高速化）────────────────────────
     # sales_history を日次集計済みにしておくことで、予測CTEのスキャン量を激減させる

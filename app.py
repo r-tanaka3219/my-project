@@ -3855,15 +3855,17 @@ def reports_forecast():
 @permission_required('reports')
 def reports_forecast_apply():
     import uuid as _uuid
-    q    = request.form.get('q', '').strip().lower()
-    mode = (request.form.get('mode') or 'reorder_point').strip()
+    import calendar as _calendar
+    q         = request.form.get('q', '').strip().lower()
+    mode      = (request.form.get('mode') or 'reorder_point').strip()
+    calc_mode = (request.form.get('calc_mode') or 'ai').strip()   # 'ai' or 'ly'
     job_id = str(_uuid.uuid4())
     _csv_progress_push(job_id, {'phase': 'start', 'file': '需要予測 一括反映', 'total': 0})
 
     def _run():
-        from database import get_db as _get_db_raw
         import psycopg2
         from database import get_dsn, DBConn
+        from datetime import date as _date
         updated = 0
         try:
             conn = psycopg2.connect(**get_dsn())
@@ -3873,9 +3875,41 @@ def reports_forecast_apply():
             _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': 'エラー', 'status': 'err', 'detail': str(e)}]})
             return
         try:
-            rows = _build_forecast_rows(db, q)
+            label = 'AI' if calc_mode == 'ai' else '前年実績'
+            if calc_mode == 'ly':
+                # 前年実績モード: 前年同月の出荷実績から発注点を計算
+                today     = _date.today()
+                last_year = today.year - 1
+                month     = today.month
+                days_in_month = _calendar.monthrange(last_year, month)[1]
+                ly_start  = f'{last_year}-{month:02d}-01'
+                ly_end    = f'{last_year}-{month:02d}-{days_in_month:02d}'
+
+                sql = "SELECT * FROM products WHERE is_active=1"
+                params = []
+                if q:
+                    sql += " AND (LOWER(product_name) LIKE %s OR LOWER(jan) LIKE %s OR LOWER(product_cd) LIKE %s)"
+                    params += [f'%{q}%', f'%{q}%', f'%{q}%']
+                prods = db.execute(sql, params).fetchall()
+                rows = []
+                for p in prods:
+                    total = db.execute(
+                        "SELECT COALESCE(SUM(quantity),0) AS s FROM sales_history WHERE jan=%s AND sale_date BETWEEN %s AND %s",
+                        [p['jan'], ly_start, ly_end]
+                    ).fetchone()['s']
+                    daily = total / days_in_month if days_in_month else 0
+                    rp = daily * p['lead_time_days'] * p['safety_factor']
+                    # ロット丸め
+                    lot = p['lot_size'] or 0
+                    if lot > 1:
+                        import math as _math
+                        rp = _math.ceil(rp / lot) * lot
+                    rows.append({'product_id': p['id'], 'suggested_reorder_point': int(round(rp)), 'suggested_order_qty': int(round(rp))})
+            else:
+                rows = _build_forecast_rows(db, q)
+
             total = len(rows)
-            _csv_progress_push(job_id, {'phase': 'start', 'file': f'需要予測 一括反映（{mode}）', 'total': total})
+            _csv_progress_push(job_id, {'phase': 'start', 'file': f'需要予測 一括反映（{label}）', 'total': total})
             updated = 0
             for i, r in enumerate(rows, 1):
                 try:
@@ -3895,7 +3929,7 @@ def reports_forecast_apply():
                     _csv_progress_push(job_id, {'phase': 'progress', 'current': i, 'total': total, 'ok': updated, 'skip': 0, 'err': i - updated})
             db.commit()
             invalidate_forecast_cache()   # 発注点/発注数更新後にキャッシュを破棄
-            _csv_progress_push(job_id, {'phase': 'done', 'file': '需要予測 一括反映', 'ok': updated, 'skip': 0, 'err': 0,
+            _csv_progress_push(job_id, {'phase': 'done', 'file': f'需要予測 一括反映（{label}）', 'ok': updated, 'skip': 0, 'err': 0,
                                         'detail': f'{updated}/{total}件 更新完了'})
         except Exception as e:
             try:
@@ -3909,7 +3943,7 @@ def reports_forecast_apply():
                 db.close()
             except Exception:
                 pass
-        _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': '需要予測 一括反映', 'status': 'ok', 'detail': f'{updated}件更新'}]})
+        _csv_progress_push(job_id, {'phase': 'finished', 'results': [{'name': f'需要予測 一括反映（{label}）', 'status': 'ok', 'detail': f'{updated}件更新'}]})
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()

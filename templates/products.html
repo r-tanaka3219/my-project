@@ -43,7 +43,7 @@
   <td class="text-right">{{ p.order_qty|format_number }}</td>
   <td class="text-center">{{ p.lead_time_days }}日</td>
   <td class="text-center">×{{ p.safety_factor }}</td>
-  <td class="text-center">{% if p.reorder_auto %}<span class="badge badge-green">自動</span>{% else %}<span class="badge badge-gray">手動</span>{% endif %}</td>
+  <td class="text-center">{% if p.reorder_auto == 1 %}<span class="badge badge-green">🤖 AI</span>{% elif p.reorder_auto == 2 %}<span class="badge badge-blue">📅 前年</span>{% else %}<span class="badge badge-gray">手動</span>{% endif %}</td>
   <td class="text-center" style="white-space:nowrap">
     <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
     <form method="post" action="/products/{{ p.id }}/delete" style="display:inline;margin-left:4px"

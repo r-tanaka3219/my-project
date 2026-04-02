@@ -294,7 +294,7 @@ def product_import():
             # NULLのデフォルト値を補完
             defaults = {
                 'unit_qty':1,'order_unit':1,'order_qty':1,'reorder_point':0,
-                'reorder_auto':1,'lead_time_days':3,'safety_factor':1.3,
+                'reorder_auto':0,'lead_time_days':3,'safety_factor':1.3,
                 'lot_size':0,'shelf_life_days':365,'expiry_alert_days':30,
                 'mixed_group':'','mixed_lot_mode':'gte','mixed_lot_cases':3,'mixed_force_days':3,
                 'cost_price':0,'sell_price':0,
@@ -404,7 +404,7 @@ def product_new():
               f['jan'],f['product_cd'],f['product_name'],
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
               int(f.get('order_qty',1)),int(f.get('reorder_point',0)),
-              1 if f.get('reorder_auto') else 0,
+              int(f.get('reorder_auto', 0) or 0),
               int(f.get('lot_size',0)),int(f.get('shelf_life_days',365)),
               int(f.get('expiry_alert_days',30)),
               float(f.get('safety_factor',1.3)),int(f.get('lead_time_days',3)),
@@ -494,7 +494,7 @@ def product_edit(pid):
               f['product_cd'],f['product_name'],
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
               int(f.get('order_qty',1)),int(f.get('reorder_point',0)),
-              1 if f.get('reorder_auto') else 0,
+              int(f.get('reorder_auto', 0) or 0),
               int(f.get('lot_size',0)),int(f.get('shelf_life_days',365)),
               int(f.get('expiry_alert_days',30)),
               float(f.get('safety_factor',1.3)),int(f.get('lead_time_days',3)),
