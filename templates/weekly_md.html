@@ -67,7 +67,7 @@ thead .col-fix-1,thead .col-fix-2,thead .col-fix-3{background:#f8fafc;z-index:3}
         <tr>
           <th class="col-fix-1" style="left:0;width:95px;min-width:95px;max-width:95px">仕入先</th>
           <th class="col-fix-2" style="left:95px;width:85px;min-width:85px;max-width:85px">商品CD / JAN</th>
-          <th class="col-fix-3" style="left:180px;width:150px;min-width:150px;max-width:150px">商品名</th>
+          <th class="col-fix-3" style="left:180px;width:200px;min-width:200px;max-width:200px">商品名</th>
           {% for w in weeks %}
           <th class="week-cell {% if w == current_week %}current-week{% endif %}">
             W{{ w }}{% if w == current_week %}<br><span style="font-size:9px;color:#92400e">今週</span>{% endif %}
@@ -80,7 +80,7 @@ thead .col-fix-1,thead .col-fix-2,thead .col-fix-3{background:#f8fafc;z-index:3}
       <tr>
         <td class="col-fix-1" style="left:0;width:95px;min-width:95px;max-width:95px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.supplier_cd }}<br><span style="color:#6b7280">{{ p.supplier_name|truncate(10,true,'…') }}</span></td>
         <td class="col-fix-2" style="left:95px;width:85px;min-width:85px;max-width:85px;font-size:11px;overflow:hidden;white-space:nowrap">{{ p.product_cd }}<br><span style="color:#6b7280;font-size:10px">{{ p.jan }}</span></td>
-        <td class="col-fix-3" style="left:180px;width:150px;min-width:150px;max-width:150px;font-size:11px">{{ p.product_name|truncate(16,true,'…') }}</td>
+        <td class="col-fix-3" style="left:180px;width:200px;min-width:200px;max-width:200px;font-size:11px">{{ p.product_name|truncate(22,true,'…') }}</td>
         {% for w in weeks %}
         {% set wd = p.weeks.get(w, {}) %}
         <td class="week-cell {% if w == current_week %}current-week{% endif %}">
