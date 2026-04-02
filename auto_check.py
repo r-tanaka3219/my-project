@@ -1592,11 +1592,22 @@ def start_scheduler():
                             # 月次：気温感応度を自動再計算
                             try:
                                 from wholesale_forecast import recalc_temp_sensitivity
+                                from datetime import datetime as _dt2
                                 _sens_db = get_db_long()
                                 _sens_n  = recalc_temp_sensitivity(_sens_db)
-                                _sens_db.close()
                                 if _sens_n:
+                                    _sens_val = (
+                                        f"{_dt2.now().strftime('%Y-%m-%d %H:%M')}"
+                                        f" ／ {_sens_n}商品 ／ 月次自動"
+                                    )
+                                    _sens_db.execute("""
+                                        INSERT INTO settings (key, value)
+                                        VALUES ('temp_sensitivity_last_run', %s)
+                                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                                    """, [_sens_val])
+                                    _sens_db.commit()
                                     logger.info(f'[Scheduler] 気温感応度 月次再計算完了: {_sens_n}商品')
+                                _sens_db.close()
                             except Exception as _se:
                                 logger.warning(f'[Scheduler] 気温感応度再計算エラー: {_se}')
             except Exception as e:

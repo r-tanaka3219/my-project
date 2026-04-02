@@ -92,6 +92,13 @@
       <div style="font-size:11px;color:#6b7280;margin-top:6px">
         インポート・取得時に自動実行されます<br>手動でも随時実行できます
       </div>
+      {% if sens_last_run %}
+      <div style="margin-top:8px;padding:6px 8px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;font-size:11px;color:#6d28d9">
+        🕐 最終実行: {{ sens_last_run }}
+      </div>
+      {% else %}
+      <div style="margin-top:8px;font-size:11px;color:#9ca3af">🕐 最終実行: 未実行</div>
+      {% endif %}
     </div>
   </div>
 </div>

@@ -15,6 +15,18 @@ logger = logging.getLogger('inventory.forecast')
 bp = Blueprint('forecast', __name__)
 
 
+def _save_sens_log(db, count: int, trigger: str):
+    """気温感応度再計算の実行履歴をsettingsテーブルに保存"""
+    from datetime import datetime as _dt
+    labels = {'monthly': '月次自動', 'import': 'インポート後自動', 'manual': '手動実行'}
+    val = f"{_dt.now().strftime('%Y-%m-%d %H:%M')} ／ {count}商品 ／ {labels.get(trigger, trigger)}"
+    db.execute("""
+        INSERT INTO settings (key, value) VALUES ('temp_sensitivity_last_run', %s)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    """, [val])
+    db.commit()
+
+
 # ── 需要予測メイン ────────────────────────────────────────────────────────
 
 @bp.route('/reports/forecast/wholesale')
@@ -350,7 +362,13 @@ def weather_data():
         GROUP BY location
         ORDER BY location
     """).fetchall()
-    return render_template('weather_data.html', rows=rows, location_summary=location_summary)
+    _sens_row = db.execute(
+        "SELECT value FROM settings WHERE key='temp_sensitivity_last_run'"
+    ).fetchone()
+    sens_last_run = _sens_row['value'] if _sens_row else None
+    return render_template('weather_data.html', rows=rows,
+                           location_summary=location_summary,
+                           sens_last_run=sens_last_run)
 
 
 @bp.route('/reports/weather/add', methods=['POST'])
@@ -431,6 +449,7 @@ def weather_import():
 def weather_recalc_sensitivity():
     db = get_db()
     n  = recalc_temp_sensitivity(db)
+    _save_sens_log(db, n, 'manual')
     flash(f'気温感応度を {n} 商品分 再計算しました。', 'success')
     return redirect(url_for('forecast.weather_data'))
 
@@ -621,6 +640,8 @@ def weather_excel_import():
     if created > 0:
         try:
             sens_n = recalc_temp_sensitivity(db)
+            if sens_n:
+                _save_sens_log(db, sens_n, 'import')
         except Exception:
             sens_n = 0
 
