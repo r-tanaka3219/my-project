@@ -463,9 +463,9 @@ def weather_recalc_sensitivity():
     if n > 0:
         _save_sens_log(db, n, 'manual')
         flash(f'気温感応度を {n} 商品分 再計算しました。', 'success')
-    elif weather_cnt < 10:
+    elif weather_cnt < 5:
         flash(
-            f'再計算できませんでした。気象データが {weather_cnt} 件しかありません（10件以上必要）。'
+            f'再計算できませんでした。気象データが {weather_cnt} 件しかありません（5件以上必要）。'
             f' まず「気象データ取得」で地点を選択して取得してください。',
             'warning'
         )

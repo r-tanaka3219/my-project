@@ -438,16 +438,16 @@ def recalc_temp_sensitivity(db) -> int:
         GROUP BY obs_date
         ORDER BY obs_date
     """).fetchall()
-    if len(temp_rows) < 10:
+    if len(temp_rows) < 5:
         return 0
 
     temp_by_date = {r['obs_date']: float(r['avg_temp']) for r in temp_rows}
 
-    # 商品ごとの日次売上
+    # 商品ごとの日次売上（最大2年分で重複日数を確保）
     sales_rows = db.execute("""
         SELECT jan, sale_date::date AS dt, SUM(quantity) AS qty
         FROM sales_history
-        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
+        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '730 days'
         GROUP BY jan, sale_date::date
     """).fetchall()
 
@@ -458,7 +458,7 @@ def recalc_temp_sensitivity(db) -> int:
     updated = 0
     for jan, date_qty in by_jan.items():
         matched_dates = [d for d in date_qty if d in temp_by_date]
-        if len(matched_dates) < 10:
+        if len(matched_dates) < 5:
             continue
         sales_vals = [float(date_qty[d]) for d in matched_dates]
         temp_vals  = [temp_by_date[d] for d in matched_dates]
