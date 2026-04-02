@@ -2,9 +2,10 @@
 {% block title %}CSV取込設定{% endblock %}
 {% block content %}
 <div class="page-title">{% if setting %}✏️ CSV設定編集{% else %}➕ CSV取込設定 新規作成{% endif %}</div>
-<div class="card" style="max-width:720px">
+<div style="max-width:800px">
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card" style="margin-bottom:14px">
 
   <div class="form-group"><label>設定名 *</label>
     <input type="text" name="name" value="{{ setting.name if setting else '' }}" placeholder="例: 日次売上CSV" required></div>
