@@ -653,11 +653,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
     <div style="margin-top:12px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div style="font-size:13px;color:#991b1b;font-weight:500">🚫 全商品を「手動」に今すぐ一括切替</div>
       <div style="font-size:12px;color:#7f1d1d;flex:1">全アクティブ商品の発注点自動更新モードを即座に手動（0）に更新します。</div>
-      <form method="post" action="/settings/apply_manual_all" style="margin:0"
-            onsubmit="return confirm('全商品の発注点自動更新を「手動」に切り替えます。よろしいですか？')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-danger btn-sm">🚫 今すぐ全商品を手動に切替</button>
-      </form>
+      <button type="button" class="btn btn-danger btn-sm" onclick="submitManualAll()">🚫 今すぐ全商品を手動に切替</button>
     </div>
   </div>
 
@@ -790,6 +786,18 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   <button type="submit" class="btn btn-primary">💾 設定保存</button>
 </div>
 </form>
+
+{# 全商品手動一括更新フォーム（メインフォームの外に配置 ※ネストフォーム回避） #}
+<form method="post" action="/settings/apply_manual_all" id="manual-all-form" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<script>
+function submitManualAll() {
+  if (confirm('全商品の発注点自動更新を「手動」に切り替えます。\nよろしいですか？')) {
+    document.getElementById('manual-all-form').submit();
+  }
+}
+</script>
 
 {# テスト送信フォーム（別フォーム・メインフォームの外に配置） #}
 <form method="post" action="/settings/test_mail" id="test-form" style="display:none">
