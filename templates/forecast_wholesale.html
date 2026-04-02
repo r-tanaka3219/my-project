@@ -183,8 +183,8 @@
         </td>
         <td class="col-name" title="{{ r.product_name }}">
           <span style="font-size:12px">{{ r.product_name|truncate(14,true,'…') }}</span><br>
-          <span class="algo-tag" style="{% if r.algorithm == 'last_year' %}background:#fff7ed;color:#92400e;border-color:#f59e0b{% endif %}">
-            {% if r.algorithm == 'last_year' %}📅前年実績{% elif r.algorithm == 'holt_winters+quantile' %}🤖HW+Q{% else %}📊SMA{% endif %}
+          <span class="algo-tag" style="{% if r.algorithm == 'last_year' %}background:#fff7ed;color:#92400e;border-color:#f59e0b{% elif r.algorithm == 'holt_winters+quantile' %}background:#eff6ff;color:#1e40af;border-color:#93c5fd{% endif %}">
+            {% if r.algorithm == 'last_year' %}📅前年実績{% elif r.algorithm == 'holt_winters+quantile' %}🤖AI予測{% else %}📊移動平均{% endif %}
           </span>
         </td>
         <td class="col-abc"><span class="abc-badge abc-{{ r.abc_rank }}">{{ r.abc_rank }}</span></td>
