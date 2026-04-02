@@ -129,7 +129,7 @@
         <th style="width:14%">仕入先</th>
         <th style="width:36%">商品</th>
         <th style="width:22%">販促名</th>
-        <th class="text-right" style="width:12%">係数</th>
+        <th style="width:12%;text-align:center">係数</th>
       </tr></thead>
       <tbody>
       {% if promo_rows %}
@@ -140,7 +140,7 @@
           <td>{{ p.supplier_name }}</td>
           <td><div>{{ p.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ p.product_cd }} / {{ p.jan }}</div></td>
           <td>{{ p.promo_name or '-' }}</td>
-          <td class="text-right">{{ p.uplift_factor }}</td>
+          <td style="text-align:center">{{ p.uplift_factor }}</td>
         </tr>
         {% endfor %}
       {% else %}
@@ -236,7 +236,7 @@
         <th style="width:22%">商品</th>
         <th style="width:16%">得意先</th>
         <th class="text-right" style="width:10%">数量</th>
-        <th style="width:24%">備考</th>
+        <th style="width:24%;text-align:center">備考</th>
       </tr></thead>
       <tbody>
       {% if demand_rows %}
@@ -248,7 +248,7 @@
           <td><div>{{ d.product_name }}</div><div style="font-size:11px;color:#6b7280">{{ d.product_cd }} / {{ d.jan }}</div></td>
           <td>{{ d.customer_name or '-' }}</td>
           <td class="text-right">{{ d.demand_qty }}</td>
-          <td>{{ d.note or '-' }}</td>
+          <td style="text-align:center">{{ d.note or '-' }}</td>
         </tr>
         {% endfor %}
       {% else %}
