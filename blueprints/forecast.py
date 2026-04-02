@@ -657,22 +657,40 @@ def weather_fetch_api():
         lat, lon = 35.6897, 139.6922
     try:
         days = int(request.form.get('days') or 30)
-        days = max(1, min(days, 92))
+        days = max(1, min(days, 365))
     except (ValueError, TypeError):
         days = 30
 
-    params = urllib.parse.urlencode({
-        'latitude':  lat,
-        'longitude': lon,
-        'daily':     'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
-        'timezone':  'Asia/Tokyo',
-        'past_days': days,
-        'forecast_days': 0,
-    })
-    url = f'https://api.open-meteo.com/v1/forecast?{params}'
+    import json as _json
+    from datetime import date as _date, timedelta as _timedelta
+    end_date   = _date.today()
+    start_date = end_date - _timedelta(days=days - 1)
+
+    if days <= 92:
+        # forecast API（直近92日まで）
+        params = urllib.parse.urlencode({
+            'latitude':      lat,
+            'longitude':     lon,
+            'daily':         'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+            'timezone':      'Asia/Tokyo',
+            'past_days':     days,
+            'forecast_days': 0,
+        })
+        url = f'https://api.open-meteo.com/v1/forecast?{params}'
+    else:
+        # archive API（93日〜365日）
+        params = urllib.parse.urlencode({
+            'latitude':   lat,
+            'longitude':  lon,
+            'daily':      'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+            'timezone':   'Asia/Tokyo',
+            'start_date': start_date.isoformat(),
+            'end_date':   end_date.isoformat(),
+        })
+        url = f'https://archive-api.open-meteo.com/v1/archive?{params}'
+
     try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
-            import json as _json
+        with urllib.request.urlopen(url, timeout=30) as resp:
             data = _json.loads(resp.read())
     except Exception as e:
         flash(f'API取得エラー: {e}', 'danger')
