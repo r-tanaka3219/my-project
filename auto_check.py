@@ -1589,6 +1589,16 @@ def start_scheduler():
                             last_run['monthly'] = today
                             update_reorder_points()
                             cleanup_old_data()
+                            # 月次：気温感応度を自動再計算
+                            try:
+                                from wholesale_forecast import recalc_temp_sensitivity
+                                _sens_db = get_db_long()
+                                _sens_n  = recalc_temp_sensitivity(_sens_db)
+                                _sens_db.close()
+                                if _sens_n:
+                                    logger.info(f'[Scheduler] 気温感応度 月次再計算完了: {_sens_n}商品')
+                            except Exception as _se:
+                                logger.warning(f'[Scheduler] 気温感応度再計算エラー: {_se}')
             except Exception as e:
                 logger.info(f"[Scheduler] Monthly: {e}")
             # 毎年1月1日 00:10 に52週MDプラン自動生成

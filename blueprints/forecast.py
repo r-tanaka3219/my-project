@@ -616,6 +616,14 @@ def weather_excel_import():
 
     db.commit()
 
+    # インポート後に気温感応度を自動再計算
+    sens_n = 0
+    if created > 0:
+        try:
+            sens_n = recalc_temp_sensitivity(db)
+        except Exception:
+            sens_n = 0
+
     # 地点別インポート結果を集計してセッションへ
     from flask import session
     loc_summary = {}
@@ -636,9 +644,11 @@ def weather_excel_import():
         'loc_summary': loc_summary,
     }
     redirect_to = request.form.get('redirect_to', 'import_page')
+    sens_msg = f' 気温感応度 {sens_n}商品 再計算済み。' if sens_n else ''
     if redirect_to == 'weather_data':
-        flash(f'{created}件インポート完了。', 'success' if not errors else 'warning')
+        flash(f'{created}件インポート完了。{sens_msg}', 'success' if not errors else 'warning')
         return redirect(url_for('forecast.weather_data'))
+    session['weather_import_result']['sens_n'] = sens_n
     return redirect(url_for('forecast.weather_import_page'))
 
 
