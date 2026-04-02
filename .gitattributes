@@ -1,0 +1,19 @@
+# BAT/CMD ファイルは必ず CRLF で保存（Windows cmd.exe が LF を認識できないため）
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Python/HTML/JS/CSS は LF で統一
+*.py    text eol=lf
+*.html  text eol=lf
+*.js    text eol=lf
+*.css   text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+
+# バイナリファイル
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
