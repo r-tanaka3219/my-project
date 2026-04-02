@@ -3775,34 +3775,25 @@ def settings_save():
             db.execute("INSERT INTO settings (key, value) VALUES (%s,%s)", [key, val])
     db.commit()
 
-    # reorder_auto_mode が manual の場合、全商品を手動（reorder_auto=0）に一括更新
-    # ※ 設定保存用の接続とは別の新規接続で実行し、状態の影響を受けないようにする
+    # reorder_auto_mode に応じて全商品を一括更新
+    # ※ 設定保存用の接続とは別の新規接続で実行
     new_ram = f.get('reorder_auto_mode', 'ai') or 'ai'
+    _mode_map = {'ai': (1, '🤖 AIモード'), 'ly': (2, '📅 前年実績モード'), 'manual': (0, '🚫 手動')}
     bulk_cnt = 0
-    if new_ram == 'manual':
+    if new_ram in _mode_map:
+        mode_val, mode_label = _mode_map[new_ram]
         try:
-            import psycopg2 as _pg2
-            from database import get_dsn as _get_dsn
-            _conn = _pg2.connect(**_get_dsn())
-            _conn.autocommit = False
-            _cur = _conn.cursor()
-            _cur.execute("UPDATE products SET reorder_auto=0 WHERE is_active=1")
-            bulk_cnt = _cur.rowcount
-            _conn.commit()
-            _cur.close()
-            _conn.close()
-            logger.info(f'[settings] reorder_auto_mode=manual: {bulk_cnt}商品を手動モードに一括更新')
+            bulk_cnt = _bulk_set_reorder_auto(mode_val, mode_label)
+            logger.info(f'[settings] reorder_auto_mode={new_ram}: {bulk_cnt}商品を{mode_label}に一括更新')
         except Exception as _e:
-            logger.error(f'[settings] reorder_auto_mode=manual 一括更新エラー: {_e}')
+            logger.error(f'[settings] reorder_auto_mode={new_ram} 一括更新エラー: {_e}')
             flash(f'設定は保存しましたが、商品の一括更新でエラーが発生しました: {_e}', 'danger')
             invalidate_forecast_cache()
             return redirect(url_for('settings'))
 
-    invalidate_forecast_cache()   # 設定変更でモードが変わる可能性があるためキャッシュ破棄
-    if new_ram == 'manual':
-        flash(f'設定を保存しました。全 {bulk_cnt} 商品の発注点自動更新を「手動」に切り替えました。', 'success')
-    else:
-        flash('設定を保存しました。再起動後に反映されます。', 'success')
+    invalidate_forecast_cache()
+    mode_label = _mode_map.get(new_ram, (None, new_ram))[1]
+    flash(f'設定を保存しました。全 {bulk_cnt} 商品の発注点自動更新を「{mode_label}」に切り替えました。', 'success')
     return redirect(url_for('settings'))
 
 
