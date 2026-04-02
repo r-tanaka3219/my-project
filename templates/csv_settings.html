@@ -12,56 +12,66 @@
 </div>
 <div class="card">
   <div class="card-title">取込設定一覧</div>
-  <table style="table-layout:fixed;width:100%"><thead><tr>
-    <th style="width:12%">設定名</th><th style="width:11%">種別</th><th style="width:11%">フォルダ</th><th style="width:11%">ファイル名パターン</th>
-    <th style="width:11%">実行時刻</th><th style="width:11%">月末月次</th><th style="width:11%">最終実行</th><th style="width:11%">状態</th><th style="width:11%">操作</th>
+  <div class="table-wrap">
+  <table><thead><tr>
+    <th style="width:14%">設定名</th>
+    <th style="width:8%">種別</th>
+    <th style="width:22%">フォルダ / ファイル名パターン</th>
+    <th style="width:10%">実行時刻</th>
+    <th style="width:9%">月末月次</th>
+    <th style="width:14%">最終実行</th>
+    <th style="width:6%">状態</th>
+    <th style="width:17%">操作</th>
   </tr></thead><tbody>
   {% for s in settings %}
   <tr>
     <td><b>{{ s.name }}</b></td>
-    <td>{% if s.import_type=='sales' %}<span class="badge badge-blue">販売(引当)</span>
-        {% elif s.import_type=='receipt' %}<span class="badge badge-green">入庫(加算)</span>
-        {% elif s.import_type=='record_only' %}<span class="badge badge-gray">記録のみ</span>
-        {% else %}<span class="badge badge-gray">{{ s.import_type }}</span>{% endif %}</td>
-    <td style="font-size:12px;font-family:monospace;max-width:200px;overflow:hidden">{{ s.folder_path }}</td>
-    <td style="font-size:12px;font-family:monospace">{{ s.filename_pattern }}</td>
-    <td class="text-center">
+    <td>
+      {% if s.import_type=='sales' %}<span class="badge badge-blue">販売(引当)</span>
+      {% elif s.import_type=='receipt' %}<span class="badge badge-green">入庫(加算)</span>
+      {% elif s.import_type=='record_only' %}<span class="badge badge-gray">記録のみ</span>
+      {% else %}<span class="badge badge-gray">{{ s.import_type }}</span>{% endif %}
+    </td>
+    <td style="font-size:11px;font-family:monospace">
+      <div style="color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" title="{{ s.folder_path }}">{{ s.folder_path }}</div>
+      <div style="color:#2563eb;margin-top:2px">{{ s.filename_pattern }}</div>
+    </td>
+    <td style="text-align:center">
       {% if s.run_times %}
         {% for t in s.run_times.split(',') %}
-          <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;
-                       font-weight:bold;padding:1px 6px;border-radius:4px;margin:1px">{{ t.strip() }}</span>
+          <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin:1px">{{ t.strip() }}</span>
         {% endfor %}
       {% else %}
-        <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;
-                     font-weight:bold;padding:1px 6px;border-radius:4px">
-          {{ "%02d:%02d"|format(s.run_hour or 6, s.run_minute or 0) }}
-        </span>
+        <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px">{{ "%02d:%02d"|format(s.run_hour or 6, s.run_minute or 0) }}</span>
       {% endif %}
     </td>
-    <td style="font-size:12px">{{ s.last_run_at or '未実行' }}</td>
-    <td>
+    <td style="text-align:center">
       {% if s.month_end_enabled %}
-        <span style="display:inline-block;background:#ede9fe;color:#7c3aed;font-size:11px;
-                     font-weight:bold;padding:2px 7px;border-radius:4px">有効</span>
+        <span style="display:inline-block;background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:bold;padding:2px 7px;border-radius:4px">有効</span>
         <div style="font-size:10px;color:#9ca3af;margin-top:2px">{{ s.month_end_pattern or '' }}</div>
       {% else %}
         <span style="color:#d1d5db;font-size:11px">—</span>
       {% endif %}
     </td>
-    <td>{% if s.is_active %}<span class="badge badge-green">有効</span>
-        {% else %}<span class="badge badge-gray">無効</span>{% endif %}</td>
+    <td style="font-size:11px;color:#6b7280">{{ s.last_run_at or '未実行' }}</td>
+    <td style="text-align:center">
+      {% if s.is_active %}<span class="badge badge-green">有効</span>
+      {% else %}<span class="badge badge-gray">無効</span>{% endif %}
+    </td>
     <td>
-      <a href="/csv/{{ s.id }}/edit" class="btn btn-outline btn-sm">編集</a>
-      <button type="button" class="btn btn-success btn-sm"
-              onclick="{% if s.import_type == 'sales' %}confirmRunSales({{ s.id }}, '{{ s.filename_pattern }}'){% else %}openRunDialog({{ s.id }}, '{{ s.filename_pattern }}'){% endif %}">▶ 実行</button>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+        <a href="/csv/{{ s.id }}/edit" class="btn btn-outline btn-sm">編集</a>
+        <button type="button" class="btn btn-success btn-sm"
+                onclick="{% if s.import_type == 'sales' %}confirmRunSales({{ s.id }}, '{{ s.filename_pattern }}'){% else %}openRunDialog({{ s.id }}, '{{ s.filename_pattern }}'){% endif %}">▶ 実行</button>
+        {% if s.month_end_enabled %}
+        <button type="button" class="btn btn-purple btn-sm"
+                onclick="openMonthEndDialog({{ s.id }}, '{{ s.month_end_pattern or '' }}')">月末月次</button>
+        {% endif %}
+      </div>
       {% if s.import_type == 'sales' %}
       <span style="font-size:10px;color:#dc2626;font-weight:bold;display:block;margin-top:2px">🚨 在庫引当モード</span>
       {% elif s.import_type == 'record_only' %}
       <span style="font-size:10px;color:#1d4ed8;font-weight:bold;display:block;margin-top:2px">📋 記録のみ</span>
-      {% endif %}
-      {% if s.month_end_enabled %}
-      <button type="button" class="btn btn-purple btn-sm"
-              onclick="openMonthEndDialog({{ s.id }}, '{{ s.month_end_pattern or '' }}')">月末月次</button>
       {% endif %}
     </td>
   </tr>
@@ -71,6 +81,7 @@
   </td></tr>
   {% endfor %}
   </tbody></table>
+  </div>
 </div>
 
 {# ── 手動実行ダイアログ ── #}
