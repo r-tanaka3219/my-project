@@ -38,7 +38,11 @@
 </style>
 
 <div class="page-title">
-  <span>問屋向け需要予測（ハイブリッドAI）</span>
+  <span>問屋向け需要予測（ハイブリッドAI）
+    <span class="badge badge-{% if ai_mode %}blue{% else %}yellow{% endif %}" style="font-size:11px;vertical-align:middle;margin-left:8px">
+      {% if ai_mode %}🤖 AIモード{% else %}📅 前年実績モード{% endif %}
+    </span>
+  </span>
   <div style="display:flex;gap:6px;flex-wrap:wrap">
     <a href="/reports/forecast/wholesale/export{% if q %}?q={{ q }}{% endif %}" class="btn btn-outline btn-sm">CSV出力</a>
     <a href="/reports/abc" class="btn btn-outline btn-sm">ABC分析</a>
@@ -47,6 +51,12 @@
     <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
   </div>
 </div>
+{% if not ai_mode %}
+<div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b;padding:10px 16px;font-size:12px">
+  📅 <b>前年実績モード</b>で表示中 — 前年同月の実績日次平均から30日予測を算出しています。AIアルゴリズム（ホルト・ウィンタース・気温補正・分位点）は無効です。
+  <a href="/settings#forecast" style="margin-left:8px;color:#92400e;font-weight:600">→ 設定でモード変更</a>
+</div>
+{% endif %}
 
 <div class="card" style="padding:12px 16px;font-size:12px">
   <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:#1e3a5f">📋 AI予測 ページ一覧</div>
@@ -173,7 +183,9 @@
         </td>
         <td class="col-name" title="{{ r.product_name }}">
           <span style="font-size:12px">{{ r.product_name|truncate(14,true,'…') }}</span><br>
-          <span class="algo-tag">{{ r.algorithm }}</span>
+          <span class="algo-tag" style="{% if r.algorithm == 'last_year' %}background:#fff7ed;color:#92400e;border-color:#f59e0b{% endif %}">
+            {% if r.algorithm == 'last_year' %}📅前年実績{% elif r.algorithm == 'holt_winters+quantile' %}🤖HW+Q{% else %}📊SMA{% endif %}
+          </span>
         </td>
         <td class="col-abc"><span class="abc-badge abc-{{ r.abc_rank }}">{{ r.abc_rank }}</span></td>
         <td class="col-stock">{{ r.stock_qty|int }}</td>

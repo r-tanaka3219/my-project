@@ -34,7 +34,7 @@ def _save_sens_log(db, count: int, trigger: str):
 def forecast_wholesale():
     db = get_db()
     q = request.args.get('q', '').strip().lower()
-    rows = build_wholesale_forecast_rows(db, q)
+    rows, ai_mode = build_wholesale_forecast_rows(db, q)
 
     # ABC別件数集計
     abc_counts = {'A': 0, 'B': 0, 'C': 0}
@@ -51,7 +51,8 @@ def forecast_wholesale():
     return render_template('forecast_wholesale.html',
                            rows=rows, q=q,
                            abc_counts=abc_counts,
-                           z_score=z_score)
+                           z_score=z_score,
+                           ai_mode=ai_mode)
 
 
 @bp.route('/reports/forecast/wholesale/apply', methods=['POST'])
@@ -60,7 +61,7 @@ def forecast_wholesale_apply():
     db = get_db()
     mode = request.form.get('mode', 'reorder_point')
     q    = request.form.get('q', '')
-    rows = build_wholesale_forecast_rows(db, q)
+    rows, _ = build_wholesale_forecast_rows(db, q)
     updated = 0
     for r in rows:
         if mode == 'both':
@@ -83,7 +84,7 @@ def forecast_wholesale_apply():
 def forecast_wholesale_export():
     db  = get_db()
     q   = request.args.get('q', '').strip()
-    rows = build_wholesale_forecast_rows(db, q)
+    rows, _ = build_wholesale_forecast_rows(db, q)
     sio  = io.StringIO()
     writer = csv.writer(sio)
     writer.writerow(['仕入先CD', '仕入先名', '商品CD', 'JAN', '商品名',

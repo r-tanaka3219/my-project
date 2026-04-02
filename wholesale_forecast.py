@@ -209,6 +209,28 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
     a_threshold  = float(_setting('abc_a_threshold', '0.70'))
     b_threshold  = float(_setting('abc_b_threshold', '0.90'))
 
+    # ── AIモード / 前年実績モード ─────────────────────────────────────
+    _ai_raw = _setting('forecast_ai_mode', '1')
+    ai_mode = str(_ai_raw).strip() in ('1', 'true', 'True', 'on', 'yes')
+
+    # 前年実績モード用: 前年同月の日次平均を一括取得
+    _ly_map: dict[str, float] = {}
+    if not ai_mode:
+        import calendar as _cal
+        _last_year = today.year - 1
+        _start_ly  = date(_last_year, today.month, 1)
+        _, _end_day = _cal.monthrange(_last_year, today.month)
+        _end_ly    = date(_last_year, today.month, _end_day)
+        _ly_rows   = db.execute("""
+            SELECT jan, SUM(quantity) AS total_qty
+            FROM sales_history
+            WHERE sale_date::date BETWEEN %s AND %s
+            GROUP BY jan
+        """, [str(_start_ly), str(_end_ly)]).fetchall()
+        _, _days_in_month = _cal.monthrange(_last_year, today.month)
+        _ly_map = {r['jan']: float(r['total_qty'] or 0) / _days_in_month
+                   for r in _ly_rows}
+
     # ── ABC分析マップ ─────────────────────────────────────────────────
     abc_map = build_abc_map(db, a_threshold, b_threshold)
 
@@ -320,7 +342,19 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
         sf = max(float(p.get('safety_factor') or 1.0), 1.0)
         manual_adj = max(0.1, float(p.get('manual_adj_factor') or 1.0))
 
-        if abc_rank == 'A' and len(daily_qtys) >= _MIN_DAYS:
+        if not ai_mode:
+            # === 前年実績モード ===
+            ly_daily   = _ly_map.get(jan, 0.0)
+            forecast_30 = ly_daily * 30
+            next_daily  = round(forecast_30 / 30.0, 2)
+            q25 = q50 = q75 = iqr_std = 0.0
+            dyn_ss    = 0.0
+            temp_adj  = 1.0
+            demand_add = 0
+            suggested_rp = int(max(0, next_daily * lt * sf + 0.9999))
+            algorithm = 'last_year'
+
+        elif abc_rank == 'A' and len(daily_qtys) >= _MIN_DAYS:
             # === Aランク: ホルト・ウィンタース + 分位点 + 気温補正 ===
 
             # ホルト・ウィンタース30日予測
@@ -361,7 +395,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
             algorithm = 'holt_winters+quantile'
 
         else:
-            # === B/Cランク: 単純移動平均 ===
+            # === B/Cランク or 前年実績なし: 単純移動平均 ===
             q25 = q50 = q75 = iqr_std = 0.0
             dyn_ss    = 0.0
             temp_adj  = 1.0
@@ -418,7 +452,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
         })
         out.append(p)
 
-    return out
+    return out, ai_mode
 
 
 # ──────────────────────────────────────────────────────────────────────────
