@@ -3667,7 +3667,7 @@ def settings():
     forecast_flags = {
         'forecast_ai_mode':      get_setting('forecast_ai_mode', 1),
         'forecast_reorder_mode': get_setting('forecast_reorder_mode', 'sf'),
-        'reorder_auto_mode':     get_setting('reorder_auto_mode', 'ai'),
+        'reorder_auto_mode':     get_setting('reorder_auto_mode', 'manual'),
         'safety_level_z':        get_setting('safety_level_z', '1.65'),
         'abc_a_threshold':       get_setting('abc_a_threshold', '0.70'),
         'abc_b_threshold':       get_setting('abc_b_threshold', '0.90'),
@@ -3734,7 +3734,7 @@ def settings_save():
         ('product_setting_template_name', '商品CD設定_テンプレート'),
         ('forecast_ai_mode', 1),
         ('forecast_reorder_mode', 'sf'),
-        ('reorder_auto_mode', 'ai'),
+        ('reorder_auto_mode', 'manual'),
         ('safety_level_z', '1.65'),
         ('abc_a_threshold', '0.70'),
         ('abc_b_threshold', '0.90'),
@@ -3777,7 +3777,7 @@ def settings_save():
 
     # reorder_auto_mode に応じて全商品を一括更新
     # ※ 設定保存用の接続とは別の新規接続で実行
-    new_ram = f.get('reorder_auto_mode', 'ai') or 'ai'
+    new_ram = f.get('reorder_auto_mode', 'manual') or 'manual'
     _mode_map = {'ai': (1, '🤖 AIモード'), 'ly': (2, '📅 前年実績モード'), 'manual': (0, '🚫 手動')}
     bulk_cnt = 0
     if new_ram in _mode_map:

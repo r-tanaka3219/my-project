@@ -499,7 +499,7 @@ _MIGRATIONS = [
     "ALTER TABLE mail_recipients ADD COLUMN IF NOT EXISTS supplier_cd TEXT DEFAULT ''",
 
     # 発注点自動更新モード設定（グローバル設定 → 現在は商品ごとのreorder_autoで管理）
-    "INSERT INTO settings(key,value) SELECT 'reorder_auto_mode','ai' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='reorder_auto_mode')",
+    "INSERT INTO settings(key,value) SELECT 'reorder_auto_mode','manual' WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key='reorder_auto_mode')",
 
     # ─── 商品ごとの発注点自動更新モード（reorder_auto の値域拡張）─────────────
     # 0 = 手動（自動更新しない）

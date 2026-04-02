@@ -605,9 +605,9 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--color-border-tertiary)">
     <label style="font-weight:500;font-size:14px;display:block;margin-bottom:10px">🔄 発注点・発注数 自動更新モード（新規商品インポート時のデフォルト）</label>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}var(--color-border-info){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}var(--color-background-info){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','manual') == 'ai' %}var(--color-border-info){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','manual') == 'ai' %}var(--color-background-info){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
         <input type="radio" name="reorder_auto_mode" value="ai"
-               {% if forecast_flags.get('reorder_auto_mode','ai') == 'ai' %}checked{% endif %}
+               {% if forecast_flags.get('reorder_auto_mode','manual') == 'ai' %}checked{% endif %}
                style="margin-top:3px;flex-shrink:0">
         <div>
           <div style="font-weight:500;font-size:13px;color:var(--color-text-info)">🤖 AIモード（推奨）</div>
@@ -618,9 +618,9 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
           </div>
         </div>
       </label>
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}var(--color-border-warning){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}var(--color-background-warning){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','manual') == 'ly' %}var(--color-border-warning){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','manual') == 'ly' %}var(--color-background-warning){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
         <input type="radio" name="reorder_auto_mode" value="ly"
-               {% if forecast_flags.get('reorder_auto_mode','ai') == 'ly' %}checked{% endif %}
+               {% if forecast_flags.get('reorder_auto_mode','manual') == 'ly' %}checked{% endif %}
                style="margin-top:3px;flex-shrink:0">
         <div>
           <div style="font-weight:500;font-size:13px;color:var(--color-text-warning)">📅 前年実績モード</div>
@@ -631,9 +631,9 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
           </div>
         </div>
       </label>
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}var(--color-border-tertiary){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}var(--color-background-secondary){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px 16px;border:2px solid {% if forecast_flags.get('reorder_auto_mode','manual') == 'manual' %}var(--color-border-tertiary){% else %}var(--color-border-tertiary){% endif %};border-radius:10px;background:{% if forecast_flags.get('reorder_auto_mode','manual') == 'manual' %}var(--color-background-secondary){% else %}var(--color-background-secondary){% endif %};flex:1;min-width:240px">
         <input type="radio" name="reorder_auto_mode" value="manual"
-               {% if forecast_flags.get('reorder_auto_mode','ai') == 'manual' %}checked{% endif %}
+               {% if forecast_flags.get('reorder_auto_mode','manual') == 'manual' %}checked{% endif %}
                style="margin-top:3px;flex-shrink:0">
         <div>
           <div style="font-weight:500;font-size:13px;color:var(--color-text-secondary)">🚫 手動（自動更新しない）</div>
