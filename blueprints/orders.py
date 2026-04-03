@@ -442,6 +442,7 @@ def orders_backorders():
         FROM order_history oh
         LEFT JOIN products p ON oh.jan=p.jan
         WHERE NULLIF(oh.order_date, '')::date >= CURRENT_DATE - INTERVAL '180 days'
+          AND oh.closed_at IS NULL
         ORDER BY NULLIF(oh.order_date, '')::date DESC, oh.id DESC
     """).fetchall()
     if q:
@@ -506,7 +507,14 @@ def orders_backorders_receive():
     db.execute("INSERT INTO order_receipts (order_history_id, jan, received_qty, receipt_date, note) VALUES (%s,%s,%s,%s,%s)", [order_id, order['jan'], qty, str(date.today()), note])
     remaining = outstanding - qty
     if remaining <= 0:
-        db.execute("UPDATE products SET ordered_at='' WHERE jan=%s", [order['jan']])
+        # 同一JANで他に未完了の発注残がなければ ordered_at をクリア
+        other_open = db.execute("""
+            SELECT COUNT(*) AS cnt FROM order_history
+            WHERE jan=%s AND id<>%s AND closed_at IS NULL
+              AND (order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=order_history.id),0)) > 0
+        """, [order['jan'], order_id]).fetchone()['cnt']
+        if other_open == 0:
+            db.execute("UPDATE products SET ordered_at='' WHERE jan=%s", [order['jan']])
     db.commit()
     flash(f'{order["product_name"]} を {qty} 個受領登録しました。残 {remaining} 個。', 'success')
     return redirect(url_for('orders.orders_backorders'))
@@ -523,9 +531,16 @@ def orders_backorders_close():
         return redirect(url_for('orders.orders_backorders'))
     received = db.execute("SELECT COALESCE(SUM(received_qty),0) AS qty FROM order_receipts WHERE order_history_id=%s", [order_id]).fetchone()['qty']
     outstanding = max(int(order['order_qty'] or 0) - int(received or 0), 0)
-    if outstanding > 0:
-        db.execute("INSERT INTO order_receipts (order_history_id, jan, received_qty, receipt_date, note) VALUES (%s,%s,%s,%s,%s)", [order_id, order['jan'], 0, str(date.today()), f'close:{reason}'])
-    db.execute("UPDATE products SET ordered_at='' WHERE jan=%s", [order['jan']])
+    # order_history に closed_at をセット（クローズフラグ）
+    db.execute("UPDATE order_history SET closed_at=%s WHERE id=%s", [str(date.today()), order_id])
+    # 同一JANで他に未完了の発注残がなければ ordered_at をクリア
+    other_open = db.execute("""
+        SELECT COUNT(*) AS cnt FROM order_history
+        WHERE jan=%s AND id<>%s AND closed_at IS NULL
+          AND (order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=order_history.id),0)) > 0
+    """, [order['jan'], order_id]).fetchone()['cnt']
+    if other_open == 0:
+        db.execute("UPDATE products SET ordered_at='' WHERE jan=%s", [order['jan']])
     db.commit()
     flash(f'{order["product_name"]} の未納残 {outstanding} 個をクローズしました。', 'warning')
     return redirect(url_for('orders.orders_backorders'))

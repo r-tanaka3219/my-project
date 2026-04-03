@@ -1551,6 +1551,7 @@ def receipt():
                 FROM order_history oh
                 WHERE oh.jan=%s
                   AND NULLIF(oh.order_date,'')::date >= CURRENT_DATE - INTERVAL '180 days'
+                  AND oh.closed_at IS NULL
                   AND (oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0)) > 0
                 ORDER BY NULLIF(oh.order_date,'')::date ASC
             """, [product['jan']]).fetchall()
