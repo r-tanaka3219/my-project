@@ -1542,6 +1542,29 @@ def receipt():
             # 入庫で発注済みフラグをクリア
             db.execute("UPDATE products SET ordered_at='' WHERE jan=%s", [product['jan']])
             db.execute("DELETE FROM order_pending WHERE jan=%s AND status='pending'", [product['jan']])
+
+            # 発注残（order_receipts）と自動連動
+            remaining_qty = qty
+            open_orders = db.execute("""
+                SELECT oh.id, oh.order_qty,
+                       COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0) AS received_qty
+                FROM order_history oh
+                WHERE oh.jan=%s
+                  AND NULLIF(oh.order_date,'')::date >= CURRENT_DATE - INTERVAL '180 days'
+                  AND (oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0)) > 0
+                ORDER BY NULLIF(oh.order_date,'')::date ASC
+            """, [product['jan']]).fetchall()
+            for o in open_orders:
+                if remaining_qty <= 0:
+                    break
+                outstanding = int(o['order_qty'] or 0) - int(o['received_qty'] or 0)
+                apply_qty = min(remaining_qty, outstanding)
+                db.execute(
+                    "INSERT INTO order_receipts (order_history_id, jan, received_qty, receipt_date, note) VALUES (%s,%s,%s,%s,%s)",
+                    [o['id'], product['jan'], apply_qty, str(date.today()), '入庫登録より自動連動']
+                )
+                remaining_qty -= apply_qty
+
             db.commit()
             flash(f"{product['product_name']} を {qty} 個入庫しました。", 'success')
         return redirect(url_for('receipt'))
