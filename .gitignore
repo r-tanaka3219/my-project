@@ -1,4 +1,6 @@
 .env
+.claude/
+_gen_*.py
 __pycache__/
 *.pyc
 *.pyo
