@@ -5,7 +5,7 @@ import os, csv, io, json, logging
 from urllib.parse import quote
 from db import get_db
 from auth_helpers import login_required, admin_required, permission_required
-from helpers import _normalize_jan, _normalize_date, _to_int, _safe_date, _excel_bytes_from_rows
+from helpers import _normalize_jan, _normalize_date, _to_int, _safe_date, _excel_bytes_from_rows, _record_receipt
 from mail_service import send_order_mail
 from auto_check import run_order_check, get_pending_orders
 
