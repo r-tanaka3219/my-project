@@ -483,16 +483,17 @@ def product_new():
         db.execute("""
             INSERT INTO products
             (supplier_cd,supplier_name,supplier_email,jan,product_cd,product_name,
-             unit_qty,order_unit,order_qty,reorder_point,reorder_auto,lot_size,
+             unit_qty,order_unit,order_qty,lock_order_qty,reorder_point,reorder_auto,lot_size,
              shelf_life_days,expiry_alert_days,safety_factor,lead_time_days,
              mixed_group,mixed_lot_mode,mixed_lot_cases,mixed_force_days,
              cost_price,sell_price,location_code,shelf_face_qty,shelf_replenish_point,
              manual_adj_factor)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, [f['supplier_cd'],f['supplier_name'],f.get('supplier_email',''),
               f['jan'],f['product_cd'],f['product_name'],
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
-              int(f.get('order_qty',1)),int(f.get('reorder_point',0)),
+              int(f.get('order_qty',1)),1 if f.get('lock_order_qty') else 0,
+              int(f.get('reorder_point',0)),
               int(f.get('reorder_auto', 0) or 0),
               int(f.get('lot_size',0)),int(f.get('shelf_life_days',365)),
               int(f.get('expiry_alert_days',30)),
@@ -573,7 +574,7 @@ def product_edit(pid):
         db.execute("""
             UPDATE products SET
             supplier_cd=%s,supplier_name=%s,supplier_email=%s,product_cd=%s,product_name=%s,
-            unit_qty=%s,order_unit=%s,order_qty=%s,reorder_point=%s,reorder_auto=%s,lot_size=%s,
+            unit_qty=%s,order_unit=%s,order_qty=%s,lock_order_qty=%s,reorder_point=%s,reorder_auto=%s,lot_size=%s,
             shelf_life_days=%s,expiry_alert_days=%s,safety_factor=%s,lead_time_days=%s,
             mixed_group=%s,mixed_lot_mode=%s,mixed_lot_cases=%s,mixed_force_days=%s,
             cost_price=%s,sell_price=%s,location_code=%s,shelf_face_qty=%s,shelf_replenish_point=%s,
@@ -582,7 +583,8 @@ def product_edit(pid):
         """, [f['supplier_cd'],f['supplier_name'],f.get('supplier_email',''),
               f['product_cd'],f['product_name'],
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
-              int(f.get('order_qty',1)),int(f.get('reorder_point',0)),
+              int(f.get('order_qty',1)),1 if f.get('lock_order_qty') else 0,
+              int(f.get('reorder_point',0)),
               int(f.get('reorder_auto', 0) or 0),
               int(f.get('lot_size',0)),int(f.get('shelf_life_days',365)),
               int(f.get('expiry_alert_days',30)),

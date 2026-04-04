@@ -33,6 +33,13 @@
       <input type="number" name="order_unit" value="{{ product.order_unit if product else 1 }}" min="1"></div>
     <div class="form-group"><label>発注数量</label>
       <input type="number" name="order_qty" value="{{ product.order_qty if product else 1 }}" min="1"></div>
+    <div class="form-group"><label>発注数固定</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer">
+        <input type="checkbox" name="lock_order_qty" value="1"
+               {% if product and product.lock_order_qty %}checked{% endif %}>
+        AIや自動更新で発注数を変更しない
+      </label>
+      <div class="help">チェックすると予測・自動更新から発注数が上書きされません</div></div>
   </div>
   <hr>
   <div style="background:#f0f9ff;border-radius:8px;padding:12px;margin-bottom:12px">
