@@ -121,7 +121,26 @@
 </div>
 
 {% if prod_list %}
-<div class="card" style="padding:8px 12px">
+<div class="card" style="padding:8px 12px;font-size:11px;color:#6b7280">
+  <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e2e8f0">
+    <div>
+      <span style="font-weight:700;color:#374151;font-size:12px">セルの見方</span><br>
+      <span style="color:#1e40af;font-weight:600">5</span> ← 計画数（週の販売目標数量）<br>
+      <span style="color:#166534;font-weight:600">0</span> ← 実績数（実際の販売数量）<br>
+      <span style="color:#dc2626;font-weight:600">0%</span> ← 達成率（実績÷計画×100）　<span style="color:#16a34a">緑≥100%</span>・<span style="color:#d97706">橙≥70%</span>・<span style="color:#dc2626">赤&lt;70%</span>
+    </div>
+    <div>
+      <span style="font-weight:700;color:#374151;font-size:12px">AI予測表示（現在週のみ）</span><br>
+      <span style="color:#7c3aed;font-weight:600">予27</span> ← AI週次予測数（30日平均×7日換算）<br>
+      <span style="color:#16a34a;font-weight:600">+22</span> ← 予測が計画を上回る場合（緑）<br>
+      <span style="color:#dc2626;font-weight:600">-5</span> ← 計画が予測を超えている場合（赤）
+    </div>
+    <div>
+      <span style="font-weight:700;color:#374151;font-size:12px">ハイライト</span><br>
+      <span style="background:#fef9c3;padding:1px 6px;border-radius:3px">黄色背景</span> ← 現在週<br>
+      計画未登録の週は「−」、現在週のみAI予測を表示
+    </div>
+  </div>
   <div class="weekly-md-wrap">
     <table>
       <thead>
@@ -189,11 +208,6 @@
       {% endfor %}
       </tbody>
     </table>
-  </div>
-  <div style="font-size:11px;color:#6b7280;margin-top:8px">
-    <span style="color:#1e40af;font-weight:600">計画数</span> /
-    <span style="color:#166534;font-weight:600">実績数</span> /
-    <span>達成率</span> の順で表示。現在週は黄色ハイライト。
   </div>
 </div>
 {% else %}

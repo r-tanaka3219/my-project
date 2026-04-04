@@ -392,6 +392,28 @@ def weekly_md():
         rows = [r for r in rows if any(q in str(r.get(k) or '').lower()
                                        for k in ('jan', 'product_cd', 'product_name', 'supplier_cd', 'supplier_name'))]
 
+    # 実績：sales_history から週番号別に集計（年度内の全週）
+    # 年度開始月（4月）〜終了月（翌年3月）の範囲で絞り込む
+    fiscal_start = date(year_param, 4, 1)
+    fiscal_end   = date(year_param + 1, 3, 31)
+    actual_rows = db.execute("""
+        SELECT jan,
+               EXTRACT(ISODOW FROM sale_date::date)::int AS dow,
+               EXTRACT(WEEK  FROM sale_date::date)::int AS week_no,
+               SUM(quantity) AS qty
+        FROM sales_history
+        WHERE sale_date::date BETWEEN %s AND %s
+        GROUP BY jan, week_no, dow
+    """, [fiscal_start, fiscal_end]).fetchall()
+
+    # JAN × 週番号 → 実績数量マップ
+    actual_map: dict = {}
+    for ar in actual_rows:
+        jan = ar['jan']
+        wn  = int(ar['week_no'])
+        actual_map.setdefault(jan, {})
+        actual_map[jan][wn] = actual_map[jan].get(wn, 0) + int(ar['qty'] or 0)
+
     # 商品ごとに週次データを集約
     products_md: dict = {}
     for r in rows:
@@ -406,8 +428,8 @@ def weekly_md():
                 'weeks': {}
             }
         products_md[jan]['weeks'][wn] = {
-            'plan': int(r['plan_qty'] or 0),
-            'actual': int(r['actual_qty'] or 0),
+            'plan':   int(r['plan_qty'] or 0),
+            'actual': actual_map.get(jan, {}).get(wn, 0),
         }
 
     # 週次予測値マップ（当週のAI予測 = 直近30日日次平均 × 7）
