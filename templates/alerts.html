@@ -20,11 +20,20 @@
   <a href="/reports/alerts" class="filter-btn {% if not alert_type %}active{% endif %}">
     全件 <strong>{{ counts.values()|sum }}</strong>
   </a>
-  {% for atype, cnt in counts.items() %}
+  {% set fixed_types = ['売上異常値', 'ABCランク変化'] %}
+  {% for atype in fixed_types %}
   <a href="/reports/alerts?type={{ atype|urlencode }}"
      class="filter-btn {% if alert_type == atype %}active{% endif %}">
-    {{ atype }} <strong>{{ cnt }}</strong>
+    {{ atype }} <strong>{{ counts.get(atype, 0) }}</strong>
   </a>
+  {% endfor %}
+  {% for atype, cnt in counts.items() %}
+    {% if atype not in fixed_types %}
+    <a href="/reports/alerts?type={{ atype|urlencode }}"
+       class="filter-btn {% if alert_type == atype %}active{% endif %}">
+      {{ atype }} <strong>{{ cnt }}</strong>
+    </a>
+    {% endif %}
   {% endfor %}
 </div>
 
