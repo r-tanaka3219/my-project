@@ -1,12 +1,10 @@
 """発注管理 Blueprint"""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, session
-from datetime import date, timedelta, datetime
-import os, csv, io, json, logging
-from urllib.parse import quote
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from datetime import date, timedelta
+import logging
 from db import get_db
 from auth_helpers import login_required, admin_required, permission_required
-from helpers import _normalize_jan, _normalize_date, _to_int, _safe_date, _excel_bytes_from_rows, _record_receipt
-from mail_service import send_order_mail
+from helpers import _to_int, _safe_date, _record_receipt
 from auto_check import run_order_check, get_pending_orders
 
 logger = logging.getLogger('inventory.orders')
@@ -348,7 +346,6 @@ def pending_force_group_manual():
 
 @bp.route('/orders/pending_force_group', methods=['POST'])
 def pending_force_group():
-    import math
     from auto_check import _do_order
     db = get_db()
     group_name = request.form.get('mixed_group', '').strip()
@@ -524,7 +521,6 @@ def orders_backorders_receive():
 def orders_backorders_close():
     db = get_db()
     order_id = _to_int(request.form.get('order_history_id'))
-    reason = (request.form.get('reason') or '未納終了').strip()
     order = db.execute("SELECT * FROM order_history WHERE id=%s", [order_id]).fetchone()
     if not order:
         flash('発注情報が見つかりません。', 'danger')

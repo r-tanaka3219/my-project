@@ -1,5 +1,5 @@
 """在庫管理・自動発注システム"""
-import sys, os, csv, io, hashlib, hmac, threading, queue, json, time as _time, logging, math
+import sys, os, csv, io, threading, json, time as _time, logging, math
 
 # Windows CP932 環境でも UTF-8 で出力できるよう stdout/stderr を再設定
 if hasattr(sys.stdout, 'reconfigure'):
@@ -32,11 +32,9 @@ for _enc in ('utf-8-sig', 'utf-8', 'shift_jis', 'cp932'):
         continue
 
 from database import init_db
-from mail_service import send_order_mail, send_expiry_alert
-from auto_check import (run_order_check, run_expiry_check, run_csv_import,
-                        run_month_end_import, is_month_end,
-                        start_scheduler, update_reorder_points, create_inventory_count,
-                        get_pending_orders)
+from auto_check import (run_expiry_check, run_csv_import,
+                        run_month_end_import,
+                        start_scheduler, create_inventory_count)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -89,9 +87,15 @@ def close_db(error):
     db = g.pop('db', None)
     if db is not None:
         try:
-            db.close()
+            if error:
+                db.rollback()
         except Exception:
             pass
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 # ── 予測キャッシュ & バックグラウンド事前計算 ──────────────────────────
@@ -579,7 +583,7 @@ def _build_forecast_rows_raw(db, flags=None):
         ORDER BY p.supplier_cd, p.product_cd
     """).fetchall()
 
-    import calendar, statistics as _stats
+    import statistics as _stats
 
     reorder_mode = flags.get('forecast_reorder_mode', 'sf')  # P2: 'sf'/'p80'/'p90'
 
@@ -1033,7 +1037,8 @@ def _csv_progress_push(job_id, event):
 
 
 # ─── 認証ヘルパー ────────────────────────────────────────────────
-def _hash(pw): return hashlib.sha256(pw.encode()).hexdigest()
+from werkzeug.security import generate_password_hash as _gen_pw_hash
+def _hash(pw): return _gen_pw_hash(pw)
 
 def current_user():
     return session.get('user')
@@ -1119,7 +1124,7 @@ def inject_permissions():
 # --- グローバルエラーハンドラー ---
 @app.errorhandler(500)
 def internal_error(e):
-    import traceback, sys
+    import traceback
     tb = traceback.format_exc()
     print("500 ERROR:", tb, flush=True)
     logger.error("500 ERROR: %s", tb)
@@ -1261,7 +1266,6 @@ def api_browse_folders():
 @admin_required
 def api_net_use_browse():
     """net use でUNC接続してフォルダ一覧を返す"""
-    import subprocess as _sp
     data     = request.get_json() or {}
     unc_base = (data.get('path') or '').strip()
     net_user = (data.get('net_user') or '').strip()
@@ -1614,6 +1618,7 @@ def receipt_history_delete(mid):
     stocks = db.execute("""
         SELECT * FROM stocks WHERE jan=%s AND quantity>0
         ORDER BY CASE WHEN expiry_date='' THEN '0000-00-00' ELSE expiry_date END DESC
+        FOR UPDATE
     """, [mv['jan']]).fetchall()
     for s in stocks:
         if qty_to_restore <= 0:
@@ -2093,11 +2098,6 @@ def csv_reimport_month_end(sid):
     db = get_db()
     ym_str = target_ym
     try:
-        yr, mo = int(ym_str[:4]), int(ym_str[4:6])
-        import calendar as _cal2
-        last_day2 = _cal2.monthrange(yr, mo)[1]
-        from datetime import date as _date2
-        me_date2 = _date2(yr, mo, last_day2)
         log_key_pat = f"month_end_{ym_str}_%"
         db.execute(
             "DELETE FROM import_logs WHERE setting_id=%s AND filename LIKE %s AND status='partial_skip'",
@@ -3076,7 +3076,6 @@ def mail_templates():
 @admin_required
 def test_order_mail():
     from mail_service import queue_order, flush_order_mail
-    today = str(date.today())
     # サンプル発注データ
     sample_product = {
         'supplier_cd': 'SUP001', 'supplier_name': '山田食品',
@@ -4327,10 +4326,10 @@ def reports_forecast_demand_bulk_delete():
         db.execute(f"DELETE FROM demand_plans WHERE id IN ({placeholders})", ids)
         deleted = len(ids)
     else:
-        db.execute("DELETE FROM demand_plans WHERE demand_date >= CURRENT_DATE - INTERVAL '7 days'")
-        deleted = db.rowcount if getattr(db, 'rowcount', None) is not None else 0
+        cur = db.execute("DELETE FROM demand_plans WHERE demand_date >= CURRENT_DATE - INTERVAL '7 days'")
+        deleted = cur.rowcount
     db.commit()
-    flash(f'受注予定を削除しました。', 'warning')
+    flash(f'受注予定を {deleted} 件削除しました。', 'warning')
     return redirect(url_for('reports_forecast'))
 
 @app.route('/reports/forecast/demands/<int:demand_id>/delete', methods=['POST'])
@@ -4462,7 +4461,7 @@ def sales_history_import_page():
                         ON CONFLICT DO NOTHING
                     """, [jan, product_name, quantity, sale_date, source_file, row_hash])
                     ok += 1
-                except Exception as e2:
+                except Exception:
                     err += 1
                 if i % 100 == 0 or i == total:
                     _csv_progress_push(job_id, {'phase': 'progress', 'current': i, 'total': total, 'ok': ok, 'skip': skip, 'err': err})

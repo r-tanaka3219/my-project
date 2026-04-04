@@ -1,7 +1,6 @@
 """共有ヘルパー関数・定数"""
-import io, csv, logging
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import logging
+import math
 from datetime import date, timedelta, datetime
 
 logger = logging.getLogger('inventory.helpers')
@@ -280,7 +279,7 @@ def _build_forecast_rows(db, q=''):
         ORDER BY p.supplier_cd, p.product_cd
     """).fetchall()
 
-    import calendar, statistics as _stats
+    import statistics as _stats
 
     reorder_mode = flags.get('forecast_reorder_mode', 'sf')  # P2: 'sf'/'p80'/'p90'
 
@@ -443,13 +442,29 @@ def _build_forecast_rows(db, q=''):
         r['weighted_daily_forecast'] = round(base_next_daily_display, 2)
         r['next_month_forecast']= round(adjusted30, 1)
         r['cover_days']         = round(float(r.get('stock_qty') or 0) / next_daily, 1) if next_daily else None
+        # ── ロット単位への丸め処理（問屋向け共通）────────────────
+        # unit_qty  : 入数（ケースあたりの個数）→ 発注数はこの倍数
+        # order_unit: 発注単位（個数ベースの最小発注単位）→ 発注点はこの倍数
+        _unit_qty   = max(1, int(r.get('unit_qty')   or 1))
+        _order_unit = max(1, int(r.get('order_unit') or 1))
+
+        # 推奨発注点: order_unit の倍数に切り上げ
+        if _order_unit > 1 and suggested_rp > 0:
+            suggested_rp = math.ceil(suggested_rp / _order_unit) * _order_unit
+
+        # 推奨発注数: unit_qty(入数)の倍数に切り上げ（ケース単位発注）
+        raw_oq = max(0, next_daily * (lt + 14))
+        if _unit_qty > 1:
+            suggested_oq = max(_unit_qty, math.ceil(raw_oq / _unit_qty) * _unit_qty)
+        else:
+            suggested_oq = int(max(0, raw_oq + 0.9999))
+
         r['suggested_reorder_point'] = suggested_rp
         r['rp_mode_label']      = rp_mode_label                 # P2
         r['p80_daily']          = p80_daily                     # P2
         r['p90_daily']          = p90_daily                     # P2
         r['daily_std']          = round(daily_std, 2) if daily_std is not None else None  # P2
-        # 推奨発注数 = (LT + 14) × 日次予測
-        r['suggested_order_qty']= int(max(0, next_daily * (lt + 14) + 0.9999))
+        r['suggested_order_qty']= suggested_oq
         out.append(r)
     return out
 

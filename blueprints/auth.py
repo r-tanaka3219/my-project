@@ -1,8 +1,8 @@
 """認証 Blueprint"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-import hashlib, hmac, logging
+import hashlib, logging
 from db import get_db
-from auth_helpers import _hash, _rate_limit, has_permission, PAGE_PERMISSIONS, PERMISSION_ENDPOINTS
+from auth_helpers import _hash, _check_hash, _rate_limit, has_permission, PAGE_PERMISSIONS
 
 logger = logging.getLogger('inventory.auth')
 bp = Blueprint('auth', __name__)
@@ -24,7 +24,12 @@ def login():
         user = db.execute(
             "SELECT * FROM users WHERE username=%s AND is_active=1", [username]
         ).fetchone()
-        if user and hmac.compare_digest(user['password'], _hash(password)):
+        if user and _check_hash(user['password'], password):
+            # 旧 SHA-256 ハッシュの場合は PBKDF2 形式へ自動アップグレード
+            if not user['password'].startswith('pbkdf2:') and not user['password'].startswith('scrypt:'):
+                db.execute("UPDATE users SET password=%s WHERE username=%s",
+                           [_hash(password), user['username']])
+                db.commit()
             session.clear()
             session['user'] = user['username']
             session['role'] = user['role']
@@ -68,7 +73,7 @@ def change_password_required():
             flash('パスワードは8文字以上で入力してください。', 'danger')
         elif pw1 != pw2:
             flash('パスワードが一致しません。', 'danger')
-        elif _hash(pw1) in _default_hashes:
+        elif hashlib.sha256(pw1.encode()).hexdigest() in _default_hashes:
             flash('初期パスワードは使用できません。別のパスワードを設定してください。', 'danger')
         else:
             db = get_db()

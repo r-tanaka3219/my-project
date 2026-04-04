@@ -3,9 +3,11 @@ Database layer - PostgreSQL (psycopg2)
 SQLite から PostgreSQL へ移行版
 """
 import os
+import threading
 import logging
 import psycopg2
 import psycopg2.extras
+from psycopg2.pool import ThreadedConnectionPool
 from datetime import date, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -108,10 +110,48 @@ class DBConn:
         self.close()
 
 
+
+# ── コネクションプール ────────────────────────────────────────────
+_pool: ThreadedConnectionPool | None = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool() -> ThreadedConnectionPool:
+    """接続プールを遅延初期化して返す（スレッドセーフ）"""
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = ThreadedConnectionPool(minconn=2, maxconn=10, **get_dsn())
+    return _pool
+
+
+class _PooledConn(DBConn):
+    """プールから取得した接続を管理するラッパー。close() で接続をプールへ返却する。"""
+    def __init__(self, conn, pool: ThreadedConnectionPool):
+        super().__init__(conn)
+        self._pool = pool
+
+    def close(self):
+        try:
+            if not self._conn.closed:
+                self._conn.rollback()
+        except Exception:
+            pass
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+
 def get_db() -> DBConn:
-    conn = psycopg2.connect(**get_dsn())
+    pool = _get_pool()
+    conn = pool.getconn()
     conn.autocommit = False
-    return DBConn(conn)
+    return _PooledConn(conn, pool)
 
 
 # _migrate: removed (columns already applied)

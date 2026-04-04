@@ -1,5 +1,5 @@
 """チェーン・店舗管理 Blueprint"""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
+from flask import Blueprint, render_template, request, redirect, flash, send_file
 import logging
 from db import get_db
 from auth_helpers import permission_required, admin_required
@@ -202,7 +202,6 @@ def chain_template():
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from io import BytesIO
-    from urllib.parse import quote
     db = get_db()
     _tn = db.execute("SELECT value FROM settings WHERE key='chain_template_name'").fetchone()
     dl_name = ((_tn['value'] if _tn else None) or 'チェーンマスタ_テンプレート') + '.xlsx'
@@ -290,7 +289,6 @@ def store_template():
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from io import BytesIO
-    from urllib.parse import quote
     db = get_db()
     _tn = db.execute("SELECT value FROM settings WHERE key='store_template_name'").fetchone()
     dl_name = ((_tn['value'] if _tn else None) or '店舗マスタ_テンプレート') + '.xlsx'

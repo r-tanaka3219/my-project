@@ -1,12 +1,22 @@
 """認証・認可ヘルパー（デコレータ、権限チェック）"""
-import hashlib
+import hashlib, hmac
 from functools import wraps
 from flask import session, redirect, url_for, flash
 from extensions import limiter
+from werkzeug.security import generate_password_hash, check_password_hash as _wp_check
 
 # ─── パスワードハッシュ ───────────────────────────────────────────
-def _hash(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
+def _hash(pw: str) -> str:
+    """新しいパスワードハッシュを生成（PBKDF2-SHA256 + ランダムソルト）"""
+    return generate_password_hash(pw)
+
+
+def _check_hash(stored: str, pw: str) -> bool:
+    """保存済みハッシュとパスワードを照合。旧 SHA-256 形式との後方互換あり。"""
+    if stored.startswith('pbkdf2:') or stored.startswith('scrypt:'):
+        return _wp_check(stored, pw)
+    # 旧形式（ソルトなし SHA-256）
+    return hmac.compare_digest(stored, hashlib.sha256(pw.encode()).hexdigest())
 
 
 # ─── ページ権限リスト ─────────────────────────────────────────────

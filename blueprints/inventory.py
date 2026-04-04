@@ -1,11 +1,10 @@
 """在庫管理 Blueprint"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, session
 from datetime import date, timedelta
-import csv, io, json, logging
-from urllib.parse import quote
+import csv, io, logging
 from db import get_db
-from auth_helpers import login_required, admin_required, permission_required
-from helpers import _normalize_date, _to_int, _safe_date, _build_picking_plan, _build_replenishment_rows, _excel_bytes_from_rows
+from auth_helpers import login_required, permission_required
+from helpers import _to_int, _build_picking_plan, _build_replenishment_rows, _excel_bytes_from_rows
 
 logger = logging.getLogger('inventory.inventory')
 bp = Blueprint('inventory', __name__)
@@ -74,7 +73,7 @@ def inventory_edit(stock_id):
 @login_required
 def inventory_dispose(stock_id):
     db = get_db()
-    s = db.execute("SELECT * FROM stocks WHERE id=%s", [stock_id]).fetchone()
+    s = db.execute("SELECT * FROM stocks WHERE id=%s FOR UPDATE", [stock_id]).fetchone()
     if not s:
         flash('在庫が見つかりません', 'error')
         return redirect(url_for('inventory.inventory'))
@@ -214,7 +213,7 @@ def inventory_transfer(stock_id):
     if qty <= 0 or not to_location:
         flash('移動数量と移動先ロケーションは必須です。', 'danger')
         return redirect(url_for('inventory.inventory'))
-    stock = db.execute("SELECT * FROM stocks WHERE id=%s", [stock_id]).fetchone()
+    stock = db.execute("SELECT * FROM stocks WHERE id=%s FOR UPDATE", [stock_id]).fetchone()
     if not stock or int(stock['quantity'] or 0) <= 0:
         flash('移動元在庫が見つかりません。', 'danger')
         return redirect(url_for('inventory.inventory'))
