@@ -3222,13 +3222,11 @@ def backup():
         if rows:
             for ri, row in enumerate(rows, 2):
                 for ci, key in enumerate(headers, 1):
-                    val = row[ci-1] if isinstance(row, (list, tuple)) else row.get(headers[ci-1]) if hasattr(row, 'get') else None
                     try:
                         val = row[key]
                     except Exception:
                         val = ''
-                    c = ws.cell(ri, ci, val)
-                    c.font = dfont; c.border = bdr
+                    ws.cell(ri, ci, val)
         ws.freeze_panes = 'A2'
 
     # ── 商品マスタ ──
@@ -3241,7 +3239,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── 在庫一覧 ──
@@ -3258,7 +3256,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── 発注履歴 ──
@@ -3271,7 +3269,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── 廃棄退避在庫 ──
@@ -3284,7 +3282,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── 入庫履歴 ──
@@ -3297,7 +3295,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── 棚卸データ ──
@@ -3310,7 +3308,7 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     # ── CSV取込ログ ──
@@ -3327,25 +3325,27 @@ def backup():
             c.alignment = Alignment(horizontal='center'); c.border = bdr
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
-    # ── CSVインポートデータ（sales_history）──
+    # ── CSVインポートデータ（sales_history）── 直近50,000件のみ
     ws = wb.create_sheet('CSVインポートデータ')
     rows = db.execute("""
         SELECT jan, product_name, quantity, sale_date, source_file,
                chain_cd, client_name, store_cd, store_name, row_hash, created_at
         FROM sales_history
         ORDER BY sale_date DESC, created_at DESC
+        LIMIT 50000
     """).fetchall()
     if rows:
         keys = list(rows[0].keys())
         for ci, h in enumerate(keys, 1):
             c = ws.cell(1, ci, h); c.font = hfont; c.fill = hfill
             c.alignment = Alignment(horizontal='center'); c.border = bdr
+        # 大量データは書式なしで書き込み（速度優先）
         for ri, row in enumerate(rows, 2):
             for ci, key in enumerate(keys, 1):
-                c = ws.cell(ri, ci, row[key]); c.font = dfont; c.border = bdr
+                ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
     buf = io.BytesIO()
