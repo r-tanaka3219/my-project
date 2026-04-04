@@ -270,12 +270,16 @@ def product_import():
             import openpyxl
             wb = openpyxl.load_workbook(io.BytesIO(f.read()), data_only=True)
             ws = wb.active
-            headers = [str(ws.cell(1, c).value or '').strip() for c in range(1, ws.max_column+1)]
+            def _cs(v):
+                if v is None: return ''
+                if isinstance(v, float) and v.is_integer(): return str(int(v))
+                return str(v).strip()
+            headers = [_cs(ws.cell(1, c).value) for c in range(1, ws.max_column+1)]
             for ri in range(2, ws.max_row+1):
                 row = {}
                 for ci, h in enumerate(headers, 1):
                     v = ws.cell(ri, ci).value
-                    row[h] = str(v).strip() if v is not None else ''
+                    row[h] = _cs(v)
                 # 空行スキップ
                 if any(v for v in row.values()):
                     rows_data.append(row)

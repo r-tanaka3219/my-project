@@ -35,7 +35,7 @@
   <th class="text-center" style="width:42px;min-width:42px">区分</th>
   <th class="text-right" style="min-width:65px">在庫</th><th class="text-right" style="min-width:60px">入数</th>
   <th class="text-right" style="min-width:70px">発注点</th><th class="text-right" style="min-width:60px">ロット</th>
-  <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:55px">LT</th><th class="text-center" style="min-width:75px">安全係数</th><th class="text-center" style="min-width:60px">自動</th><th class="text-center" style="min-width:110px">操作</th>
+  <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:55px">LT</th><th class="text-center" style="min-width:75px">安全係数</th><th class="text-center" style="min-width:60px">自動</th><th style="min-width:120px">混載グループ</th><th class="text-center" style="min-width:110px">操作</th>
 </tr></thead><tbody>
 {% for p in products %}
 <tr>
@@ -60,6 +60,18 @@
   <td class="text-center">{{ p.lead_time_days }}日</td>
   <td class="text-center">×{{ p.safety_factor }}</td>
   <td class="text-center">{% if p.reorder_auto == 1 %}<span class="badge badge-green">🤖 AI</span>{% elif p.reorder_auto == 2 %}<span class="badge badge-blue">📅 前年</span>{% else %}<span class="badge badge-gray">手動</span>{% endif %}</td>
+  <td>
+    {% if p.mixed_group %}
+      <span class="badge badge-purple" style="font-size:11px">🚚 {{ p.mixed_group }}</span>
+      <div style="font-size:11px;color:#9ca3af;margin-top:2px;white-space:nowrap">
+        {{ p.mixed_lot_cases }}ケース
+        {% if p.mixed_lot_mode == 'gte' %}以上{% else %}単位{% endif %}
+        / {{ p.mixed_force_days }}日強制
+      </div>
+    {% else %}
+      <span style="color:#d1d5db;font-size:12px">-</span>
+    {% endif %}
+  </td>
   <td class="text-center" style="white-space:nowrap">
     <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
     <form method="post" action="/products/{{ p.id }}/delete" style="display:inline;margin-left:4px"

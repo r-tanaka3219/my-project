@@ -120,9 +120,13 @@ def forecast_wholesale_apply():
     db = get_db()
     mode = request.form.get('mode', 'reorder_point')
     q    = request.form.get('q', '')
+    selected_ids = request.form.getlist('selected_ids')
+    selected_set = set(str(i) for i in selected_ids) if selected_ids else None
     rows, _ = build_wholesale_forecast_rows(db, q)
     updated = 0
     for r in rows:
+        if selected_set and str(r['product_id']) not in selected_set:
+            continue
         locked = int(r.get('lock_order_qty') or 0)
         if mode == 'both':
             if locked:
@@ -140,7 +144,8 @@ def forecast_wholesale_apply():
                        [r['suggested_reorder_point'], r['product_id']])
         updated += 1
     db.commit()
-    flash(f'問屋向け予測をもとに {updated} 件の設定を更新しました。', 'success')
+    scope = '選択' if selected_set else '全件'
+    flash(f'問屋向け予測をもとに {updated} 件（{scope}）の設定を更新しました。', 'success')
     return redirect(url_for('forecast.forecast_wholesale', q=q))
 
 

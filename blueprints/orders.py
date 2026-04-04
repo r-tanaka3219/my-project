@@ -46,9 +46,18 @@ def orders():
         """, jans + [today_str]).fetchall()
         for h in hist_rows:
             actual_order_qty[h['jan']] = h['total_qty']
+    # 混載グループの保留進捗サマリー（発注対象テーブルで使用）
+    group_status = {}
+    for item in pending:
+        gname = item['mixed_group']
+        if gname not in group_status:
+            group_status[gname] = {
+                'total': int(item['group_total_cases'] or 0),
+                'lot_cases': int(item['mixed_lot_cases'] or 0),
+            }
     return render_template('orders.html', low_stock=low_stock, ordered_list=ordered_list,
                            all_products=all_products, pending=pending, today=date.today(), q=q,
-                           actual_order_qty=actual_order_qty)
+                           actual_order_qty=actual_order_qty, group_status=group_status)
 
 @bp.route('/orders/send', methods=['POST'])
 @login_required
@@ -128,24 +137,8 @@ def order_history():
 # ─── 混載ペンディング管理 ──────────────────────────────────────
 @bp.route('/orders/pending_force', methods=['POST'])
 def pending_force():
-    """指定したペンディング発注を強制送信"""
-    db = get_db()
-    pending_ids = request.form.getlist('pending_id')
-    today = str(date.today())
-    sent = 0
-    from auto_check import _do_order
-    for pid in pending_ids:
-        item = db.execute("SELECT * FROM order_pending WHERE id=%s",[int(pid)]).fetchone()
-        if not item or item['status'] != 'pending':
-            continue
-        product = db.execute("SELECT * FROM products WHERE jan=%s",[item['jan']]).fetchone()
-        if not product:
-            continue
-        ok, msg = _do_order(db, product, item['order_qty'], 'forced', today)
-        db.execute("UPDATE order_pending SET status='sent' WHERE id=%s",[int(pid)])
-        db.commit()
-        sent += 1
-    flash(f'{sent}件の保留発注を強制送信しました。', 'success' if sent else 'warning')
+    """混載ロット保留発注の強制送信（ロットチェックあり）"""
+    flash('全件強制発注は廃止されました。グループごとの⚡強制発注ボタンをご利用ください。', 'warning')
     return redirect(url_for('orders.orders'))
 
 @bp.route('/orders/pending_force_single', methods=['POST'])
@@ -253,6 +246,34 @@ def pending_force_group_edit():
             'suggested_order_qty': final_order_qty,
         })
 
+    # 同グループで未保留の商品（追加候補）
+    pending_jans = [it['jan'] for it in items]
+    if pending_jans:
+        ph = ','.join(['%s'] * len(pending_jans))
+        addable_rows = db.execute(f"""
+            SELECT p.jan, p.product_cd, p.product_name, p.unit_qty,
+                   p.order_qty AS default_order_qty,
+                   COALESCE(SUM(s.quantity), 0) AS stock_qty
+            FROM products p
+            LEFT JOIN stocks s ON s.jan = p.jan
+            WHERE p.mixed_group = %s AND p.is_active = 1
+              AND p.jan NOT IN ({ph})
+            GROUP BY p.jan, p.product_cd, p.product_name, p.unit_qty, p.order_qty
+            ORDER BY p.product_cd
+        """, [group_name] + pending_jans).fetchall()
+    else:
+        addable_rows = db.execute("""
+            SELECT p.jan, p.product_cd, p.product_name, p.unit_qty,
+                   p.order_qty AS default_order_qty,
+                   COALESCE(SUM(s.quantity), 0) AS stock_qty
+            FROM products p
+            LEFT JOIN stocks s ON s.jan = p.jan
+            WHERE p.mixed_group = %s AND p.is_active = 1
+            GROUP BY p.jan, p.product_cd, p.product_name, p.unit_qty, p.order_qty
+            ORDER BY p.product_cd
+        """, [group_name]).fetchall()
+    addable_products = [dict(r) for r in addable_rows]
+
     return render_template(
         'pending_force_group_edit.html',
         group_name=group_name,
@@ -261,6 +282,7 @@ def pending_force_group_edit():
         total_cases=total_cases,
         shortage=shortage,
         suggested_total_cases=sum(v['suggested_total_cases'] for v in view_items),
+        addable_products=addable_products,
         today=date.today(),
     )
 
@@ -314,9 +336,26 @@ def pending_force_group_manual():
             'final_qty': final_qty,
         })
 
+    # 追加商品（order_pendingにない同グループ商品）の処理
+    add_jans = request.form.getlist('add_jan')
+    add_lines = []
+    for jan in add_jans:
+        raw = (request.form.get(f'add_cases_{jan}') or '1').strip()
+        try:
+            add_cases = max(1, int(raw))
+        except ValueError:
+            add_cases = 1
+        product = db.execute('SELECT * FROM products WHERE jan=%s AND is_active=1', [jan]).fetchone()
+        if not product:
+            continue
+        unit_qty = int(product['unit_qty'] or 1)
+        final_qty = add_cases * unit_qty
+        final_total_cases += add_cases
+        add_lines.append({'product': product, 'final_qty': final_qty, 'jan': jan})
+
     if final_total_cases < lot_cases:
         flash(f'手動調整後の合計ロットが不足しています。合計 {final_total_cases} ケース / 必要 {lot_cases} ケースです。', 'error')
-        return redirect(url_for('pending_force_group_edit', mixed_group=group_name))
+        return redirect(url_for('orders.pending_force_group_edit', mixed_group=group_name))
 
     today = str(date.today())
     sent = 0
@@ -330,13 +369,18 @@ def pending_force_group_manual():
         db.commit()
         sent += 1
 
+    for al in add_lines:
+        ok, msg = _do_order(db, al['product'], al['final_qty'], 'forced_manual', today)
+        db.commit()
+        sent += 1
+
     ok, msg = flush_order_mail()
-    for line in manual_lines:
-        it = line['item']
+    all_jans = [line['item']['jan'] for line in manual_lines] + [al['jan'] for al in add_lines]
+    for jan in all_jans:
         db.execute("""
             UPDATE order_history SET mail_sent=%s, mail_result=%s
             WHERE jan=%s AND order_date=%s AND trigger_type='forced_manual'
-        """, [1 if ok else 0, msg, it['jan'], today])
+        """, [1 if ok else 0, msg, jan, today])
     db.commit()
 
     if ok:
@@ -362,22 +406,19 @@ def pending_force_group():
         return redirect(url_for('orders.orders'))
     lot_cases = int(items[0]['mixed_lot_cases'] or 5)
     total_cases = sum(it['order_cases'] for it in items)
-    n = len(items)
     shortage = max(0, lot_cases - total_cases)
-    # 在庫数が少ない順にソート（在庫が少ない方に余りを多く配分）
-    stocks_map = {}
-    for it in items:
-        st = db.execute(
-            "SELECT COALESCE(SUM(quantity),0) AS s FROM stocks WHERE jan=%s", [it['jan']]
-        ).fetchone()['s']
-        stocks_map[it['jan']] = int(st)
-    items_sorted = sorted(items, key=lambda x: stocks_map.get(x['jan'], 0))
-    extra_per = shortage // n if n > 0 else 0
-    remainder = shortage % n if n > 0 else 0
+    # ロット未達 → 手動調整画面へ誘導
+    if shortage > 0:
+        flash(
+            f'グループ「{group_name}」は現在 {total_cases}ケース / 必要 {lot_cases}ケース（あと {shortage}ケース不足）です。'
+            f'手動調整で数量を追加してから発注してください。',
+            'warning'
+        )
+        return redirect(url_for('orders.pending_force_group_edit', mixed_group=group_name))
+    n = len(items)
     adjusted = {}
-    for idx, it in enumerate(items_sorted):
-        extra = extra_per + (1 if idx < remainder else 0)
-        adjusted[it['jan']] = (it['order_cases'] + extra) * int(it['order_qty'] or 1)
+    for it in items:
+        adjusted[it['jan']] = int(it['order_cases']) * int(it['order_qty'] or 1)
     sent = 0
     for it in items:
         product = db.execute("SELECT * FROM products WHERE jan=%s", [it['jan']]).fetchone()
@@ -402,6 +443,81 @@ def pending_force_group():
     else:
         flash(f'グループ{group_name}: 発注登録済みですがメール送信失敗: {msg}', 'warning')
     return redirect(url_for('orders.orders'))
+
+@bp.route('/orders/pending_group_data')
+@login_required
+def pending_group_data():
+    """混載グループのロット充足チェック用JSON（モーダル向け）"""
+    db = get_db()
+    group_name = request.args.get('mixed_group', '').strip()
+    if not group_name:
+        return jsonify({'error': 'グループ名未指定'}), 400
+
+    items = db.execute("""
+        SELECT op.*, p.unit_qty, p.mixed_lot_cases, p.order_qty AS product_order_qty
+        FROM order_pending op
+        JOIN products p ON op.jan = p.jan
+        WHERE op.mixed_group = %s AND op.status = 'pending'
+        ORDER BY op.order_cases DESC
+    """, [group_name]).fetchall()
+    if not items:
+        return jsonify({'error': '保留発注なし'}), 404
+
+    lot_cases   = int(items[0]['mixed_lot_cases'] or 5)
+    total_cases = sum(int(it['order_cases'] or 0) for it in items)
+    shortage    = max(0, lot_cases - total_cases)
+
+    # 自動配分（在庫少ない順）
+    stocks_map = {}
+    for it in items:
+        st = db.execute("SELECT COALESCE(SUM(quantity),0) AS s FROM stocks WHERE jan=%s",
+                        [it['jan']]).fetchone()['s']
+        stocks_map[it['jan']] = int(st or 0)
+    sorted_items = sorted(items, key=lambda x: stocks_map.get(x['jan'], 0))
+    n = len(sorted_items)
+    extra_per  = shortage // n if n else 0
+    remainder  = shortage % n if n else 0
+    auto_extra = {it['jan']: extra_per + (1 if i < remainder else 0)
+                  for i, it in enumerate(sorted_items)}
+
+    view_items = []
+    for it in items:
+        base_cases     = int(it['order_cases'] or 0)
+        base_order_qty = int(it['order_qty'] or it.get('product_order_qty') or 1)
+        sug_extra      = auto_extra.get(it['jan'], 0)
+        view_items.append({
+            'id': it['id'], 'jan': it['jan'],
+            'product_cd': it['product_cd'] or '',
+            'product_name': it['product_name'] or '',
+            'stock_qty': stocks_map.get(it['jan'], 0),
+            'unit_qty': int(it['unit_qty'] or 1),
+            'base_cases': base_cases,
+            'base_order_qty': base_order_qty,
+            'suggested_extra': sug_extra,
+        })
+
+    # 追加候補（同グループ未保留）
+    pending_jans = [it['jan'] for it in items]
+    ph = ','.join(['%s'] * len(pending_jans))
+    addable = db.execute(f"""
+        SELECT p.jan, p.product_cd, p.product_name, p.unit_qty,
+               COALESCE(SUM(s.quantity),0) AS stock_qty
+        FROM products p
+        LEFT JOIN stocks s ON s.jan = p.jan
+        WHERE p.mixed_group=%s AND p.is_active=1 AND p.jan NOT IN ({ph})
+        GROUP BY p.jan, p.product_cd, p.product_name, p.unit_qty
+        ORDER BY p.product_cd
+    """, [group_name] + pending_jans).fetchall()
+
+    return jsonify({
+        'group_name':  group_name,
+        'lot_cases':   lot_cases,
+        'total_cases': total_cases,
+        'shortage':    shortage,
+        'items':       view_items,
+        'addable':     [dict(r) for r in addable],
+    })
+
 
 @bp.route('/orders/pending_cancel', methods=['POST'])
 def pending_cancel():

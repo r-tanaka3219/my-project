@@ -22,87 +22,385 @@
   </form>
 </div>
 
-{# ── 混載保留中 ────────────────────────────────── #}
+{# ── 混載保留中（アコーディオン） ──────────────── #}
 {% if pending %}
+<style>
+.mixed-group-card{border-radius:10px;overflow:hidden;margin-bottom:8px;border:1px solid #ddd6fe}
+.mixed-group-card.achieved{border-color:#86efac}
+.mixed-group-card.overdue{border-color:#fca5a5}
+.mixed-group-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;
+  flex-wrap:wrap;user-select:none;transition:background .15s}
+.mixed-group-header:hover{filter:brightness(.97)}
+.mixed-group-body{display:none;border-top:1px solid #ede9fe}
+.mixed-group-body table{width:100%;border-collapse:collapse;font-size:13px}
+.mixed-group-body thead th{padding:6px 12px;background:#f8f7ff;font-size:11px;
+  color:#6b7280;font-weight:600;border-bottom:1px solid #ede9fe;white-space:nowrap}
+.mixed-group-body tbody tr{border-bottom:1px solid #f3f0ff}
+.mixed-group-body tbody tr:last-child{border-bottom:none}
+.mixed-group-body tbody tr.overdue-row{background:#fff7ed}
+.mixed-group-body tbody td{padding:7px 12px;vertical-align:middle}
+.toggle-icon{font-size:11px;color:#7c3aed;transition:transform .2s;display:inline-block;min-width:12px}
+.toggle-icon.open{transform:rotate(90deg)}
+</style>
+
 <div class="card" style="border-left:4px solid #7c3aed">
-  <div class="card-title" style="color:#7c3aed">
-    🚚 混載ロット保留中（{{ pending|length }}件）
-    <span style="font-size:11px;font-weight:normal;color:#9ca3af;margin-left:8px">
-      ロット条件達成 または 強制発注期限超過 で自動送信されます
-    </span>
+
+  {# ── ヘッダー + 全体操作 ── #}
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <div class="card-title" style="color:#7c3aed;margin:0">
+      🚚 混載ロット保留中（{{ pending|length }}件）
+    </div>
+    <span style="font-size:11px;color:#9ca3af">ロット条件達成 または 強制発注期限超過 で自動送信</span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button type="button" id="toggleAllBtn" class="btn btn-outline btn-sm" onclick="mixedToggleAllSwitch()">▼ 全展開</button>
+      <form method="post" action="/orders/pending_cancel" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for item in pending %}<input type="hidden" name="pending_id" value="{{ item.id }}">{% endfor %}
+        <button type="submit" class="btn btn-sm"
+                style="background:#fff;color:#dc2626;border:1px solid #dc2626"
+                onclick="return confirm('保留中の発注を全てキャンセルしますか？')">🗑 全件キャンセル</button>
+      </form>
+    </div>
   </div>
 
-  {# グループごとに集計表示 #}
-  {% set ns = namespace(cur_group='') %}
-  {% for item in pending %}
-  {% if item.mixed_group != ns.cur_group %}
-    {% set ns.cur_group = item.mixed_group %}
-    {% set group_total = item.group_total_cases %}
-    {% set lot_cases   = item.mixed_lot_cases or 10 %}
-    {% set pct = [((group_total / lot_cases * 100)|int), 100]|min %}
-    <div style="background:#f5f3ff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
-        <b style="color:#7c3aed">グループ：{{ item.mixed_group }}</b>
-        <span class="badge badge-purple">{{ group_total }}ケース / {{ lot_cases }}ケース</span>
-        {% if group_total >= lot_cases %}
-          <span class="badge badge-green">✅ ロット達成 → 次回チェックで送信</span>
-        {% else %}
-          {% if item.mixed_lot_mode == 'gte' %}
-          <span class="badge badge-gray">あと {{ lot_cases - group_total }}ケースで発注</span>
-          {% else %}
-          <span class="badge badge-blue">単位{{ lot_cases }}ケース（{{ group_total }}ケース保留中）</span>
-          {% endif %}
-        {% endif %}
-        <form method="get" action="/orders/pending_force_group_edit" style="margin-left:auto"><input type="hidden" name="mixed_group" value="{{ item.mixed_group }}"><button type="submit" class="btn btn-outline btn-sm">✍ 手動調整して強制発注</button></form>
-      </div>
+  {# ── グループ別アコーディオン ── #}
+  {% for group_name, group_items in pending|groupby('mixed_group') %}
+  {% set group_items = group_items|list %}
+  {% set first = group_items[0] %}
+  {% set group_total = first.group_total_cases %}
+  {% set lot_cases   = first.mixed_lot_cases or 10 %}
+  {% set pct = [(group_total / lot_cases * 100)|int, 100]|min %}
+  {% set is_achieved = group_total >= lot_cases %}
+  {% set has_overdue = group_items|selectattr('force_send_date','lt', today|string)|list|length > 0 %}
+  {% set gid = 'mg-' ~ loop.index %}
+
+  <div class="mixed-group-card {% if is_achieved %}achieved{% elif has_overdue %}overdue{% endif %}"
+       data-gid="{{ gid }}" data-overdue="{{ 'true' if has_overdue else 'false' }}" data-achieved="{{ 'true' if is_achieved else 'false' }}">
+
+    {# ── グループヘッダー ── #}
+    <div class="mixed-group-header"
+         onclick="mixedToggle('{{ gid }}')"
+         style="background:{% if is_achieved %}#f0fdf4{% elif has_overdue %}#fff7ed{% else %}#f5f3ff{% endif %}">
+
+      <span class="toggle-icon" id="icon-{{ gid }}">▶</span>
+
+      <b style="font-size:14px;color:{% if is_achieved %}#16a34a{% elif has_overdue %}#c2410c{% else %}#7c3aed{% endif %}">
+        {{ group_name }}
+      </b>
+
+      <span style="font-size:12px;color:#6b7280;white-space:nowrap">
+        <span style="font-family:monospace;font-size:11px;color:#9ca3af">{{ first.supplier_cd }}</span>
+        {{ first.supplier_name }}
+      </span>
+
       {# プログレスバー #}
-      <div style="background:#e5e7eb;border-radius:9999px;height:8px;overflow:hidden">
-        <div style="background:{% if group_total >= lot_cases %}#16a34a{% else %}#7c3aed{% endif %};
-                    width:{{ pct }}%;height:100%;border-radius:9999px;transition:width .3s"></div>
+      <div style="flex:1;min-width:100px;max-width:180px">
+        <div style="background:#e5e7eb;border-radius:9999px;height:8px;overflow:hidden">
+          <div style="background:{% if is_achieved %}#16a34a{% elif has_overdue %}#f97316{% else %}#7c3aed{% endif %};
+                      width:{{ pct }}%;height:100%;border-radius:9999px"></div>
+        </div>
+      </div>
+
+      <span class="badge {% if is_achieved %}badge-green{% elif has_overdue %}badge-orange{% else %}badge-purple{% endif %}">
+        {{ group_total }}/{{ lot_cases }}ケース
+      </span>
+
+      {% if is_achieved %}
+        <span class="badge badge-green">✅ ロット達成</span>
+      {% elif has_overdue %}
+        <span class="badge badge-red">⚠️ 期限超過</span>
+      {% else %}
+        {% if first.mixed_lot_mode == 'gte' %}
+          <span class="badge badge-gray">あと {{ lot_cases - group_total }}ケース</span>
+        {% else %}
+          <span class="badge badge-blue">単位{{ lot_cases }}ケース</span>
+        {% endif %}
+      {% endif %}
+
+      <span style="font-size:11px;color:#9ca3af">{{ group_items|length }}件</span>
+
+      {# グループ操作ボタン（クリック伝播を止める） #}
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+        <a href="/orders/pending_force_group_edit?mixed_group={{ group_name|urlencode }}"
+           class="btn btn-outline btn-sm">✍ 手動調整</a>
+        <form method="post" action="/orders/pending_cancel" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% for item in group_items %}<input type="hidden" name="pending_id" value="{{ item.id }}">{% endfor %}
+          <button type="submit" class="btn btn-sm"
+                  style="background:#fff;color:#d97706;border:1px solid #d97706"
+                  onclick="return confirm('グループ「{{ group_name }}」の保留をキャンセルしますか？')">🗑 取消</button>
+        </form>
+        <button type="button" class="btn btn-warning btn-sm"
+                onclick="openForceModal('{{ group_name }}')">⚡ 強制発注</button>
       </div>
     </div>
-  {% endif %}
 
-  <div style="display:flex;align-items:center;gap:10px;padding:5px 12px;font-size:13px;
-              background:#fff;border-radius:6px;margin-bottom:4px;border:1px solid #ede9fe">
-    <span style="color:#6b7280;font-family:monospace;font-size:11px">{{ item.jan }}</span>
-    <span><b>{{ item.product_name }}</b></span>
-    <span class="badge badge-purple">{{ item.order_cases|format_number }}ケース / {{ item.order_qty|format_number }}個</span>
-    {% if item.trigger_type == 'reorder' %}
-      <span class="badge badge-red">発注点到達</span>
-    {% else %}
-      <span class="badge badge-orange">ロット数到達</span>
-    {% endif %}
-    <span style="color:#9ca3af;font-size:11px;margin-left:auto">
-      保留開始: {{ item.pending_since }}　強制送信: {{ item.force_send_date }}
-      {% if item.force_send_date < today|string %}
-        <span class="badge badge-red" style="margin-left:4px">⚠️ 期限超過</span>
-      {% endif %}
-    </span>
+    {# ── グループボディ（折りたたみ） ── #}
+    <div class="mixed-group-body" id="{{ gid }}">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left;width:120px">JAN</th>
+            <th style="text-align:left">商品名</th>
+            <th style="text-align:center">ケース数／数量</th>
+            <th style="text-align:center">トリガー</th>
+            <th style="text-align:center">保留開始</th>
+            <th style="text-align:center">強制送信日</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in group_items %}
+          {% set is_overdue = item.force_send_date < today|string %}
+          <tr class="{% if is_overdue %}overdue-row{% endif %}">
+            <td style="font-family:monospace;font-size:11px;color:#6b7280">{{ item.jan }}</td>
+            <td style="font-weight:500">{{ item.product_name }}</td>
+            <td style="text-align:center">
+              <span class="badge badge-purple">{{ item.order_cases|format_number }}ケース / {{ item.order_qty|format_number }}個</span>
+            </td>
+            <td style="text-align:center">
+              {% if item.trigger_type == 'reorder' %}
+                <span class="badge badge-red">発注点到達</span>
+              {% else %}
+                <span class="badge badge-orange">ロット数到達</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;font-size:12px;color:#6b7280">{{ item.pending_since }}</td>
+            <td style="text-align:center;font-size:12px">
+              {% if is_overdue %}
+                <span style="color:#dc2626;font-weight:700">{{ item.force_send_date }}</span>
+                <span class="badge badge-red" style="margin-left:4px">超過</span>
+              {% else %}
+                {{ item.force_send_date }}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
   </div>
   {% endfor %}
 
-  <div style="margin-top:10px;display:flex;gap:8px">
-    <form method="post" action="/orders/pending_force" style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% for item in pending %}
-      <input type="hidden" name="pending_id" value="{{ item.id }}">
-      {% endfor %}
-      <button type="submit" class="btn btn-warning btn-sm"
-              onclick="return confirm('保留中の全発注を今すぐ強制送信しますか？')">
-        ⚡ 全件今すぐ強制発注
-      </button>
-    </form>
-    <form method="post" action="/orders/pending_cancel" style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% for item in pending %}
-      <input type="hidden" name="pending_id" value="{{ item.id }}">
-      {% endfor %}
-      <button type="submit" class="btn btn-outline btn-sm"
-              onclick="return confirm('保留中の発注を全てキャンセルしますか？')">
-        🗑 全件キャンセル
-      </button>
-    </form>
+</div>
+
+<script>
+function mixedToggle(gid) {
+  var body = document.getElementById(gid);
+  var icon = document.getElementById('icon-' + gid);
+  if (!body) return;
+  var open = body.style.display !== 'none' && body.style.display !== '';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.classList.toggle('open', !open);
+}
+function mixedToggleAll(expand) {
+  document.querySelectorAll('.mixed-group-body').forEach(function(b) {
+    b.style.display = expand ? 'block' : 'none';
+  });
+  document.querySelectorAll('.toggle-icon').forEach(function(i) {
+    i.classList.toggle('open', expand);
+  });
+}
+function mixedToggleAllSwitch() {
+  var btn = document.getElementById('toggleAllBtn');
+  var expanded = btn.dataset.expanded === 'true';
+  var next = !expanded;
+  mixedToggleAll(next);
+  btn.dataset.expanded = next ? 'true' : 'false';
+  btn.textContent = next ? '▶ 全折りたたみ' : '▼ 全展開';
+}
+// 初期表示：期限超過・ロット達成グループは自動展開
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.mixed-group-card').forEach(function(card) {
+    var gid = card.dataset.gid;
+    var overdue = card.dataset.overdue === 'true';
+    var achieved = card.dataset.achieved === 'true';
+    if (overdue || achieved) {
+      var body = document.getElementById(gid);
+      var icon = document.getElementById('icon-' + gid);
+      if (body) body.style.display = 'block';
+      if (icon) icon.classList.add('open');
+    }
+  });
+});
+
+// ── 強制発注モーダル ──────────────────────────────────────────
+var _forceModalData = null;
+
+function openForceModal(groupName) {
+  fetch('/orders/pending_group_data?mixed_group=' + encodeURIComponent(groupName))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      _forceModalData = data;
+      if (data.shortage === 0) {
+        // ロット達成済み → 確認ダイアログのみ
+        if (!confirm('グループ「' + groupName + '」を今すぐ強制発注しますか？')) return;
+        submitForceGroup(groupName);
+        return;
+      }
+      // ロット不足 → モーダル表示
+      buildForceModal(data);
+      document.getElementById('force-modal').style.display = 'flex';
+    })
+    .catch(function(e){ alert('データ取得エラー: ' + e); });
+}
+
+function submitForceGroup(groupName) {
+  var csrf = document.querySelector('input[name=csrf_token]').value;
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/orders/pending_force_group';
+  form.innerHTML = '<input type="hidden" name="csrf_token" value="' + csrf + '">'
+                 + '<input type="hidden" name="mixed_group" value="' + groupName + '">';
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function buildForceModal(data) {
+  var d = document.getElementById('force-modal-inner');
+  var pct = Math.min(100, Math.round(data.total_cases / data.lot_cases * 100));
+  var csrf = document.querySelector('input[name=csrf_token]').value;
+
+  var html = '<div style="font-size:13px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<span class="badge badge-purple">' + data.total_cases + ' / ' + data.lot_cases + 'ケース</span>'
+    + '<span class="badge badge-red">不足 ' + data.shortage + 'ケース</span>'
+    + '<div style="flex:1;min-width:120px;max-width:200px;background:#e5e7eb;border-radius:9999px;height:8px;overflow:hidden">'
+    + '<div style="background:#7c3aed;width:' + pct + '%;height:100%;border-radius:9999px"></div></div>'
+    + '</div>';
+
+  html += '<form id="force-modal-form" method="post" action="/orders/pending_force_group_manual">'
+        + '<input type="hidden" name="csrf_token" value="' + csrf + '">'
+        + '<input type="hidden" name="mixed_group" value="' + data.group_name + '">';
+
+  // 既存保留商品テーブル
+  html += '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">保留中の商品</div>'
+        + '<div class="table-wrap"><table style="width:100%;font-size:13px;border-collapse:collapse">'
+        + '<thead><tr style="background:#f8f7ff;font-size:11px;color:#6b7280">'
+        + '<th style="padding:5px 8px;text-align:left">商品名</th>'
+        + '<th style="padding:5px 8px;text-align:right;white-space:nowrap">在庫</th>'
+        + '<th style="padding:5px 8px;text-align:center;white-space:nowrap">保留ケース</th>'
+        + '<th style="padding:5px 8px;text-align:center;white-space:nowrap">追加ケース</th>'
+        + '<th style="padding:5px 8px;text-align:right;white-space:nowrap">発注数</th>'
+        + '</tr></thead><tbody>';
+
+  data.items.forEach(function(it) {
+    html += '<tr style="border-bottom:1px solid #f3f0ff" data-base-cases="' + it.base_cases + '" data-unit="' + it.unit_qty + '" data-base-qty="' + it.base_order_qty + '">'
+          + '<td style="padding:6px 8px"><b>' + it.product_name + '</b><br><span style="font-family:monospace;font-size:11px;color:#9ca3af">' + it.jan + '</span></td>'
+          + '<td style="padding:6px 8px;text-align:right">' + it.stock_qty + '</td>'
+          + '<td style="padding:6px 8px;text-align:center"><span class="badge badge-purple">' + it.base_cases + '</span></td>'
+          + '<td style="padding:6px 8px;text-align:center">'
+          + '<input type="number" name="extra_cases_' + it.id + '" value="' + it.suggested_extra + '" min="0" step="1"'
+          + ' class="modal-extra-input" data-base-cases="' + it.base_cases + '" data-base-qty="' + it.base_order_qty + '"'
+          + ' style="width:70px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:right"'
+          + ' oninput="recalcForceModal()">'
+          + '</td>'
+          + '<td class="modal-final-qty" style="padding:6px 8px;text-align:right;font-weight:600">-</td>'
+          + '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // 追加候補商品
+  if (data.addable && data.addable.length > 0) {
+    html += '<div style="font-size:12px;font-weight:700;color:#2563eb;margin:12px 0 6px">同グループから追加</div>'
+          + '<div class="table-wrap"><table style="width:100%;font-size:13px;border-collapse:collapse">'
+          + '<thead><tr style="background:#eff6ff;font-size:11px;color:#6b7280">'
+          + '<th style="padding:5px 8px;width:32px"></th>'
+          + '<th style="padding:5px 8px;text-align:left">商品名</th>'
+          + '<th style="padding:5px 8px;text-align:right;white-space:nowrap">在庫</th>'
+          + '<th style="padding:5px 8px;text-align:center;white-space:nowrap">追加ケース</th>'
+          + '<th style="padding:5px 8px;text-align:right;white-space:nowrap">発注数</th>'
+          + '</tr></thead><tbody>';
+    data.addable.forEach(function(p) {
+      html += '<tr style="border-bottom:1px solid #dbeafe" data-jan="' + p.jan + '" data-unit="' + (p.unit_qty||1) + '">'
+            + '<td style="padding:6px 8px;text-align:center"><input type="checkbox" name="add_jan" value="' + p.jan + '" class="modal-add-cb" onchange="onModalAddCb(this)"></td>'
+            + '<td style="padding:6px 8px"><b>' + p.product_name + '</b><br><span style="font-family:monospace;font-size:11px;color:#9ca3af">' + p.jan + '</span></td>'
+            + '<td style="padding:6px 8px;text-align:right">' + p.stock_qty + '</td>'
+            + '<td style="padding:6px 8px;text-align:center">'
+            + '<input type="number" name="add_cases_' + p.jan + '" value="1" min="1" step="1"'
+            + ' class="modal-add-cases" style="width:70px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:right;display:none"'
+            + ' oninput="recalcForceModal()">'
+            + '<span class="modal-add-disp" style="color:#9ca3af;font-size:12px">-</span>'
+            + '</td>'
+            + '<td class="modal-add-qty" style="padding:6px 8px;text-align:right;color:#9ca3af">-</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // フッター：合計・警告・ボタン
+  html += '<div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid #e5e7eb;padding-top:12px">'
+        + '<span style="font-size:13px">合計: <b id="modal-grand-total">0</b> / ' + data.lot_cases + ' ケース</span>'
+        + '<span id="modal-lot-warn" style="font-size:12px;color:#dc2626;display:none">不足しています</span>'
+        + '<div style="margin-left:auto;display:flex;gap:8px">'
+        + '<button type="button" class="btn btn-outline btn-sm" onclick="closeForceModal()">キャンセル</button>'
+        + '<button type="button" class="btn btn-warning" onclick="submitForceModal(' + data.lot_cases + ')">⚡ 発注確定</button>'
+        + '</div></div>';
+
+  html += '</form>';
+  d.innerHTML = html;
+  document.getElementById('force-modal-title').textContent = '⚡ 強制発注 — ' + data.group_name;
+  recalcForceModal();
+}
+
+function recalcForceModal() {
+  var grand = 0;
+  document.querySelectorAll('.modal-extra-input').forEach(function(inp) {
+    var base = parseInt(inp.dataset.baseCases || '0', 10);
+    var extra = Math.max(0, parseInt(inp.value || '0', 10) || 0);
+    var baseQty = parseInt(inp.dataset.baseQty || '1', 10);
+    var total = base + extra;
+    var qty = total * baseQty;
+    var td = inp.closest('tr').querySelector('.modal-final-qty');
+    if (td) td.textContent = qty.toLocaleString() + '個';
+    grand += total;
+  });
+  document.querySelectorAll('.modal-add-cb:checked').forEach(function(cb) {
+    var tr = cb.closest('tr');
+    var unit = parseInt(tr.dataset.unit || '1', 10);
+    var cases = Math.max(1, parseInt(tr.querySelector('.modal-add-cases').value || '1', 10) || 1);
+    var td = tr.querySelector('.modal-add-qty');
+    if (td) { td.textContent = (cases * unit).toLocaleString() + '個'; td.style.color = '#2563eb'; }
+    grand += cases;
+  });
+  var gtEl = document.getElementById('modal-grand-total');
+  var warnEl = document.getElementById('modal-lot-warn');
+  if (gtEl) gtEl.textContent = grand;
+  if (warnEl) warnEl.style.display = (_forceModalData && grand < _forceModalData.lot_cases) ? 'inline' : 'none';
+}
+
+function onModalAddCb(cb) {
+  var tr = cb.closest('tr');
+  var inp = tr.querySelector('.modal-add-cases');
+  var disp = tr.querySelector('.modal-add-disp');
+  inp.style.display = cb.checked ? 'inline-block' : 'none';
+  disp.style.display = cb.checked ? 'none' : 'inline';
+  if (!cb.checked) { var td = tr.querySelector('.modal-add-qty'); td.textContent = '-'; td.style.color = '#9ca3af'; }
+  recalcForceModal();
+}
+
+function submitForceModal(lotCases) {
+  var grand = parseInt(document.getElementById('modal-grand-total').textContent || '0', 10);
+  if (grand < lotCases) {
+    alert('合計ケース数が必要ロット（' + lotCases + 'ケース）に達していません。');
+    return;
+  }
+  if (!confirm('この内容で強制発注します。よろしいですか？')) return;
+  document.getElementById('force-modal-form').submit();
+}
+
+function closeForceModal() {
+  document.getElementById('force-modal').style.display = 'none';
+}
+</script>
+
+{# ── 強制発注モーダル ── #}
+<div id="force-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:min(680px,96vw);max-height:88vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1">
+      <span id="force-modal-title" style="font-size:15px;font-weight:700;color:#7c3aed"></span>
+      <button type="button" onclick="closeForceModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;line-height:1">×</button>
+    </div>
+    <div id="force-modal-inner" style="padding:16px 20px"></div>
   </div>
 </div>
 {% endif %}
@@ -133,8 +431,21 @@
     <td class="text-center">{{ p.order_qty|format_number }}</td>
     <td>
       {% if p.mixed_group %}
-        <span class="badge badge-purple">{{ p.mixed_group }}</span>
-        <span style="font-size:11px;color:#9ca3af">（混載{{ p.mixed_lot_cases }}ケース待ち）</span>
+        {% set gs = group_status.get(p.mixed_group) %}
+        <span class="badge badge-purple">🚚 {{ p.mixed_group }}</span>
+        {% if gs %}
+          {% set pct = [(gs.total / gs.lot_cases * 100)|int, 100]|min if gs.lot_cases else 0 %}
+          <div style="font-size:11px;margin-top:3px;color:{% if gs.total >= gs.lot_cases %}#16a34a{% else %}#6b7280{% endif %}">
+            {{ gs.total }}/{{ gs.lot_cases }}ケース保留中
+            {% if gs.total >= gs.lot_cases %}<span style="color:#16a34a">✅ 達成</span>
+            {% else %}<span style="color:#7c3aed">あと{{ gs.lot_cases - gs.total }}ケース</span>{% endif %}
+          </div>
+          <div style="background:#e5e7eb;border-radius:9999px;height:4px;width:80px;overflow:hidden;margin-top:2px">
+            <div style="background:{% if gs.total >= gs.lot_cases %}#16a34a{% else %}#7c3aed{% endif %};width:{{ pct }}%;height:100%;border-radius:9999px"></div>
+          </div>
+        {% else %}
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">ロット{{ p.mixed_lot_cases }}ケース（未保留）</div>
+        {% endif %}
       {% else %}
         <span style="color:#9ca3af;font-size:12px">-</span>
       {% endif %}

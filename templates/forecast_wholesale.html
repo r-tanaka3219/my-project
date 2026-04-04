@@ -15,8 +15,9 @@
 .stat-B .val{color:#2563eb}
 .stat-C .val{color:#64748b}
 /* テーブルセル幅固定 */
-.fc-table{table-layout:fixed;width:100%;min-width:1310px}
+.fc-table{table-layout:fixed;width:100%;min-width:1345px}
 .fc-table th,.fc-table td{overflow:hidden;text-overflow:ellipsis;padding:6px 8px;vertical-align:middle}
+.col-cb{width:32px;text-align:center;padding:4px}
 .col-supplier{width:110px}
 .col-product{width:110px}
 .col-name{width:140px}
@@ -189,7 +190,7 @@
 </div>
 
 <div class="card" style="background:#fff7ed;border-left:4px solid #f59e0b;padding:10px 14px">
-  <form method="post" action="/reports/forecast/wholesale/apply" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0">
+  <form id="apply-form" method="post" action="/reports/forecast/wholesale/apply" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="q" value="{{ q or '' }}">
     <span style="font-weight:600;font-size:13px;white-space:nowrap">予測値を設定へ反映</span>
@@ -198,8 +199,9 @@
       <option value="order_qty">発注数のみ</option>
       <option value="both">発注点＋発注数</option>
     </select>
-    <button type="submit" class="btn btn-warning btn-sm"
-            onclick="return confirm('表示中の商品を予測値で更新します。よろしいですか？')">一括反映</button>
+    <span id="sel-count-badge" style="font-size:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:2px 10px;color:#92400e;white-space:nowrap">0件選択中</span>
+    <button type="button" class="btn btn-warning btn-sm" onclick="submitApply()">選択を反映</button>
+    <button type="button" class="btn btn-outline btn-sm" onclick="submitApplyAll()">全件反映</button>
   </form>
 </div>
 
@@ -208,6 +210,7 @@
     <table class="fc-table">
       <thead>
         <tr>
+          <th class="col-cb"><input type="checkbox" id="select-all-cb" title="全選択/解除" onchange="toggleSelectAll(this)"></th>
           <th class="col-supplier">仕入先</th>
           <th class="col-product">商品CD/JAN</th>
           <th class="col-name">商品名</th>
@@ -229,6 +232,7 @@
       <tbody>
       {% for r in rows %}
       <tr>
+        <td class="col-cb"><input type="checkbox" class="row-cb" value="{{ r.product_id }}" onchange="updateSelCount()"></td>
         <td class="col-supplier" title="{{ r.supplier_name }}">
           <span style="font-size:11px;color:#6b7280">{{ r.supplier_cd }}</span><br>
           <span style="font-size:12px">{{ r.supplier_name|truncate(10,true,'…') }}</span>
@@ -311,10 +315,51 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="16" style="text-align:center;color:#94a3b8;padding:24px">データがありません。販売実績を登録するとここに予測が表示されます。</td></tr>
+      <tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:24px">データがありません。販売実績を登録するとここに予測が表示されます。</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<script>
+function updateSelCount() {
+  var checked = document.querySelectorAll('.row-cb:checked').length;
+  var total = document.querySelectorAll('.row-cb').length;
+  document.getElementById('sel-count-badge').textContent = checked + '件選択中';
+  var allCb = document.getElementById('select-all-cb');
+  allCb.indeterminate = checked > 0 && checked < total;
+  allCb.checked = total > 0 && checked === total;
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.row-cb').forEach(function(el) { el.checked = cb.checked; });
+  updateSelCount();
+}
+
+function submitApply() {
+  var checked = document.querySelectorAll('.row-cb:checked');
+  if (checked.length === 0) {
+    alert('反映する商品を1件以上チェックしてください。');
+    return;
+  }
+  if (!confirm(checked.length + '件の商品に予測値を反映します。よろしいですか？')) return;
+  var form = document.getElementById('apply-form');
+  form.querySelectorAll('input[name="selected_ids"]').forEach(function(el) { el.remove(); });
+  checked.forEach(function(cb) {
+    var h = document.createElement('input');
+    h.type = 'hidden'; h.name = 'selected_ids'; h.value = cb.value;
+    form.appendChild(h);
+  });
+  form.submit();
+}
+
+function submitApplyAll() {
+  var total = document.querySelectorAll('.row-cb').length;
+  if (!confirm(total + '件すべての商品に予測値を反映します。よろしいですか？')) return;
+  var form = document.getElementById('apply-form');
+  form.querySelectorAll('input[name="selected_ids"]').forEach(function(el) { el.remove(); });
+  form.submit();
+}
+</script>
 {% endblock %}

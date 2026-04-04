@@ -8,6 +8,15 @@ logger = logging.getLogger('inventory.chains')
 bp = Blueprint('chains', __name__)
 
 
+def _cell_str(v):
+    """openpyxlセル値を文字列に変換。数値セル(例: 1.0)は '1' に正規化する。"""
+    if v is None:
+        return ''
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
 @bp.route('/chains')
 @permission_required('chains')
 def chains():
@@ -253,11 +262,11 @@ def chain_import():
 
     added = updated = skipped = 0
     for row in ws.iter_rows(min_row=3, values_only=True):
-        chain_cd = str(row[0]).strip() if row[0] is not None else ''
+        chain_cd = _cell_str(row[0])
         if not chain_cd or chain_cd == 'None':
             skipped += 1
             continue
-        chain_name     = str(row[1]).strip() if row[1] is not None else ''
+        chain_name     = _cell_str(row[1])
         try:
             exclude_deduct = int(row[2]) if row[2] is not None else 0
         except (ValueError, TypeError):
@@ -340,13 +349,13 @@ def store_import():
 
     added = updated = skipped = 0
     for row in ws.iter_rows(min_row=3, values_only=True):
-        store_cd = str(row[0]).strip() if row[0] is not None else ''
+        store_cd = _cell_str(row[0])
         if not store_cd or store_cd == 'None':
             skipped += 1
             continue
-        store_name     = str(row[1]).strip() if row[1] is not None else ''
-        chain_cd       = str(row[2]).strip() if row[2] is not None else ''
-        client_name    = str(row[3]).strip() if row[3] is not None else ''
+        store_name     = _cell_str(row[1])
+        chain_cd       = _cell_str(row[2])
+        client_name    = _cell_str(row[3])
         try:
             exclude_deduct = int(row[4]) if row[4] is not None else 0
         except (ValueError, TypeError):
@@ -429,12 +438,12 @@ def supplier_setting_import():
 
     added = updated = skipped = 0
     for row in ws.iter_rows(min_row=3, values_only=True):
-        supplier_cd = str(row[0]).strip() if row[0] is not None else ''
+        supplier_cd = _cell_str(row[0])
         if not supplier_cd or supplier_cd == 'None':
             skipped += 1
             continue
-        chain_cd  = str(row[1]).strip() if row[1] is not None else ''
-        store_cd  = str(row[2]).strip() if row[2] is not None else ''
+        chain_cd  = _cell_str(row[1])
+        store_cd  = _cell_str(row[2])
         chain_cd  = chain_cd or None
         store_cd  = store_cd or None
         try:
@@ -528,15 +537,15 @@ def product_setting_import():
 
     added = updated = skipped = 0
     for row in ws.iter_rows(min_row=3, values_only=True):
-        product_cd = str(row[0]).strip() if row[0] is not None else ''
-        jan        = str(row[1]).strip() if row[1] is not None else ''
+        product_cd = _cell_str(row[0])
+        jan        = _cell_str(row[1])
         product_cd = product_cd if product_cd and product_cd != 'None' else None
         jan        = jan if jan and jan != 'None' else None
         if not product_cd and not jan:
             skipped += 1
             continue
-        chain_cd = str(row[2]).strip() if row[2] is not None else ''
-        store_cd = str(row[3]).strip() if row[3] is not None else ''
+        chain_cd = _cell_str(row[2])
+        store_cd = _cell_str(row[3])
         chain_cd = chain_cd or None
         store_cd = store_cd or None
         try:

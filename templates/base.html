@@ -77,10 +77,16 @@ label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3
 input[type=text],input[type=number],input[type=email],input[type=date],input[type=password],input[type=time],select,textarea{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;color:#1e2d3d}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.12)}
 .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.flash{padding:8px 13px;border-radius:6px;margin-bottom:10px;font-size:13px}
-.flash-success{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
-.flash-danger{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
-.flash-warning{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}
+.flash{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:8px;margin-bottom:10px;font-size:13px;font-weight:500;border-left:4px solid transparent;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.flash-icon{font-size:16px;flex-shrink:0;line-height:1.4}
+.flash-body{flex:1;line-height:1.5}
+.flash-close{flex-shrink:0;background:none;border:none;cursor:pointer;font-size:16px;color:inherit;opacity:.55;padding:0 2px;line-height:1;margin-left:4px}
+.flash-close:hover{opacity:1}
+.flash-success{background:#f0fdf4;color:#15803d;border-left-color:#22c55e;border:1px solid #bbf7d0;border-left:4px solid #22c55e}
+.flash-danger{background:#fef2f2;color:#b91c1c;border-left-color:#ef4444;border:1px solid #fecaca;border-left:4px solid #ef4444}
+.flash-warning{background:#fffbeb;color:#b45309;border-left-color:#f59e0b;border:1px solid #fde68a;border-left:4px solid #f59e0b}
+.flash-error{background:#fef2f2;color:#b91c1c;border-left-color:#ef4444;border:1px solid #fecaca;border-left:4px solid #ef4444}
+.flash-info{background:#eff6ff;color:#1d4ed8;border-left-color:#3b82f6;border:1px solid #bfdbfe;border-left:4px solid #3b82f6}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .kpi-value{font-size:28px;font-weight:bold;line-height:1.1}
@@ -94,9 +100,6 @@ hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}
 @media (min-width:1800px){.main{padding:18px 48px}}
 @media print{nav{display:none}.btn{display:none}.main{margin-top:0}}
 
-/* 設定ページ用2列グリッド */
-.settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
-@media(max-width:1280px){.settings-grid{grid-template-columns:1fr}}
 /* layout helpers for added features */
 .page-title-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
 .page-title > form{margin-left:auto}
@@ -291,7 +294,12 @@ tr:hover td.table-actions-cell {
 <div class="main">
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for cat, msg in messages %}
-  <div class="flash flash-{{ cat }}">{{ msg }}</div>
+  {% set icon = '✅' if cat == 'success' else ('❌' if cat in ('danger','error') else ('⚠️' if cat == 'warning' else 'ℹ️')) %}
+  <div class="flash flash-{{ cat }}">
+    <span class="flash-icon">{{ icon }}</span>
+    <span class="flash-body">{{ msg }}</span>
+    <button class="flash-close" onclick="this.closest('.flash').remove()" title="閉じる">✕</button>
+  </div>
   {% endfor %}
 {% endwith %}
 {% block content %}{% endblock %}

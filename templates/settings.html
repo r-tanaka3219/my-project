@@ -3,11 +3,10 @@
 {% block content %}
 <div class="page-title">⚙️ システム設定</div>
 
-<div class="settings-grid">
-<form method="post" action="/settings/save" style="display:contents">
+<form method="post" action="/settings/save">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">🐘 PostgreSQL 接続設定</div>
   <div class="form-group"><label>サーバーアドレス (PG_HOST)</label>
     <input type="text" name="PG_HOST" value="{{ env.get('PG_HOST','localhost') }}"
@@ -36,7 +35,7 @@
   </div>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">📧 メールサーバー設定（社内SMTP）</div>
 
   {# プリセット選択 #}
@@ -129,7 +128,7 @@
   </div>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">⏰ 自動送信スケジュール</div>
   <p style="font-size:12px;color:#6b7280;margin-bottom:12px">
     毎日この時刻に発注チェック・期限アラートを自動実行してメール送信します。<br>
@@ -183,60 +182,60 @@
   <button type="submit" class="btn btn-primary">💾 設定保存</button>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">📄 テンプレートファイル名設定</div>
   <div style="font-size:12px;color:#6b7280;margin-bottom:8px">拡張子（.xlsx / .csv）は自動で付加されます。</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:flex-start">
+  <div style="display:flex;gap:10px;align-items:flex-start">
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ テンプレート名</label>
-      <input type="text" name="product_template_name" value="{{ retention.product_template_name }}" placeholder="商品マスタ_テンプレート">
+      <input type="text" name="product_template_name" value="{{ retention.product_template_name }}" placeholder="商品マスタ_テンプレート" style="width:200px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ エクスポート名</label>
-      <input type="text" name="product_export_name" value="{{ retention.product_export_name }}" placeholder="商品マスタ">
+      <input type="text" name="product_export_name" value="{{ retention.product_export_name }}" placeholder="商品マスタ" style="width:180px">
       <div class="help">.xlsx / .csv</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">入庫インポート テンプレート名</label>
-      <input type="text" name="receipt_template_name" value="{{ retention.receipt_template_name }}" placeholder="入庫一括インポート_テンプレート">
+      <input type="text" name="receipt_template_name" value="{{ retention.receipt_template_name }}" placeholder="入庫一括インポート_テンプレート" style="width:210px">
       <div class="help">.csv</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">棚卸エクスポート名</label>
-      <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト">
+      <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト" style="width:180px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">受信者テンプレート名</label>
-      <input type="text" name="recipients_template_name" value="{{ retention.recipients_template_name }}" placeholder="受信者一覧_テンプレート">
+      <input type="text" name="recipients_template_name" value="{{ retention.recipients_template_name }}" placeholder="受信者一覧_テンプレート" style="width:210px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">チェーンマスタ テンプレート名</label>
-      <input type="text" name="chain_template_name" value="{{ retention.chain_template_name }}" placeholder="チェーンマスタ_テンプレート">
+      <input type="text" name="chain_template_name" value="{{ retention.chain_template_name }}" placeholder="チェーンマスタ_テンプレート" style="width:210px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">店舗マスタ テンプレート名</label>
-      <input type="text" name="store_template_name" value="{{ retention.store_template_name }}" placeholder="店舗マスタ_テンプレート">
+      <input type="text" name="store_template_name" value="{{ retention.store_template_name }}" placeholder="店舗マスタ_テンプレート" style="width:210px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">仕入先CD設定 テンプレート名</label>
-      <input type="text" name="supplier_setting_template_name" value="{{ retention.supplier_setting_template_name }}" placeholder="仕入先CD設定_テンプレート">
+      <input type="text" name="supplier_setting_template_name" value="{{ retention.supplier_setting_template_name }}" placeholder="仕入先CD設定_テンプレート" style="width:210px">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品CD設定 テンプレート名</label>
-      <input type="text" name="product_setting_template_name" value="{{ retention.product_setting_template_name }}" placeholder="商品CD設定_テンプレート">
+      <input type="text" name="product_setting_template_name" value="{{ retention.product_setting_template_name }}" placeholder="商品CD設定_テンプレート" style="width:210px">
       <div class="help">.xlsx</div>
     </div>
   </div>
   <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px">💾 設定保存</button>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">🗓 データ保持期間設定</div>
   <div style="font-size:12px;color:#6b7280;margin-bottom:8px">毎月1日深夜に自動削除。0=削除しない。</div>
   <div style="display:flex;gap:16px;align-items:flex-start">
@@ -272,14 +271,14 @@
   <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px">💾 設定保存</button>
 </div>
 
-<div class="card" style="border-left:4px solid #16a34a">
+<div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #16a34a">
   <div class="card-title" style="color:#16a34a">💾 バックアップ</div>
   <p style="font-size:13px;color:#6b7280;margin-bottom:12px">全データ（商品マスタ・在庫・発注履歴・廃棄退避・入庫履歴・棚卸）をExcelでダウンロードします��</p>
   <a href="/admin/backup" class="btn btn-success btn-sm">💾 バックアップをダウンロード</a>
   <a href="/admin/restore" class="btn btn-warning btn-sm" style="margin-left:8px">♻️ 復元</a>
 </div>
 
-<div class="card" style="border-left:4px solid #0891b2">
+<div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #0891b2">
   <div class="card-title" style="color:#0891b2">📊 売上履歴 バックアップ／復元</div>
   <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
     CSV取込済みの売上履歴を全件CSVでバックアップ・復元できます。<br>
@@ -397,13 +396,13 @@ function startSalesDownload() {
 }
 </script>
 
-<div class="card" style="border-left:4px solid #dc2626">
+<div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #dc2626">
   <div class="card-title" style="color:#dc2626">🗑 データ一括削除</div>
   <p style="font-size:13px;color:#6b7280;margin-bottom:12px">商品マスタ・在庫・発注履歴などのデータを一括で削除できます。</p>
   <a href="/admin/bulk_delete" class="btn btn-danger btn-sm">⚠️ 一括削除画面へ</a>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">📨 メール内容プレビュー</div>
   <a href="/settings/mail_templates" class="btn btn-outline btn-sm" style="margin-bottom:12px;display:inline-block">✏️ メールテンプレートを編集</a>
   <div style="display:flex;gap:10px;margin-bottom:12px">
@@ -444,7 +443,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">🌤️ 気象データ自動取得設定</div>
   <div style="background:#eff6ff;border-left:3px solid #2563eb;padding:10px 14px;border-radius:6px;font-size:12px;color:#1e3a5f;margin-bottom:16px">
     Open-Meteo API（無料）を使って気象データを毎日自動取得します。インターネット接続が必要です。<br>
@@ -679,7 +678,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">📈 需要予測ロジック設定</div>
 
   <div class="form-group">
@@ -891,7 +890,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   </div>
 </div>
 
-<div class="card" style="">
+<div class="card" style="max-width:680px;margin-bottom:16px">
   <div class="card-title">🔑 その他</div>
   <div class="form-group"><label>SECRET_KEY</label>
     <input type="text" name="SECRET_KEY" value="{{ env.get('SECRET_KEY','') }}"
@@ -900,7 +899,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
   <button type="submit" class="btn btn-primary">💾 設定保存</button>
 </div>
 </form>
-</div><!-- /settings-grid -->
+
 
 {# テスト送信フォーム（別フォーム・メインフォームの外に配置） #}
 <form method="post" action="/settings/test_mail" id="test-form" style="display:none">

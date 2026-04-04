@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}混載強制発注の手動調整{% endblock %}
 {% block content %}
-<div class="page-title">✍ 混載強制発注の手動調整</div>
+<div class="page-title">
+  <span>✍ 混載強制発注の手動調整</span>
+  <a href="/orders" class="btn btn-outline btn-sm">← 発注チェックへ戻る</a>
+</div>
 
 <div class="card" style="border-left:4px solid #7c3aed">
   <div class="card-title" style="color:#7c3aed">グループ：{{ group_name }}</div>
@@ -75,11 +78,79 @@
       <span id="lot-warning" style="font-size:12px;color:#dc2626;display:none">必要ケース数を下回っています。このままでは確定できません。</span>
     </div>
   </div>
+
+  {# ── 同グループの追加候補 ── #}
+  {% if addable_products %}
+  <div class="card" style="border-left:4px solid #2563eb">
+    <div class="card-title" style="color:#2563eb">➕ 同グループから商品を追加</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:10px">
+      グループ「{{ group_name }}」に属する未保留の商品をチェックしてロットに加えることができます。
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px"></th>
+            <th style="min-width:80px">商品CD</th>
+            <th style="min-width:110px">JAN</th>
+            <th style="min-width:150px">商品名</th>
+            <th class="text-right" style="min-width:70px">現在庫</th>
+            <th class="text-right" style="min-width:80px">入数</th>
+            <th class="text-right" style="min-width:90px">追加ケース</th>
+            <th class="text-right" style="min-width:80px">発注数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in addable_products %}
+          <tr class="addable-row" data-jan="{{ p.jan }}" data-unit-qty="{{ p.unit_qty or 1 }}">
+            <td style="text-align:center">
+              <input type="checkbox" name="add_jan" value="{{ p.jan }}"
+                     class="add-cb" onchange="onAddCbChange(this)">
+            </td>
+            <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '-' }}</td>
+            <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
+            <td>{{ p.product_name }}</td>
+            <td class="text-right">{{ p.stock_qty|format_number }}</td>
+            <td class="text-right">{{ p.unit_qty|format_number }}個/ケース</td>
+            <td class="text-right">
+              <input type="number" min="1" step="1"
+                     name="add_cases_{{ p.jan }}"
+                     value="1"
+                     class="add-cases-input"
+                     style="width:70px;padding:5px;border:1px solid #d1d5db;border-radius:6px;text-align:right;display:none"
+                     onchange="recalcManualForce()">
+              <span class="add-cases-display" style="color:#9ca3af;font-size:12px">-</span>
+            </td>
+            <td class="text-right add-qty-display" style="color:#9ca3af;font-size:12px">-</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
 </form>
 
 <script>
+function onAddCbChange(cb) {
+  const tr = cb.closest('tr');
+  const input = tr.querySelector('.add-cases-input');
+  const display = tr.querySelector('.add-cases-display');
+  const checked = cb.checked;
+  input.style.display = checked ? 'inline-block' : 'none';
+  display.style.display = checked ? 'none' : 'inline';
+  if (!checked) {
+    tr.querySelector('.add-qty-display').textContent = '-';
+    tr.querySelector('.add-qty-display').style.color = '#9ca3af';
+  }
+  recalcManualForce();
+}
+
 function recalcManualForce() {
   let grand = 0;
+
+  // 既存保留商品
   document.querySelectorAll('.extra-case-input').forEach((input) => {
     const tr = input.closest('tr');
     const baseCases = parseInt(input.dataset.baseCases || '0', 10);
@@ -91,18 +162,36 @@ function recalcManualForce() {
     tr.querySelector('.final-qty').textContent = totalQty.toLocaleString();
     grand += totalCases;
   });
+
+  // 追加商品（チェック済みのみ）
+  document.querySelectorAll('.add-cb:checked').forEach((cb) => {
+    const tr = cb.closest('tr');
+    const unitQty = parseInt(tr.dataset.unitQty || '1', 10);
+    const cases = Math.max(1, parseInt(tr.querySelector('.add-cases-input').value || '1', 10) || 1);
+    const qty = cases * unitQty;
+    tr.querySelector('.add-qty-display').textContent = qty.toLocaleString() + '個';
+    tr.querySelector('.add-qty-display').style.color = '#2563eb';
+    grand += cases;
+  });
+
   document.getElementById('grand-total-cases').textContent = grand;
   const shortage = grand < {{ lot_cases }};
   document.getElementById('lot-warning').style.display = shortage ? 'inline' : 'none';
   return !shortage;
 }
+
 function confirmManualForce() {
   if (!recalcManualForce()) {
     alert('合計ケース数が不足しています。追加ケースを見直してください。');
     return false;
   }
-  return confirm('手動調整した数量で強制発注します。よろしいですか？');
+  const added = document.querySelectorAll('.add-cb:checked').length;
+  const msg = added > 0
+    ? `手動調整した数量で強制発注します。\n追加商品 ${added} 件を含みます。\nよろしいですか？`
+    : '手動調整した数量で強制発注します。よろしいですか？';
+  return confirm(msg);
 }
+
 document.querySelectorAll('.extra-case-input').forEach((input) => {
   input.addEventListener('input', recalcManualForce);
 });
