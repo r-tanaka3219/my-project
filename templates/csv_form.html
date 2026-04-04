@@ -2,7 +2,7 @@
 {% block title %}CSV取込設定{% endblock %}
 {% block content %}
 <div class="page-title">{% if setting %}✏️ CSV設定編集{% else %}➕ CSV取込設定 新規作成{% endif %}</div>
-<div style="max-width:1100px">
+<div style="max-width:min(1100px,100%)"
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="card" style="margin-bottom:14px">

@@ -186,50 +186,50 @@
 <div class="card" style="">
   <div class="card-title">📄 テンプレートファイル名設定</div>
   <div style="font-size:12px;color:#6b7280;margin-bottom:8px">拡張子（.xlsx / .csv）は自動で付加されます。</div>
-  <div style="display:flex;gap:10px;align-items:flex-start">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:flex-start">
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ テンプレート名</label>
-      <input type="text" name="product_template_name" value="{{ retention.product_template_name }}" placeholder="商品マスタ_テンプレート" style="width:200px">
+      <input type="text" name="product_template_name" value="{{ retention.product_template_name }}" placeholder="商品マスタ_テンプレート">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品マスタ エクスポート名</label>
-      <input type="text" name="product_export_name" value="{{ retention.product_export_name }}" placeholder="商品マスタ" style="width:180px">
+      <input type="text" name="product_export_name" value="{{ retention.product_export_name }}" placeholder="商品マスタ">
       <div class="help">.xlsx / .csv</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">入庫インポート テンプレート名</label>
-      <input type="text" name="receipt_template_name" value="{{ retention.receipt_template_name }}" placeholder="入庫一括インポート_テンプレート" style="width:210px">
+      <input type="text" name="receipt_template_name" value="{{ retention.receipt_template_name }}" placeholder="入庫一括インポート_テンプレート">
       <div class="help">.csv</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">棚卸エクスポート名</label>
-      <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト" style="width:180px">
+      <input type="text" name="stocktake_export_name" value="{{ retention.stocktake_export_name }}" placeholder="棚卸リスト">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">受信者テンプレート名</label>
-      <input type="text" name="recipients_template_name" value="{{ retention.recipients_template_name }}" placeholder="受信者一覧_テンプレート" style="width:210px">
+      <input type="text" name="recipients_template_name" value="{{ retention.recipients_template_name }}" placeholder="受信者一覧_テンプレート">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">チェーンマスタ テンプレート名</label>
-      <input type="text" name="chain_template_name" value="{{ retention.chain_template_name }}" placeholder="チェーンマスタ_テンプレート" style="width:210px">
+      <input type="text" name="chain_template_name" value="{{ retention.chain_template_name }}" placeholder="チェーンマスタ_テンプレート">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">店舗マスタ テンプレート名</label>
-      <input type="text" name="store_template_name" value="{{ retention.store_template_name }}" placeholder="店舗マスタ_テンプレート" style="width:210px">
+      <input type="text" name="store_template_name" value="{{ retention.store_template_name }}" placeholder="店舗マスタ_テンプレート">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">仕入先CD設定 テンプレート名</label>
-      <input type="text" name="supplier_setting_template_name" value="{{ retention.supplier_setting_template_name }}" placeholder="仕入先CD設定_テンプレート" style="width:210px">
+      <input type="text" name="supplier_setting_template_name" value="{{ retention.supplier_setting_template_name }}" placeholder="仕入先CD設定_テンプレート">
       <div class="help">.xlsx</div>
     </div>
     <div>
       <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:3px">商品CD設定 テンプレート名</label>
-      <input type="text" name="product_setting_template_name" value="{{ retention.product_setting_template_name }}" placeholder="商品CD設定_テンプレート" style="width:210px">
+      <input type="text" name="product_setting_template_name" value="{{ retention.product_setting_template_name }}" placeholder="商品CD設定_テンプレート">
       <div class="help">.xlsx</div>
     </div>
   </div>
