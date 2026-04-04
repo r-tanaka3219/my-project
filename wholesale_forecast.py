@@ -238,7 +238,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
     products = db.execute("""
         SELECT p.id AS product_id, p.jan, p.product_cd, p.product_name,
                p.supplier_cd, p.supplier_name,
-               p.reorder_point, p.order_unit, p.order_qty,
+               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty,
                p.lead_time_days, p.safety_factor, p.manual_adj_factor,
                COALESCE(s.stock_qty, 0) AS stock_qty
         FROM products p
