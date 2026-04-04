@@ -3328,25 +3328,6 @@ def backup():
                 ws.cell(ri, ci, row[key])
     ws.freeze_panes = 'A2'
 
-    # ── CSVインポートデータ（sales_history）── 直近50,000件のみ
-    ws = wb.create_sheet('CSVインポートデータ')
-    rows = db.execute("""
-        SELECT jan, product_name, quantity, sale_date, source_file,
-               chain_cd, client_name, store_cd, store_name, row_hash, created_at
-        FROM sales_history
-        ORDER BY sale_date DESC, created_at DESC
-        LIMIT 50000
-    """).fetchall()
-    if rows:
-        keys = list(rows[0].keys())
-        for ci, h in enumerate(keys, 1):
-            c = ws.cell(1, ci, h); c.font = hfont; c.fill = hfill
-            c.alignment = Alignment(horizontal='center'); c.border = bdr
-        # 大量データは書式なしで書き込み（速度優先）
-        for ri, row in enumerate(rows, 2):
-            for ci, key in enumerate(keys, 1):
-                ws.cell(ri, ci, row[key])
-    ws.freeze_panes = 'A2'
 
     buf = io.BytesIO()
     wb.save(buf); buf.seek(0)
@@ -3354,6 +3335,50 @@ def backup():
     return Response(
         buf.getvalue(),
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
+    )
+
+
+@app.route('/admin/backup/sales')
+@admin_required
+def backup_sales():
+    """sales_history を CSV でエクスポート（メインバックアップとは独立）"""
+    import csv as _csv
+    from urllib.parse import quote
+    db = get_db()
+
+    year = request.args.get('year', '').strip()
+    if year.isdigit():
+        rows = db.execute("""
+            SELECT jan, product_name, quantity, sale_date, source_file,
+                   chain_cd, client_name, store_cd, store_name, created_at
+            FROM sales_history
+            WHERE sale_date >= %s AND sale_date <= %s
+            ORDER BY sale_date DESC, created_at DESC
+        """, [f'{year}-01-01', f'{year}-12-31']).fetchall()
+        label = year
+    else:
+        rows = db.execute("""
+            SELECT jan, product_name, quantity, sale_date, source_file,
+                   chain_cd, client_name, store_cd, store_name, created_at
+            FROM sales_history
+            ORDER BY sale_date DESC, created_at DESC
+        """).fetchall()
+        label = '全期間'
+
+    sio = io.StringIO()
+    w = _csv.writer(sio)
+    w.writerow(['JAN', '商品名', '数量', '売上日', '取込ファイル',
+                'チェーンCD', '得意先名', '店舗CD', '店舗名', '作成日時'])
+    for r in rows:
+        w.writerow([r['jan'], r['product_name'], r['quantity'], r['sale_date'],
+                    r['source_file'], r['chain_cd'], r['client_name'],
+                    r['store_cd'], r['store_name'], r['created_at']])
+
+    filename = f"売上履歴_{label}_{date.today()}.csv"
+    return Response(
+        sio.getvalue().encode('utf-8-sig'),
+        mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
 
@@ -3780,7 +3805,8 @@ def settings():
         'weather_data_retention_days':   get_setting('weather_data_retention_days', '365'),
     }
     return render_template('settings.html', env=env_content, retention=retention,
-                           forecast_flags=forecast_flags, weather_settings=weather_settings)
+                           forecast_flags=forecast_flags, weather_settings=weather_settings,
+                           today=date.today())
 
 @app.route('/settings/save', methods=['POST'])
 @admin_required
