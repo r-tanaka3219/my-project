@@ -314,6 +314,10 @@
         <button type="button" onclick="loadSalesData(true)" class="btn btn-outline btn-sm">🔍</button>
         {% if sales_q %}<button type="button" onclick="clearSalesSearch()" class="btn btn-outline btn-sm">✕</button>{% endif %}
       </form>
+      <select id="sales-year-select" onchange="setSalesYear(this.value)"
+              style="padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <option value="">年を選択...</option>
+      </select>
       <button type="button" onclick="setSalesMode('master')" id="btn-sales-master" class="btn btn-sm {% if sales_mode=='master' %}btn-primary{% else %}btn-outline{% endif %}">📦 商品マスタのみ</button>
       <button type="button" onclick="setSalesMode('all')"    id="btn-sales-all"    class="btn btn-sm {% if sales_mode=='all' %}btn-primary{% else %}btn-outline{% endif %}">📋 全件表示</button>
     </div>
@@ -421,6 +425,7 @@ function switchTab(tab) {
 let _salesLoaded = false;
 let _salesMode   = '{{ sales_mode }}';
 let _salesQ      = '{{ sales_q | e }}';
+let _salesYear   = '';
 
 function loadSalesData(forceReload) {
   if (_salesLoaded && !forceReload) return;
@@ -431,7 +436,7 @@ function loadSalesData(forceReload) {
   const container = document.getElementById('sales-table-container');
   container.innerHTML = '<p style="color:#9ca3af;padding:20px 0;text-align:center">⏳ データを読み込み中...</p>';
 
-  fetch('/reports/sales_data?mode=' + encodeURIComponent(_salesMode) + '&q=' + encodeURIComponent(_salesQ))
+  fetch('/reports/sales_data?mode=' + encodeURIComponent(_salesMode) + '&q=' + encodeURIComponent(_salesQ) + '&year=' + encodeURIComponent(_salesYear))
     .then(r => r.json())
     .then(data => {
       if (!data.rows || data.rows.length === 0) {
@@ -465,11 +470,30 @@ function loadSalesData(forceReload) {
       html += '</tbody></table></div>';
       html += '<p style="color:#9ca3af;font-size:12px;margin-top:6px">' + data.count.toLocaleString() + '商品 / ' + data.year + '年実績</p>';
       container.innerHTML = html;
+      // 年セレクタを更新
+      const sel = document.getElementById('sales-year-select');
+      if(sel && data.available_years){
+        const cur = String(data.year);
+        sel.innerHTML = '<option value="">年を選択...</option>';
+        data.available_years.forEach(function(y){
+          const opt = document.createElement('option');
+          opt.value = y; opt.textContent = y + '年';
+          if(String(y) === cur) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        _salesYear = cur;
+      }
     })
     .catch(e => {
       _salesLoaded = false;
       container.innerHTML = '<p style="color:#dc2626;padding:20px 0">読み込みエラー: ' + e.message + '</p>';
     });
+}
+
+function setSalesYear(year) {
+  _salesYear  = year;
+  _salesLoaded = false;
+  loadSalesData(true);
 }
 
 function setSalesMode(mode) {

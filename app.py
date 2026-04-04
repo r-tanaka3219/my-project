@@ -2915,9 +2915,18 @@ def reports_sales_data():
     sale_date は TEXT 型 'YYYY-MM-DD' → BETWEEN で文字列比較しインデックスを活用。"""
     db = get_db()
     today      = date.today()
-    last_year  = today.year - 1
     sales_mode = request.args.get('mode', 'master')
     sales_q    = request.args.get('q', '').strip()
+
+    # 年パラメータ：未指定時はデータが存在する最新年を自動検出
+    year_param = request.args.get('year', '').strip()
+    if year_param.isdigit():
+        last_year = int(year_param)
+    else:
+        row = db.execute("""
+            SELECT MAX(SUBSTRING(sale_date, 1, 4)::int) AS max_year FROM sales_history
+        """).fetchone()
+        last_year = int(row['max_year']) if row and row['max_year'] else today.year - 1
 
     yr_start = f'{last_year}-01-01'
     yr_end   = f'{last_year}-12-31'
@@ -2984,7 +2993,15 @@ def reports_sales_data():
         d['total'] = sum(d['months'].values())
         result.append(d)
 
-    return jsonify({'rows': result, 'year': last_year, 'count': len(result)})
+    # 選択可能な年リストをDBから取得
+    year_rows = db.execute("""
+        SELECT DISTINCT SUBSTRING(sale_date, 1, 4)::int AS yr
+        FROM sales_history ORDER BY yr DESC
+    """).fetchall()
+    available_years = [int(r['yr']) for r in year_rows]
+
+    return jsonify({'rows': result, 'year': last_year, 'count': len(result),
+                    'available_years': available_years})
 
 
 @app.route('/expiry_check', methods=['POST'])
