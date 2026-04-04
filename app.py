@@ -3339,38 +3339,27 @@ def backup():
     )
 
 
-@app.route('/admin/backup/sales/count')
-@admin_required
-def backup_sales_count():
-    """sales_history の総件数を返す（進捗表示用）"""
-    db = get_db()
-    row = db.execute("SELECT COUNT(*) AS cnt FROM sales_history").fetchone()
-    return jsonify(total=row['cnt'])
+# ── 売上履歴エクスポートジョブ管理 ──────────────────────────────
+_sales_export_jobs: dict = {}   # job_id -> {total, done, path, finished, error}
 
 
-@app.route('/admin/backup/sales')
-@admin_required
-def backup_sales():
-    """sales_history を全件 CSV ストリーミングエクスポート（row_hash 含む・復元用）"""
-    import csv as _csv
-    from urllib.parse import quote
-    from flask import stream_with_context
+def _run_sales_export(job_id: str):
+    """バックグラウンドスレッドで CSV を一時ファイルに書き出す"""
+    import csv as _csv, tempfile, traceback
+    job = _sales_export_jobs[job_id]
+    tmp = None
+    try:
+        from database import get_db as _get_db
+        db = _get_db()
 
-    filename = f"売上履歴_{date.today()}.csv"
-
-    def generate():
-        db = get_db()
-        sio = io.StringIO()
-        w = _csv.writer(sio)
-        # BOM + ヘッダー
-        sio.write('\ufeff')
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv',
+                                          encoding='utf-8-sig', delete=False, newline='')
+        job['path'] = tmp.name
+        w = _csv.writer(tmp)
         w.writerow(['JAN', '商品名', '数量', '売上日', '取込ファイル',
                     'チェーンCD', '得意先名', '店舗CD', '店舗名', 'ROW_HASH', '作成日時'])
-        yield sio.getvalue().encode('utf-8')
 
-        # 1000件ずつ取得してストリーム出力
-        offset = 0
-        batch = 1000
+        offset, batch = 0, 2000
         while True:
             rows = db.execute("""
                 SELECT jan, product_name, quantity, sale_date, source_file,
@@ -3381,25 +3370,84 @@ def backup_sales():
             """, [batch, offset]).fetchall()
             if not rows:
                 break
-            sio = io.StringIO()
-            w = _csv.writer(sio)
             for r in rows:
                 w.writerow([r['jan'], r['product_name'], r['quantity'], r['sale_date'],
                             r['source_file'], r['chain_cd'], r['client_name'],
                             r['store_cd'], r['store_name'], r['row_hash'], r['created_at']])
-            yield sio.getvalue().encode('utf-8')
-            offset += batch
+            offset += len(rows)
+            job['done'] = offset
             if len(rows) < batch:
                 break
 
-    resp = Response(
-        stream_with_context(generate()),
+        tmp.close()
+        job['finished'] = True
+    except Exception:
+        job['error'] = traceback.format_exc()
+        job['finished'] = True
+        if tmp:
+            try: tmp.close()
+            except Exception: pass
+
+
+@app.route('/admin/backup/sales/start', methods=['POST'])
+@admin_required
+def backup_sales_start():
+    """CSV生成ジョブを開始し job_id と総件数を返す"""
+    import uuid
+    db = get_db()
+    total = db.execute("SELECT COUNT(*) AS cnt FROM sales_history").fetchone()['cnt']
+    job_id = uuid.uuid4().hex[:12]
+    _sales_export_jobs[job_id] = {'total': total, 'done': 0, 'path': None,
+                                   'finished': False, 'error': None}
+    t = threading.Thread(target=_run_sales_export, args=(job_id,), daemon=True)
+    t.start()
+    return jsonify(job_id=job_id, total=total)
+
+
+@app.route('/admin/backup/sales/progress/<job_id>')
+@admin_required
+def backup_sales_progress(job_id):
+    """ジョブの進捗を返す"""
+    job = _sales_export_jobs.get(job_id)
+    if not job:
+        return jsonify(error='not found'), 404
+    return jsonify(total=job['total'], done=job['done'],
+                   finished=job['finished'], error=job['error'])
+
+
+@app.route('/admin/backup/sales/download/<job_id>')
+@admin_required
+def backup_sales_download(job_id):
+    """生成済み CSV を送信して後始末"""
+    import os
+    from urllib.parse import quote
+    job = _sales_export_jobs.get(job_id)
+    if not job or not job.get('finished') or not job.get('path'):
+        flash('ファイルが見つかりません。再度お試しください。', 'error')
+        return redirect(url_for('settings'))
+
+    path = job['path']
+    filename = f"売上履歴_{date.today()}.csv"
+
+    def stream_and_cleanup():
+        try:
+            with open(path, 'rb') as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            try: os.unlink(path)
+            except Exception: pass
+            _sales_export_jobs.pop(job_id, None)
+
+    from flask import stream_with_context
+    return Response(
+        stream_with_context(stream_and_cleanup()),
         mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
-    # ダウンロード完了をクライアント側 JS が検知するためのクッキー
-    resp.set_cookie('sales_dl_done', '1', max_age=30, path='/', samesite='Lax')
-    return resp
 
 
 @app.route('/admin/backup/sales/restore', methods=['POST'])
