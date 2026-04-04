@@ -11,17 +11,36 @@
   </div>
 </div>
 <div class="card" style="padding:10px 16px;margin-bottom:0">
-  <form method="get" action="/products" class="search-form">
-    <input type="text" name="q" value="{{ request.args.get('q','') }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名"
-           >
+  <form method="get" action="/products" class="search-form" style="flex-wrap:wrap;gap:8px">
+    <input type="text" name="q" value="{{ q }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
+    <select name="ptype" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      <option value="" {% if not ptype %}selected{% endif %}>全区分</option>
+      <option value="通常品" {% if ptype == '通常品' %}selected{% endif %}>通常品</option>
+      <option value="季節品" {% if ptype == '季節品' %}selected{% endif %}>🍂 季節品</option>
+    </select>
     <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
-    {% if request.args.get('q') %}<a href="/products" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
+    {% if q or ptype %}<a href="/products" class="btn btn-outline btn-sm">✕ クリア</a>{% endif %}
   </form>
 </div>
+
+{% if ptype == '季節品' %}
+<div class="card" style="padding:10px 16px;margin-bottom:0;background:#fffbeb;border-left:4px solid #f59e0b">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span style="font-size:13px;color:#92400e">🍂 季節品が <strong>{{ products|length }} 件</strong> 表示されています</span>
+    <form method="post" action="/products/seasonal/deactivate"
+          onsubmit="return confirm('季節品 {{ products|length }} 件をすべて無効化します。\nよろしいですか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger btn-sm">🔒 季節品を一括無効化（{{ products|length }}件）</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
 <div class="table-wrap">
 <table><thead><tr>
   <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:110px">JAN</th><th style="min-width:70px">商品CD</th><th style="min-width:140px;max-width:220px">商品名</th>
+  <th class="text-center" style="min-width:65px">区分</th>
   <th class="text-right" style="min-width:65px">在庫</th><th class="text-right" style="min-width:60px">入数</th>
   <th class="text-right" style="min-width:70px">発注点</th><th class="text-right" style="min-width:60px">ロット</th>
   <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:55px">LT</th><th class="text-center" style="min-width:75px">安全係数</th><th class="text-center" style="min-width:60px">自動</th><th class="text-center" style="min-width:110px">操作</th>
@@ -33,6 +52,13 @@
   <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
   <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '' }}</td>
   <td>{{ p.product_name }}</td>
+  <td class="text-center">
+    {% if (p.product_type or '通常品') == '季節品' %}
+      <span class="badge badge-yellow">🍂 季節品</span>
+    {% else %}
+      <span style="font-size:11px;color:#9ca3af">通常品</span>
+    {% endif %}
+  </td>
   <td class="text-right">
     {% if p.stock_qty <= p.reorder_point %}<span class="badge badge-red">{{ p.stock_qty|format_number }}</span>
     {% else %}{{ p.stock_qty|format_number }}{% endif %}

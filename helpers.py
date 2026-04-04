@@ -721,6 +721,7 @@ _PRODUCT_COLS = [
     ('supplier_name',  '仕入先名',            'text'),
     ('unit_qty',       '入数',                'int'),
     ('order_unit',     '発注単位',            'int'),
+    ('product_type',   '取扱区分',            'text'),
     ('order_qty',      '発注数量',            'int'),
     ('lock_order_qty', '発注数固定',          'int'),
     ('reorder_point',  '発注点',              'int'),

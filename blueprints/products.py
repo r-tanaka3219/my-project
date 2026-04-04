@@ -461,7 +461,8 @@ def product_import():
 @permission_required('products')
 def products():
     db = get_db()
-    q = request.args.get('q','').strip()
+    q    = request.args.get('q', '').strip()
+    ptype = request.args.get('ptype', '').strip()  # '' / '通常品' / '季節品'
     rows = db.execute("""
         SELECT p.*, COALESCE((SELECT SUM(quantity) FROM stocks WHERE jan=p.jan),0) as stock_qty
         FROM products p WHERE p.is_active=1 ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST
@@ -472,7 +473,25 @@ def products():
                 or q.lower() in (r['product_name'] or '').lower()
                 or q.lower() in (r['supplier_cd'] or '').lower()
                 or q.lower() in (r['supplier_name'] or '').lower()]
-    return render_template('products.html', products=rows, q=q)
+    if ptype:
+        rows = [r for r in rows if (r['product_type'] or '通常品') == ptype]
+    return render_template('products.html', products=rows, q=q, ptype=ptype)
+
+
+@bp.route('/products/seasonal/deactivate', methods=['POST'])
+@admin_required
+def products_seasonal_deactivate():
+    """季節品を一括無効化"""
+    db = get_db()
+    targets = db.execute(
+        "SELECT id, jan, product_name FROM products WHERE is_active=1 AND product_type='季節品'"
+    ).fetchall()
+    for p in targets:
+        db.execute("DELETE FROM order_pending WHERE jan=%s", [p['jan']])
+        db.execute("UPDATE products SET is_active=0, ordered_at='' WHERE id=%s", [p['id']])
+    db.commit()
+    flash(f'季節品 {len(targets)} 件を一括無効化しました。', 'success')
+    return redirect(url_for('products.products', ptype='季節品'))
 
 @bp.route('/products/new', methods=['GET','POST'])
 @admin_required
@@ -483,14 +502,15 @@ def product_new():
         db.execute("""
             INSERT INTO products
             (supplier_cd,supplier_name,supplier_email,jan,product_cd,product_name,
-             unit_qty,order_unit,order_qty,lock_order_qty,reorder_point,reorder_auto,lot_size,
+             product_type,unit_qty,order_unit,order_qty,lock_order_qty,reorder_point,reorder_auto,lot_size,
              shelf_life_days,expiry_alert_days,safety_factor,lead_time_days,
              mixed_group,mixed_lot_mode,mixed_lot_cases,mixed_force_days,
              cost_price,sell_price,location_code,shelf_face_qty,shelf_replenish_point,
              manual_adj_factor)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, [f['supplier_cd'],f['supplier_name'],f.get('supplier_email',''),
               f['jan'],f['product_cd'],f['product_name'],
+              f.get('product_type','通常品'),
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
               int(f.get('order_qty',1)),1 if f.get('lock_order_qty') else 0,
               int(f.get('reorder_point',0)),
@@ -574,7 +594,8 @@ def product_edit(pid):
         db.execute("""
             UPDATE products SET
             supplier_cd=%s,supplier_name=%s,supplier_email=%s,product_cd=%s,product_name=%s,
-            unit_qty=%s,order_unit=%s,order_qty=%s,lock_order_qty=%s,reorder_point=%s,reorder_auto=%s,lot_size=%s,
+            product_type=%s,unit_qty=%s,order_unit=%s,order_qty=%s,lock_order_qty=%s,
+            reorder_point=%s,reorder_auto=%s,lot_size=%s,
             shelf_life_days=%s,expiry_alert_days=%s,safety_factor=%s,lead_time_days=%s,
             mixed_group=%s,mixed_lot_mode=%s,mixed_lot_cases=%s,mixed_force_days=%s,
             cost_price=%s,sell_price=%s,location_code=%s,shelf_face_qty=%s,shelf_replenish_point=%s,
@@ -582,6 +603,7 @@ def product_edit(pid):
             WHERE id=%s
         """, [f['supplier_cd'],f['supplier_name'],f.get('supplier_email',''),
               f['product_cd'],f['product_name'],
+              f.get('product_type','通常品'),
               int(f.get('unit_qty',1)),int(f.get('order_unit',1)),
               int(f.get('order_qty',1)),1 if f.get('lock_order_qty') else 0,
               int(f.get('reorder_point',0)),

@@ -25,6 +25,21 @@
   </div>
   <div class="form-group"><label>商品名 *</label>
     <input type="text" name="product_name" value="{{ product.product_name if product else '' }}" required></div>
+  <div class="form-group">
+    <label style="font-weight:500;font-size:13px;display:block;margin-bottom:6px">取扱区分</label>
+    <div style="display:flex;gap:20px">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+        <input type="radio" name="product_type" value="通常品"
+               {% if not product or (product.product_type or '通常品') == '通常品' %}checked{% endif %}>
+        通常品
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+        <input type="radio" name="product_type" value="季節品"
+               {% if product and product.product_type == '季節品' %}checked{% endif %}>
+        🍂 季節品
+      </label>
+    </div>
+  </div>
   <hr>
   <div class="form-grid-3">
     <div class="form-group"><label>入数</label>
