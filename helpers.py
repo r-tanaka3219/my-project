@@ -247,7 +247,8 @@ def _build_forecast_rows(db, q=''):
             SELECT jan, SUM(quantity) AS stock_qty FROM stocks WHERE quantity>0 GROUP BY jan
         )
         SELECT p.id AS product_id, p.supplier_cd, p.supplier_name, p.product_cd, p.jan, p.product_name,
-               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty, p.lead_time_days, p.safety_factor,
+               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty, p.lock_order_qty,
+               p.lead_time_days, p.safety_factor,
                p.shelf_face_qty, p.shelf_replenish_point,
                COALESCE(s.stock_qty,0) AS stock_qty,
                ROUND(COALESCE(a.avg_monthly,0),1) AS avg_monthly,
@@ -465,6 +466,7 @@ def _build_forecast_rows(db, q=''):
         r['p90_daily']          = p90_daily                     # P2
         r['daily_std']          = round(daily_std, 2) if daily_std is not None else None  # P2
         r['suggested_order_qty']= suggested_oq
+        r['lock_order_qty']     = int(r.get('lock_order_qty') or 0)
         out.append(r)
     return out
 
@@ -720,6 +722,7 @@ _PRODUCT_COLS = [
     ('unit_qty',       '入数',                'int'),
     ('order_unit',     '発注単位',            'int'),
     ('order_qty',      '発注数量',            'int'),
+    ('lock_order_qty', '発注数固定',          'int'),
     ('reorder_point',  '発注点',              'int'),
     ('reorder_auto',   '発注点自動更新',      'int'),
     ('lead_time_days', 'リードタイム日数',    'int'),

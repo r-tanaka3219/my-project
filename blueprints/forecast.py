@@ -63,12 +63,18 @@ def forecast_wholesale_apply():
     rows, _ = build_wholesale_forecast_rows(db, q)
     updated = 0
     for r in rows:
+        locked = int(r.get('lock_order_qty') or 0)
         if mode == 'both':
-            db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s",
-                       [r['suggested_reorder_point'], r['suggested_order_qty'], r['product_id']])
+            if locked:
+                db.execute("UPDATE products SET reorder_point=%s WHERE id=%s",
+                           [r['suggested_reorder_point'], r['product_id']])
+            else:
+                db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s",
+                           [r['suggested_reorder_point'], r['suggested_order_qty'], r['product_id']])
         elif mode == 'order_qty':
-            db.execute("UPDATE products SET order_qty=%s WHERE id=%s",
-                       [r['suggested_order_qty'], r['product_id']])
+            if not locked:
+                db.execute("UPDATE products SET order_qty=%s WHERE id=%s",
+                           [r['suggested_order_qty'], r['product_id']])
         else:
             db.execute("UPDATE products SET reorder_point=%s WHERE id=%s",
                        [r['suggested_reorder_point'], r['product_id']])

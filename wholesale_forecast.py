@@ -238,7 +238,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
     products = db.execute("""
         SELECT p.id AS product_id, p.jan, p.product_cd, p.product_name,
                p.supplier_cd, p.supplier_name,
-               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty,
+               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty, p.lock_order_qty,
                p.lead_time_days, p.safety_factor, p.manual_adj_factor,
                COALESCE(s.stock_qty, 0) AS stock_qty
         FROM products p
@@ -466,6 +466,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
             'demand_add_30d':        int(demand_add) if 'demand_add' in dir() else 0,
             'suggested_reorder_point': suggested_rp,
             'suggested_order_qty':   suggested_oq,
+            'lock_order_qty':        int(p.get('lock_order_qty') or 0),
             'cover_days':            cover_days,
             'md_plan_qty':           md_plan_qty,
             'md_achievement':        md_achievement,

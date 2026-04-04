@@ -4004,7 +4004,7 @@ def reports_forecast_apply():
                     if lot > 1:
                         import math as _math
                         rp = _math.ceil(rp / lot) * lot
-                    rows.append({'product_id': p['id'], 'suggested_reorder_point': int(round(rp)), 'suggested_order_qty': int(round(rp))})
+                    rows.append({'product_id': p['id'], 'suggested_reorder_point': int(round(rp)), 'suggested_order_qty': int(round(rp)), 'lock_order_qty': int(p.get('lock_order_qty') or 0)})
             else:
                 rows = _build_forecast_rows(db, q)
 
@@ -4013,12 +4013,18 @@ def reports_forecast_apply():
             updated = 0
             for i, r in enumerate(rows, 1):
                 try:
+                    locked = int(r.get('lock_order_qty') or 0)
                     if mode == 'both':
-                        db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s",
-                                   [int(r['suggested_reorder_point'] or 0), int(r['suggested_order_qty'] or 0), r['product_id']])
+                        if locked:
+                            db.execute("UPDATE products SET reorder_point=%s WHERE id=%s",
+                                       [int(r['suggested_reorder_point'] or 0), r['product_id']])
+                        else:
+                            db.execute("UPDATE products SET reorder_point=%s, order_qty=%s WHERE id=%s",
+                                       [int(r['suggested_reorder_point'] or 0), int(r['suggested_order_qty'] or 0), r['product_id']])
                     elif mode == 'order_qty':
-                        db.execute("UPDATE products SET order_qty=%s WHERE id=%s",
-                                   [int(r['suggested_order_qty'] or 0), r['product_id']])
+                        if not locked:
+                            db.execute("UPDATE products SET order_qty=%s WHERE id=%s",
+                                       [int(r['suggested_order_qty'] or 0), r['product_id']])
                     else:
                         db.execute("UPDATE products SET reorder_point=%s WHERE id=%s",
                                    [int(r['suggested_reorder_point'] or 0), r['product_id']])

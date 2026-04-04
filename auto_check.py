@@ -1233,6 +1233,7 @@ def _update_reorder_points_ai(db):
         order_unit = max(1, int(r.get('order_unit')  or unit_qty))
         current_rp = int(r.get('reorder_point') or 0)
         current_oq = int(r.get('order_qty')     or 0)
+        locked_oq  = int(r.get('lock_order_qty') or 0)
 
         # ── 急激な変動を抑制（50%〜200% の範囲に制限）──
         if current_rp > 0:
@@ -1250,7 +1251,7 @@ def _update_reorder_points_ai(db):
             or abs(new_rp - current_rp) / max(current_rp, 1) >= 0.05
             or abs(new_rp - current_rp) >= order_unit
         )
-        oq_changed = (new_oq != current_oq) and (
+        oq_changed = (not locked_oq) and (new_oq != current_oq) and (
             current_oq == 0
             or abs(new_oq - current_oq) / max(current_oq, 1) >= 0.05
             or abs(new_oq - current_oq) >= unit_qty
@@ -1368,12 +1369,14 @@ def _update_reorder_points_ly(db=None):
         new_oq = math.ceil(raw_oq / unit_qty) * unit_qty if unit_qty > 1 else int(raw_oq + 0.9999)
         new_oq = max(unit_qty, new_oq)
 
+        locked_oq = int(p.get('lock_order_qty') or 0)
+
         # ── 変動幅が小さすぎる場合はスキップ（5% 未満かつ unit 未満の差）──
         rp_changed = (new_rp != current_rp) and (
             current_rp == 0 or abs(new_rp - current_rp) / current_rp >= 0.05
             or abs(new_rp - current_rp) >= order_unit
         )
-        oq_changed = (new_oq != current_oq) and (
+        oq_changed = (not locked_oq) and (new_oq != current_oq) and (
             current_oq == 0 or abs(new_oq - current_oq) / max(current_oq, 1) >= 0.05
             or abs(new_oq - current_oq) >= unit_qty
         )
