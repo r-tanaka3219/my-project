@@ -247,7 +247,7 @@ def _build_forecast_rows(db, q=''):
             SELECT jan, SUM(quantity) AS stock_qty FROM stocks WHERE quantity>0 GROUP BY jan
         )
         SELECT p.id AS product_id, p.supplier_cd, p.supplier_name, p.product_cd, p.jan, p.product_name,
-               p.reorder_point, p.order_unit, p.order_qty, p.lead_time_days, p.safety_factor,
+               p.reorder_point, p.unit_qty, p.order_unit, p.order_qty, p.lead_time_days, p.safety_factor,
                p.shelf_face_qty, p.shelf_replenish_point,
                COALESCE(s.stock_qty,0) AS stock_qty,
                ROUND(COALESCE(a.avg_monthly,0),1) AS avg_monthly,
