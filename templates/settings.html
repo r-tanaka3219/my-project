@@ -279,17 +279,33 @@
 </div>
 
 <div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #0891b2">
-  <div class="card-title" style="color:#0891b2">📊 売上履歴バックアップ</div>
+  <div class="card-title" style="color:#0891b2">📊 売上履歴 バックアップ／復元</div>
   <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-    sales_history（CSV取込済み売上データ）を別途CSVでダウンロードします。<br>
-    データ量が大きいため、年度別にダウンロードすることを推奨します。
+    CSV取込済みの売上履歴を全件CSVでバックアップ・復元できます。<br>
+    復元時は <code>ROW_HASH</code> をキーに重複をスキップします。
   </p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <a href="/admin/backup/sales" class="btn btn-outline btn-sm">📥 全期間ダウンロード</a>
-    <span style="font-size:12px;color:#6b7280">年度指定：</span>
-    {% for y in range(2022, today.year + 1) %}
-    <a href="/admin/backup/sales?year={{ y }}" class="btn btn-outline btn-sm">{{ y }}年</a>
-    {% endfor %}
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <!-- バックアップ -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">▼ バックアップ（エクスポート）</div>
+      <a href="/admin/backup/sales" class="btn btn-outline btn-sm">📥 全件CSVダウンロード</a>
+    </div>
+
+    <!-- 復元 -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">▲ 復元（インポート）</div>
+      <form method="post" action="/admin/backup/sales/restore" enctype="multipart/form-data"
+            style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"
+            onsubmit="return confirm('バックアップCSVから売上履歴を復元します。重複データはスキップされます。よろしいですか？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" accept=".csv" required style="font-size:12px">
+        <button type="submit" class="btn btn-warning btn-sm">♻️ 復元実行</button>
+      </form>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px">
+        ※ このシステムでエクスポートしたCSVのみ対応
+      </div>
+    </div>
   </div>
 </div>
 

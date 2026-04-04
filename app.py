@@ -3342,45 +3342,112 @@ def backup():
 @app.route('/admin/backup/sales')
 @admin_required
 def backup_sales():
-    """sales_history を CSV でエクスポート（メインバックアップとは独立）"""
+    """sales_history を全件 CSV エクスポート（row_hash 含む・復元用）"""
     import csv as _csv
     from urllib.parse import quote
     db = get_db()
 
-    year = request.args.get('year', '').strip()
-    if year.isdigit():
-        rows = db.execute("""
-            SELECT jan, product_name, quantity, sale_date, source_file,
-                   chain_cd, client_name, store_cd, store_name, created_at
-            FROM sales_history
-            WHERE sale_date >= %s AND sale_date <= %s
-            ORDER BY sale_date DESC, created_at DESC
-        """, [f'{year}-01-01', f'{year}-12-31']).fetchall()
-        label = year
-    else:
-        rows = db.execute("""
-            SELECT jan, product_name, quantity, sale_date, source_file,
-                   chain_cd, client_name, store_cd, store_name, created_at
-            FROM sales_history
-            ORDER BY sale_date DESC, created_at DESC
-        """).fetchall()
-        label = '全期間'
+    rows = db.execute("""
+        SELECT jan, product_name, quantity, sale_date, source_file,
+               chain_cd, client_name, store_cd, store_name, row_hash, created_at
+        FROM sales_history
+        ORDER BY sale_date ASC, id ASC
+    """).fetchall()
 
     sio = io.StringIO()
     w = _csv.writer(sio)
     w.writerow(['JAN', '商品名', '数量', '売上日', '取込ファイル',
-                'チェーンCD', '得意先名', '店舗CD', '店舗名', '作成日時'])
+                'チェーンCD', '得意先名', '店舗CD', '店舗名', 'ROW_HASH', '作成日時'])
     for r in rows:
         w.writerow([r['jan'], r['product_name'], r['quantity'], r['sale_date'],
                     r['source_file'], r['chain_cd'], r['client_name'],
-                    r['store_cd'], r['store_name'], r['created_at']])
+                    r['store_cd'], r['store_name'], r['row_hash'], r['created_at']])
 
-    filename = f"売上履歴_{label}_{date.today()}.csv"
+    filename = f"売上履歴_{date.today()}.csv"
     return Response(
         sio.getvalue().encode('utf-8-sig'),
         mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
+
+
+@app.route('/admin/backup/sales/restore', methods=['POST'])
+@admin_required
+def restore_sales():
+    """sales_history CSV を復元（row_hash で重複スキップ）"""
+    import csv as _csv
+    f = request.files.get('file')
+    if not f or not f.filename.lower().endswith('.csv'):
+        flash('CSVファイルを選択してください', 'error')
+        return redirect(url_for('settings'))
+
+    try:
+        content = f.read().decode('utf-8-sig')
+    except UnicodeDecodeError:
+        try:
+            f.seek(0)
+            content = f.read().decode('cp932')
+        except Exception as e:
+            flash(f'ファイルの読み込みエラー: {e}', 'error')
+            return redirect(url_for('settings'))
+
+    reader = _csv.DictReader(io.StringIO(content))
+    db = get_db()
+    inserted = 0
+    skipped = 0
+    errors = 0
+
+    for row in reader:
+        jan        = (row.get('JAN') or '').strip()
+        sale_date  = (row.get('売上日') or '').strip()
+        if not jan or not sale_date:
+            errors += 1
+            continue
+
+        product_name = (row.get('商品名') or '').strip()
+        source_file  = (row.get('取込ファイル') or '').strip() or None
+        chain_cd     = (row.get('チェーンCD') or '').strip() or None
+        client_name  = (row.get('得意先名') or '').strip() or None
+        store_cd     = (row.get('店舗CD') or '').strip() or None
+        store_name   = (row.get('店舗名') or '').strip() or None
+        row_hash     = (row.get('ROW_HASH') or '').strip() or None
+        created_at   = (row.get('作成日時') or '').strip() or None
+
+        try:
+            quantity = int(float(row.get('数量') or 0))
+        except (ValueError, TypeError):
+            quantity = 0
+
+        try:
+            result = db.execute("""
+                INSERT INTO sales_history
+                    (jan, product_name, quantity, sale_date, source_file,
+                     chain_cd, client_name, store_cd, store_name, row_hash, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        COALESCE(%s::timestamp, NOW()))
+                ON CONFLICT (row_hash) WHERE row_hash IS NOT NULL AND row_hash <> ''
+                DO NOTHING
+            """, [jan, product_name, quantity, sale_date, source_file,
+                  chain_cd, client_name, store_cd, store_name, row_hash, created_at])
+            if result.rowcount > 0:
+                inserted += 1
+            else:
+                skipped += 1
+        except Exception:
+            db.execute("ROLLBACK")
+            errors += 1
+
+    db.execute("COMMIT")
+
+    # sales_daily_agg を再集計
+    try:
+        from auto_check import aggregate_sales_daily
+        aggregate_sales_daily()
+    except Exception:
+        pass
+
+    flash(f'復元完了: {inserted}件追加 / {skipped}件スキップ（重複） / {errors}件エラー', 'success')
+    return redirect(url_for('settings'))
 
 
 @app.route('/admin/restore', methods=['GET', 'POST'])
