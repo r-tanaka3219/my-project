@@ -112,7 +112,7 @@
       {% if q %}<a href="/reports/weekly_md?year={{ fiscal_year }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
     </form>
     <form method="post" action="/reports/weekly_md/generate" style="display:flex;gap:6px;align-items:center;margin:0"
-          onsubmit="return confirm('{{ fiscal_year }}年度の52週MDを前年実績から生成します。よろしいですか？')">
+          onsubmit="return confirm('{{ fiscal_year }}年度の52週MDを前年実績から生成（上書き）します。既存の計画数は前年実績で上書きされます。よろしいですか？')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="fiscal_year" value="{{ fiscal_year }}">
       <button type="submit" class="btn btn-success btn-sm">前年実績から一括生成</button>

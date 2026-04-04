@@ -569,7 +569,9 @@ def generate_weekly_md_plan(db, jan: str, fiscal_year: int) -> int:
             INSERT INTO weekly_md_plans
               (jan, fiscal_year, week_no, week_start, plan_qty, actual_qty)
             VALUES (%s, %s, %s, %s, %s, 0)
-            ON CONFLICT (jan, fiscal_year, week_no) DO NOTHING
+            ON CONFLICT (jan, fiscal_year, week_no) DO UPDATE
+              SET plan_qty = EXCLUDED.plan_qty,
+                  week_start = EXCLUDED.week_start
         """, [jan, fiscal_year, int(r['week_no']), r['week_start'], int(r['qty'] or 0)])
         count += 1
 
