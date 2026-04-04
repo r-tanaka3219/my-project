@@ -168,6 +168,9 @@
           <th class="col-rp">推奨発注点</th>
           <th class="col-oq">推奨発注数</th>
           <th class="col-md">52週MD<br><small style="font-weight:400">計画/達成</small></th>
+          <th class="col-zero" style="min-width:60px" title="過去30日中、販売ゼロ（欠品）だった日数">欠品日数<br><small style="font-weight:400">30日中</small></th>
+          <th class="col-iqr" style="min-width:60px" title="IQR法で外れ値として除外した日数（過去30日）">IQR除外<br><small style="font-weight:400">30日中</small></th>
+          <th class="col-mape" style="min-width:70px" title="予測精度MAPE（低いほど精度高）">MAPE<br><small style="font-weight:400">予測誤差率</small></th>
         </tr>
       </thead>
       <tbody>
@@ -229,9 +232,33 @@
             {% endif %}
           {% else %}<span style="color:#e2e8f0">-</span>{% endif %}
         </td>
+        {% set zd = zero_days_map.get(r.jan, 0) %}
+        <td class="col-zero" style="text-align:center">
+          {% if zd > 0 %}
+            <span style="font-weight:600;color:{% if zd >= 10 %}#dc2626{% elif zd >= 5 %}#d97706{% else %}#6b7280{% endif %}">{{ zd }}日</span>
+          {% else %}
+            <span style="color:#e2e8f0">0</span>
+          {% endif %}
+        </td>
+        {% set iqr_ex = iqr_excluded_map.get(r.jan, 0) %}
+        <td class="col-iqr" style="text-align:center">
+          {% if iqr_ex > 0 %}
+            <span style="font-weight:600;color:#7c3aed" title="IQR上限超え日を{{ iqr_ex }}日除外">{{ iqr_ex }}日</span>
+          {% else %}
+            <span style="color:#e2e8f0">0</span>
+          {% endif %}
+        </td>
+        {% set mp = mape_map.get(r.jan) %}
+        <td class="col-mape" style="text-align:center">
+          {% if mp %}
+            <span style="font-weight:600;color:{% if mp.mape <= 15 %}#16a34a{% elif mp.mape <= 30 %}#d97706{% else %}#dc2626{% endif %}" title="{{ mp.dt }}時点">{{ mp.mape }}%</span>
+          {% else %}
+            <span style="color:#e2e8f0;font-size:11px">未計算</span>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:24px">データがありません。販売実績を登録するとここに予測が表示されます。</td></tr>
+      <tr><td colspan="16" style="text-align:center;color:#94a3b8;padding:24px">データがありません。販売実績を登録するとここに予測が表示されます。</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}アラート一覧{% endblock %}
+{% block content %}
+<style>
+.alert-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700}
+.at-売上異常値{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.at-ABCランク変化{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd}
+.at-other{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+.filter-btn{padding:4px 14px;border-radius:20px;font-size:12px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;text-decoration:none;color:#374151}
+.filter-btn.active{background:#1e40af;color:#fff;border-color:#1e40af}
+</style>
+
+<div class="page-title">
+  <span>アラート一覧</span>
+  <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
+</div>
+
+<!-- タイプ別件数カード -->
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+  <a href="/reports/alerts" class="filter-btn {% if not alert_type %}active{% endif %}">
+    全件 <strong>{{ counts.values()|sum }}</strong>
+  </a>
+  {% for atype, cnt in counts.items() %}
+  <a href="/reports/alerts?type={{ atype|urlencode }}"
+     class="filter-btn {% if alert_type == atype %}active{% endif %}">
+    {{ atype }} <strong>{{ cnt }}</strong>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:140px">発生日時</th>
+          <th>種別</th>
+          <th>仕入先</th>
+          <th>商品CD</th>
+          <th>JAN</th>
+          <th>商品名</th>
+          <th>メッセージ</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="font-size:12px;white-space:nowrap;color:#6b7280">
+          {{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-' }}
+        </td>
+        <td>
+          {% set cls = 'at-' + r.alert_type if r.alert_type in ['売上異常値','ABCランク変化'] else 'at-other' %}
+          <span class="alert-badge {{ cls }}">{{ r.alert_type }}</span>
+        </td>
+        <td style="font-size:11px">
+          {% if r.supplier_cd %}
+            <span style="font-family:monospace">{{ r.supplier_cd }}</span><br>
+            <span style="color:#6b7280">{{ r.supplier_name }}</span>
+          {% else %}-{% endif %}
+        </td>
+        <td style="font-size:11px;font-family:monospace">{{ r.product_cd or '-' }}</td>
+        <td style="font-size:11px;color:#6b7280;font-family:monospace">{{ r.jan or '-' }}</td>
+        <td style="font-size:12px">{{ r.product_name or '-' }}</td>
+        <td style="font-size:12px;color:#374151">{{ r.message or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:32px">
+        アラートはありません
+      </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if rows|length == per_page %}
+  <div style="margin-top:8px;text-align:right">
+    <a href="/reports/alerts?type={{ alert_type }}&page={{ page + 1 }}" class="btn btn-outline btn-sm">次の{{ per_page }}件 →</a>
+  </div>
+  {% endif %}
+  {% if page > 1 %}
+  <div style="margin-top:8px">
+    <a href="/reports/alerts?type={{ alert_type }}&page={{ page - 1 }}" class="btn btn-outline btn-sm">← 前の{{ per_page }}件</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

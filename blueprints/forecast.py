@@ -47,11 +47,71 @@ def forecast_wholesale():
 
     z_score = float(_setting('safety_level_z', '1.65'))
 
+    # ── 欠品日数（30日中ゼロ補完後のゼロ日数）──────────────────────────────
+    zero_days_map = {}
+    try:
+        zd_rows = db.execute("""
+            SELECT g.jan,
+                   30 - COUNT(d.sale_dt) AS zero_days
+            FROM (SELECT DISTINCT jan FROM sales_daily_agg
+                  WHERE sale_dt >= CURRENT_DATE - INTERVAL '29 days') g
+            CROSS JOIN generate_series(
+                CURRENT_DATE - INTERVAL '29 days',
+                CURRENT_DATE, INTERVAL '1 day') gs(d)
+            LEFT JOIN sales_daily_agg d
+                   ON d.jan = g.jan AND d.sale_dt = gs.d::date
+            GROUP BY g.jan
+        """).fetchall()
+        zero_days_map = {r['jan']: int(r['zero_days']) for r in zd_rows}
+    except Exception:
+        pass
+
+    # ── IQR除外日数（過去30日で上限超えの日数）────────────────────────────
+    iqr_excluded_map = {}
+    try:
+        iqr_rows = db.execute("""
+            WITH bounds AS (
+                SELECT jan,
+                       PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY qty)
+                         + 1.5 * (PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY qty)
+                                - PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY qty))
+                         AS upper_limit
+                FROM sales_daily_agg
+                WHERE sale_dt >= CURRENT_DATE - INTERVAL '84 days'
+                GROUP BY jan
+            )
+            SELECT d.jan, COUNT(*) AS excl
+            FROM sales_daily_agg d
+            JOIN bounds b ON b.jan = d.jan
+            WHERE d.sale_dt >= CURRENT_DATE - INTERVAL '29 days'
+              AND d.qty > b.upper_limit
+            GROUP BY d.jan
+        """).fetchall()
+        iqr_excluded_map = {r['jan']: int(r['excl']) for r in iqr_rows}
+    except Exception:
+        pass
+
+    # ── 予測精度MAPE（最新の計算値）────────────────────────────────────────
+    mape_map = {}
+    try:
+        mape_rows = db.execute("""
+            SELECT DISTINCT ON (jan) jan, mape, calc_date
+            FROM forecast_accuracy
+            ORDER BY jan, calc_date DESC
+        """).fetchall()
+        mape_map = {r['jan']: {'mape': float(r['mape']), 'dt': str(r['calc_date'])}
+                    for r in mape_rows}
+    except Exception:
+        pass
+
     return render_template('forecast_wholesale.html',
                            rows=rows, q=q,
                            abc_counts=abc_counts,
                            z_score=z_score,
-                           ai_mode=ai_mode)
+                           ai_mode=ai_mode,
+                           zero_days_map=zero_days_map,
+                           iqr_excluded_map=iqr_excluded_map,
+                           mape_map=mape_map)
 
 
 @bp.route('/reports/forecast/wholesale/apply', methods=['POST'])
@@ -491,6 +551,47 @@ def weekly_md_apply_order():
     db.commit()
     flash(f'MDプランから {updated} 商品の発注数・発注点を更新しました（{fiscal_year}年度 W{today_week}〜W{today_week+3}）。', 'success')
     return redirect(url_for('forecast.weekly_md', year=fiscal_year))
+
+
+# ── アラート一覧 ──────────────────────────────────────────────────────────
+
+@bp.route('/reports/alerts')
+@permission_required('reports')
+def alerts():
+    db = get_db()
+    alert_type = request.args.get('type', '').strip()
+    page       = max(1, int(request.args.get('page', 1)))
+    per_page   = 50
+
+    sql = """
+        SELECT al.*, p.product_cd, p.supplier_cd, p.supplier_name
+        FROM alert_logs al
+        LEFT JOIN products p ON p.jan = al.jan
+        WHERE 1=1
+    """
+    params = []
+    if alert_type:
+        sql += " AND al.alert_type = %s"
+        params.append(alert_type)
+    sql += " ORDER BY al.created_at DESC LIMIT %s OFFSET %s"
+    params += [per_page, (page - 1) * per_page]
+
+    rows = db.execute(sql, params).fetchall()
+
+    # 件数集計（タイプ別）
+    counts = {}
+    for row in db.execute("""
+        SELECT alert_type, COUNT(*) AS cnt FROM alert_logs
+        GROUP BY alert_type ORDER BY cnt DESC
+    """).fetchall():
+        counts[row['alert_type']] = int(row['cnt'])
+
+    return render_template('alerts.html',
+                           rows=rows,
+                           counts=counts,
+                           alert_type=alert_type,
+                           page=page,
+                           per_page=per_page)
 
 
 # ── 気温データ管理 ───────────────────────────────────────────────────────
