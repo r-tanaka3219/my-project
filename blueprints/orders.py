@@ -15,16 +15,18 @@ bp = Blueprint('orders', __name__)
 def orders():
     db = get_db()
     q = request.args.get('q','').strip()
-    rows = db.execute("""
-        SELECT p.*, COALESCE((SELECT SUM(quantity) FROM stocks WHERE jan=p.jan),0) as stock_qty
-        FROM products p WHERE p.is_active=1 ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST
-    """).fetchall()
+    sql = """
+        SELECT p.*, COALESCE(s.stock_qty, 0) AS stock_qty
+        FROM products p
+        LEFT JOIN (SELECT jan, SUM(quantity) AS stock_qty FROM stocks GROUP BY jan) s ON s.jan=p.jan
+        WHERE p.is_active=1
+    """
+    params = []
     if q:
-        rows = [r for r in rows if q.lower() in (r['jan'] or '').lower()
-                or q.lower() in (r['product_cd'] or '').lower()
-                or q.lower() in (r['product_name'] or '').lower()
-                or q.lower() in (r['supplier_cd'] or '').lower()
-                or q.lower() in (r['supplier_name'] or '').lower()]
+        sql += " AND (p.jan ILIKE %s OR p.product_cd ILIKE %s OR p.product_name ILIKE %s OR p.supplier_cd ILIKE %s OR p.supplier_name ILIKE %s)"
+        params += [f'%{q}%'] * 5
+    sql += " ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST"
+    rows = db.execute(sql, params).fetchall()
     low_stock     = [r for r in rows if r['reorder_point'] > 0 and r['stock_qty'] <= r['reorder_point'] and not r['ordered_at']]
     ordered_list  = [r for r in rows if r['ordered_at']]
     all_products  = [r for r in rows if not r['ordered_at']]
@@ -429,21 +431,31 @@ def folder_candidates():
 @permission_required('orders')
 def orders_backorders():
     db = get_db()
-    q = request.args.get('q','').strip().lower()
-    rows = db.execute("""
+    q = request.args.get('q','').strip()
+    sql = """
         SELECT oh.*, p.unit_qty, p.location_code,
-               COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0) AS received_qty,
-               (oh.order_qty - COALESCE((SELECT SUM(received_qty) FROM order_receipts r WHERE r.order_history_id=oh.id),0)) AS outstanding_qty,
+               COALESCE(orx.received_qty, 0) AS received_qty,
+               (oh.order_qty - COALESCE(orx.received_qty, 0)) AS outstanding_qty,
                (CURRENT_DATE - oh.order_date::date) AS order_age,
-               COALESCE((SELECT MAX(receipt_date) FROM order_receipts r WHERE r.order_history_id=oh.id),'') AS last_receipt_date
+               COALESCE(orx.last_receipt_date, '') AS last_receipt_date
         FROM order_history oh
         LEFT JOIN products p ON oh.jan=p.jan
+        LEFT JOIN (
+            SELECT order_history_id,
+                   SUM(received_qty) AS received_qty,
+                   MAX(receipt_date) AS last_receipt_date
+            FROM order_receipts
+            GROUP BY order_history_id
+        ) orx ON orx.order_history_id = oh.id
         WHERE NULLIF(oh.order_date, '')::date >= CURRENT_DATE - INTERVAL '180 days'
           AND oh.closed_at IS NULL
-        ORDER BY NULLIF(oh.order_date, '')::date DESC, oh.id DESC
-    """).fetchall()
+    """
+    params = []
     if q:
-        rows = [r for r in rows if q in (r['jan'] or '').lower() or q in (r['product_cd'] or '').lower() or q in (r['product_name'] or '').lower() or q in (r['supplier_cd'] or '').lower() or q in (r['supplier_name'] or '').lower()]
+        sql += " AND (oh.jan ILIKE %s OR oh.product_cd ILIKE %s OR oh.product_name ILIKE %s OR oh.supplier_cd ILIKE %s OR oh.supplier_name ILIKE %s)"
+        params += [f'%{q}%'] * 5
+    sql += " ORDER BY NULLIF(oh.order_date, '')::date DESC, oh.id DESC"
+    rows = db.execute(sql, params).fetchall()
     today = date.today()
     enriched = []
     for r in rows:

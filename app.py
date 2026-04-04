@@ -4558,8 +4558,10 @@ if __name__ == '__main__':
     # ── 起動時バックグラウンドウォームアップ ──────────────────────────────
     # DB接続成功後のみ実行。ユーザーの最初のアクセスまでにキャッシュを温める
     try:
-        threading.Thread(target=_bg_refresh_sales_daily_agg,  daemon=True).start()
-        threading.Thread(target=_bg_rebuild_forecast_cache,    daemon=True).start()
+        def _warmup_sequence():
+            _bg_refresh_sales_daily_agg()   # 集計テーブルを先に構築
+            _bg_rebuild_forecast_cache()    # 完了後にキャッシュを構築（高速パスを使用）
+        threading.Thread(target=_warmup_sequence, daemon=True).start()
         logger.info("  [PerfOpt] バックグラウンドで予測キャッシュ・集計テーブルをウォームアップ中...")
     except Exception as _we:
         logger.warning(f"  [WARN] Warmup start failed: {_we}")

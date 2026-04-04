@@ -16,19 +16,21 @@ def inventory():
     today = date.today()
     db = get_db()
     q = request.args.get('q','').strip()
-    stocks = db.execute("""
+    sql = """
         SELECT s.*, p.reorder_point, p.expiry_alert_days, p.product_cd, p.location_code AS product_location,
                COALESCE(NULLIF(s.location_code,''), NULLIF(p.location_code,''), '') as display_location,
-               (SELECT SUM(s2.quantity) FROM stocks s2 WHERE s2.jan=s.jan) as total_qty
-        FROM stocks s LEFT JOIN products p ON s.jan=p.jan
-        WHERE s.quantity>0 ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, s.expiry_date ASC
-    """).fetchall()
+               COALESCE(t.total_qty, 0) AS total_qty
+        FROM stocks s
+        LEFT JOIN products p ON s.jan=p.jan
+        LEFT JOIN (SELECT jan, SUM(quantity) AS total_qty FROM stocks GROUP BY jan) t ON t.jan=s.jan
+        WHERE s.quantity>0
+    """
+    params = []
     if q:
-        stocks = [s for s in stocks if q.lower() in (s['jan'] or '').lower()
-                  or q.lower() in (s['product_cd'] or '').lower()
-                  or q.lower() in (s['product_name'] or '').lower()
-                  or q.lower() in (s['supplier_cd'] or '').lower()
-                  or q.lower() in (s['supplier_name'] or '').lower()]
+        sql += " AND (s.jan ILIKE %s OR p.product_cd ILIKE %s OR p.product_name ILIKE %s OR p.supplier_cd ILIKE %s OR p.supplier_name ILIKE %s)"
+        params += [f'%{q}%'] * 5
+    sql += " ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, s.expiry_date ASC"
+    stocks = db.execute(sql, params).fetchall()
     alert_date = str(today + timedelta(days=30))
     return render_template('inventory.html', stocks=stocks, today=today, alert_date=alert_date, q=q)
 
