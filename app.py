@@ -3339,6 +3339,15 @@ def backup():
     )
 
 
+@app.route('/admin/backup/sales/count')
+@admin_required
+def backup_sales_count():
+    """sales_history の総件数を返す（進捗表示用）"""
+    db = get_db()
+    row = db.execute("SELECT COUNT(*) AS cnt FROM sales_history").fetchone()
+    return jsonify(total=row['cnt'])
+
+
 @app.route('/admin/backup/sales')
 @admin_required
 def backup_sales():
@@ -3383,11 +3392,14 @@ def backup_sales():
             if len(rows) < batch:
                 break
 
-    return Response(
+    resp = Response(
         stream_with_context(generate()),
         mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
+    # ダウンロード完了をクライアント側 JS が検知するためのクッキー
+    resp.set_cookie('sales_dl_done', '1', max_age=30, path='/', samesite='Lax')
+    return resp
 
 
 @app.route('/admin/backup/sales/restore', methods=['POST'])

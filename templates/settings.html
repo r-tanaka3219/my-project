@@ -289,7 +289,7 @@
     <!-- バックアップ -->
     <div>
       <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">▼ バックアップ（エクスポート）</div>
-      <a href="/admin/backup/sales" class="btn btn-outline btn-sm">📥 全件CSVダウンロード</a>
+      <button type="button" class="btn btn-outline btn-sm" onclick="startSalesDownload()">📥 全件CSVダウンロード</button>
     </div>
 
     <!-- 復元 -->
@@ -308,6 +308,89 @@
     </div>
   </div>
 </div>
+
+<!-- ダウンロード進捗モーダル -->
+<div id="sales-dl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:32px 40px;min-width:320px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:8px">📥 売上履歴をダウンロード中</div>
+    <div id="sales-dl-count" style="font-size:13px;color:#6b7280;margin-bottom:16px">件数を確認中...</div>
+    <!-- プログレスバー（アニメーション） -->
+    <div style="background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden;margin-bottom:16px">
+      <div id="sales-dl-bar" style="height:100%;background:#2563eb;border-radius:4px;width:0%;transition:width .4s ease"></div>
+    </div>
+    <div id="sales-dl-status" style="font-size:12px;color:#94a3b8">準備中...</div>
+    <div style="margin-top:16px;font-size:11px;color:#cbd5e1">ブラウザのダウンロードバーでも進捗を確認できます</div>
+  </div>
+</div>
+
+<script>
+function startSalesDownload() {
+  var modal = document.getElementById('sales-dl-modal');
+  var countEl = document.getElementById('sales-dl-count');
+  var bar = document.getElementById('sales-dl-bar');
+  var status = document.getElementById('sales-dl-status');
+
+  modal.style.display = 'flex';
+  bar.style.width = '0%';
+  status.textContent = '件数を確認中...';
+  countEl.textContent = '件数を確認中...';
+
+  // 1. 件数取得
+  fetch('/admin/backup/sales/count')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var total = data.total || 0;
+      countEl.textContent = '対象: ' + total.toLocaleString() + ' 件';
+      status.textContent = 'ダウンロード開始...';
+
+      // プログレスバーをアニメーション（実際のバイト進捗は取れないので時間ベース推定）
+      // 目安: 1万件 ≒ 1秒 として全体時間を推定、最大90%まで
+      var estSec = Math.max(3, Math.ceil(total / 10000));
+      var start = Date.now();
+      var timer = setInterval(function() {
+        var elapsed = (Date.now() - start) / 1000;
+        var pct = Math.min(90, (elapsed / estSec) * 90);
+        bar.style.width = pct + '%';
+        status.textContent = 'ダウンロード中... (' + Math.round(pct) + '%)';
+      }, 300);
+
+      // 2. ダウンロード開始（隠しiframe経由）
+      var iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = '/admin/backup/sales?token=' + Date.now();
+      document.body.appendChild(iframe);
+
+      // cookieポーリングでダウンロード完了を検知
+      var pollTimer = setInterval(function() {
+        if (document.cookie.indexOf('sales_dl_done=1') !== -1) {
+          clearInterval(timer);
+          clearInterval(pollTimer);
+          bar.style.width = '100%';
+          status.textContent = '完了！';
+          // cookieを消す
+          document.cookie = 'sales_dl_done=; Max-Age=0; path=/';
+          setTimeout(function(){ modal.style.display = 'none'; }, 1200);
+        }
+      }, 500);
+
+      // フォールバック: 推定時間+10秒経過後に閉じる
+      setTimeout(function(){
+        clearInterval(timer);
+        clearInterval(pollTimer);
+        bar.style.width = '100%';
+        status.textContent = '完了（ブラウザを確認してください）';
+        setTimeout(function(){ modal.style.display = 'none'; }, 2000);
+      }, (estSec + 10) * 1000);
+    })
+    .catch(function() {
+      // 件数取得失敗でもダウンロードは開始
+      countEl.textContent = '';
+      status.textContent = 'ダウンロード開始...';
+      window.location.href = '/admin/backup/sales';
+      setTimeout(function(){ modal.style.display = 'none'; }, 3000);
+    });
+}
+</script>
 
 <div class="card" style="max-width:680px;margin-bottom:16px;border-left:4px solid #dc2626">
   <div class="card-title" style="color:#dc2626">🗑 データ一括削除</div>
