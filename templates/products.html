@@ -18,7 +18,7 @@
 <div class="card" style="padding:10px 16px;margin-bottom:0">
   <form method="get" action="/products" class="search-form" style="flex-wrap:wrap;gap:8px">
     <input type="text" name="q" value="{{ q }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
-    <select name="ptype" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+    <select name="ptype" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;width:auto">
       <option value="" {% if not ptype %}selected{% endif %}>全区分</option>
       <option value="通常品" {% if ptype == '通常品' %}selected{% endif %}>通常品</option>
       <option value="季節品" {% if ptype == '季節品' %}selected{% endif %}>🍂 季節品</option>
