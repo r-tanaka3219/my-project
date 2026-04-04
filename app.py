@@ -3342,30 +3342,49 @@ def backup():
 @app.route('/admin/backup/sales')
 @admin_required
 def backup_sales():
-    """sales_history を全件 CSV エクスポート（row_hash 含む・復元用）"""
+    """sales_history を全件 CSV ストリーミングエクスポート（row_hash 含む・復元用）"""
     import csv as _csv
     from urllib.parse import quote
-    db = get_db()
-
-    rows = db.execute("""
-        SELECT jan, product_name, quantity, sale_date, source_file,
-               chain_cd, client_name, store_cd, store_name, row_hash, created_at
-        FROM sales_history
-        ORDER BY sale_date ASC, id ASC
-    """).fetchall()
-
-    sio = io.StringIO()
-    w = _csv.writer(sio)
-    w.writerow(['JAN', '商品名', '数量', '売上日', '取込ファイル',
-                'チェーンCD', '得意先名', '店舗CD', '店舗名', 'ROW_HASH', '作成日時'])
-    for r in rows:
-        w.writerow([r['jan'], r['product_name'], r['quantity'], r['sale_date'],
-                    r['source_file'], r['chain_cd'], r['client_name'],
-                    r['store_cd'], r['store_name'], r['row_hash'], r['created_at']])
+    from flask import stream_with_context
 
     filename = f"売上履歴_{date.today()}.csv"
+
+    def generate():
+        db = get_db()
+        sio = io.StringIO()
+        w = _csv.writer(sio)
+        # BOM + ヘッダー
+        sio.write('\ufeff')
+        w.writerow(['JAN', '商品名', '数量', '売上日', '取込ファイル',
+                    'チェーンCD', '得意先名', '店舗CD', '店舗名', 'ROW_HASH', '作成日時'])
+        yield sio.getvalue().encode('utf-8')
+
+        # 1000件ずつ取得してストリーム出力
+        offset = 0
+        batch = 1000
+        while True:
+            rows = db.execute("""
+                SELECT jan, product_name, quantity, sale_date, source_file,
+                       chain_cd, client_name, store_cd, store_name, row_hash, created_at
+                FROM sales_history
+                ORDER BY sale_date ASC, id ASC
+                LIMIT %s OFFSET %s
+            """, [batch, offset]).fetchall()
+            if not rows:
+                break
+            sio = io.StringIO()
+            w = _csv.writer(sio)
+            for r in rows:
+                w.writerow([r['jan'], r['product_name'], r['quantity'], r['sale_date'],
+                            r['source_file'], r['chain_cd'], r['client_name'],
+                            r['store_cd'], r['store_name'], r['row_hash'], r['created_at']])
+            yield sio.getvalue().encode('utf-8')
+            offset += batch
+            if len(rows) < batch:
+                break
+
     return Response(
-        sio.getvalue().encode('utf-8-sig'),
+        stream_with_context(generate()),
         mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
