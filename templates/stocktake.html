@@ -80,6 +80,7 @@
       <th class="text-right" style="min-width:85px">理論在庫</th>
       <th class="text-right" style="min-width:115px">実棚数</th>
       <th class="text-right" style="min-width:65px">差異</th>
+      <th class="text-right print-hide" style="min-width:90px">差異金額</th>
       <th class="text-right print-hide" style="min-width:80px">原価(円)</th>
       <th class="print-hide" style="min-width:55px">調整</th>
       <th style="min-width:110px">備考</th>
@@ -152,6 +153,14 @@
           {% else %}<span style="color:#d1d5db">-</span>{% endif %}
         </span>
         <span class="print-only" style="display:none">&nbsp;</span>
+      </td>
+      <td class="text-right print-hide" style="font-size:12px">
+        {% if r.adjusted and r.diff_qty and r.cost_price %}
+          {% set impact = (r.diff_qty * (r.cost_price|float))|round(0)|int %}
+          {% if impact < 0 %}<span style="color:#dc2626;font-weight:600">{{ "{:,.0f}".format(impact) }}円</span>
+          {% elif impact > 0 %}<span style="color:#16a34a;font-weight:600">+{{ "{:,.0f}".format(impact) }}円</span>
+          {% else %}<span style="color:#9ca3af">±0円</span>{% endif %}
+        {% else %}<span style="color:#d1d5db">-</span>{% endif %}
       </td>
       <td class="text-right print-hide" style="font-size:12px;color:#6b7280">{{ "{:,.0f}".format(r.cost_price or 0) if r.cost_price else '-' }}</td>
       <td class="print-hide">

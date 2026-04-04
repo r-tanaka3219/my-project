@@ -80,6 +80,14 @@
         ⚡ 全商品一括生成
       </button>
     </form>
+    <form method="post" action="/reports/weekly_md/apply_order" style="display:inline;margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="fiscal_year" value="{{ fiscal_year }}">
+      <button type="submit" class="btn btn-success btn-sm"
+              onclick="return confirm('今後4週のMDプラン計画数から発注数・発注点を自動更新します（ロック商品は除外）。よろしいですか？')">
+        発注数へ反映
+      </button>
+    </form>
     <a href="/reports/weekly_md/export?year={{ fiscal_year }}" class="btn btn-outline btn-sm">CSV出力</a>
     <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
     <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
@@ -152,8 +160,28 @@
               {% set ach = (wd.actual / wd.plan * 100)|round(0)|int %}
               <br><span class="week-ach {% if ach >= 100 %}ach-good{% elif ach >= 70 %}ach-warn{% else %}ach-bad{% endif %}">{{ ach }}%</span>
             {% endif %}
+            {% if w == current_week %}
+              {% set fc = forecast_weekly_map.get(p.jan, 0) %}
+              {% if fc > 0 %}
+                {% set gap = fc - wd.plan %}
+                <br><span style="font-size:9px;color:#7c3aed" title="AI週次予測">
+                  予{{ fc }}
+                  {% if gap > 0 %}<span style="color:#16a34a">+{{ gap }}</span>
+                  {% elif gap < 0 %}<span style="color:#dc2626">{{ gap }}</span>{% endif %}
+                </span>
+              {% endif %}
+            {% endif %}
           {% else %}
-            <span style="color:#e2e8f0">-</span>
+            {% if w == current_week %}
+              {% set fc = forecast_weekly_map.get(p.jan, 0) %}
+              {% if fc > 0 %}
+                <span style="font-size:9px;color:#7c3aed">予{{ fc }}</span>
+              {% else %}
+                <span style="color:#e2e8f0">-</span>
+              {% endif %}
+            {% else %}
+              <span style="color:#e2e8f0">-</span>
+            {% endif %}
           {% endif %}
         </td>
         {% endfor %}

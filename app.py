@@ -503,14 +503,35 @@ def _build_forecast_rows_raw(db, flags=None):
             FROM daily
             WHERE sale_dt >= CURRENT_DATE - INTERVAL '84 days'
             GROUP BY jan, dow
+        ), filled_daily AS (
+            -- 欠品期間補完: generate_series で過去30日の全日付を生成し、売上ゼロ日をゼロ埋め
+            SELECT g.jan, gs.d::date AS sale_dt, COALESCE(d.qty, 0) AS qty
+            FROM (SELECT DISTINCT jan FROM daily) g
+            CROSS JOIN generate_series(
+                CURRENT_DATE - INTERVAL '29 days',
+                CURRENT_DATE,
+                INTERVAL '1 day'
+            ) gs(d)
+            LEFT JOIN daily d ON d.jan = g.jan AND d.sale_dt = gs.d::date
+        ), iqr_bounds AS (
+            -- IQR法で外れ値の上限を計算（外れ値除去用）
+            SELECT jan,
+                   PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY qty) AS q1,
+                   PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY qty) AS q3
+            FROM filled_daily
+            GROUP BY jan
         ), wma_daily AS (
             SELECT jan,
                    SUM(qty * day_weight) / NULLIF(SUM(day_weight), 0) AS avg_daily
             FROM (
-                SELECT jan, qty,
-                       ROW_NUMBER() OVER (PARTITION BY jan ORDER BY sale_dt) AS day_weight
-                FROM daily
-                WHERE sale_dt >= CURRENT_DATE - INTERVAL '30 days'
+                SELECT f.jan, f.qty,
+                       ROW_NUMBER() OVER (PARTITION BY f.jan ORDER BY f.sale_dt) AS day_weight
+                FROM filled_daily f
+                LEFT JOIN iqr_bounds ib ON ib.jan = f.jan
+                -- IQR外れ値除去: Q3 + 1.5×IQR を超える日は除外（ゼロ日は常に含む）
+                WHERE (ib.q3 IS NULL
+                       OR f.qty = 0
+                       OR f.qty <= ib.q3 + 1.5 * (ib.q3 - ib.q1))
             ) w
             GROUP BY jan
         ), base_daily AS (
@@ -627,6 +648,28 @@ def _build_forecast_rows_raw(db, flags=None):
     except Exception:
         pass
 
+    # ── 気温感応度マップと直近気温（AIモード時のみ使用）────────────────────
+    _temp_sens_map: dict = {}
+    _avg_temp_recent: float = 20.0
+    if ai_mode:
+        try:
+            _sens_rows = db.execute("SELECT * FROM temp_sensitivity").fetchall()
+            _temp_sens_map = {
+                r['jan']: {
+                    'temp_coef': float(r['temp_coef'] or 0),
+                    'base_temp': float(r['base_temp'] or 20),
+                }
+                for r in _sens_rows
+            }
+            _tw = db.execute("""
+                SELECT AVG(avg_temp) AS t FROM weather_data
+                WHERE obs_date >= CURRENT_DATE - INTERVAL '14 days'
+            """).fetchone()
+            if _tw and _tw['t'] is not None:
+                _avg_temp_recent = float(_tw['t'])
+        except Exception:
+            pass
+
     out = []
     today = date.today()
     for r in rows:
@@ -686,11 +729,18 @@ def _build_forecast_rows_raw(db, flags=None):
             direct_demand_qty = 0
             direct_demand_days = 0
 
+            # 気温補正係数（temp_sensitivityが登録されている商品のみ）
+            _temp_factor = 1.0
+            _sens = _temp_sens_map.get(r['jan'])
+            if _sens and _sens['temp_coef'] != 0 and avg_daily > 0:
+                _tadj = _sens['temp_coef'] * (_avg_temp_recent - _sens['base_temp']) / avg_daily
+                _temp_factor = max(0.7, min(1.3, 1.0 + _tadj))
+
             for i in range(30):
                 target_day = today + timedelta(days=i)
                 d_idx = dow_idx_map[target_day.isoweekday()]
                 s_idx = season_idx_this if target_day.month == today.month else season_idx_next
-                daily_fc = avg_daily * s_idx * d_idx * manual_adj
+                daily_fc = avg_daily * s_idx * d_idx * manual_adj * _temp_factor
                 base_next_30 += daily_fc
 
                 ds = str(target_day)
@@ -777,6 +827,7 @@ def _build_forecast_rows_raw(db, flags=None):
         r['p90_daily']          = p90_daily                     # P2
         r['daily_std']          = round(daily_std, 2) if daily_std is not None else None  # P2
         r['suggested_order_qty']= suggested_oq
+        r['temp_adj_factor']    = round(_temp_factor, 3) if ai_mode else 1.0
         out.append(r)
     return out
 

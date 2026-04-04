@@ -591,6 +591,26 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS ix_alert_logs_created_at     ON alert_logs(created_at DESC)",
     # products product_type（取扱区分フィルタ）
     "CREATE INDEX IF NOT EXISTS ix_products_product_type     ON products(product_type) WHERE is_active=1",
+    # ABCランク変化追跡カラム
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS abc_rank         TEXT DEFAULT 'C'",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS abc_rank_prev    TEXT",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS abc_rank_updated TEXT",
+    # 予測精度評価テーブル
+    """CREATE TABLE IF NOT EXISTS forecast_accuracy (
+        id          SERIAL PRIMARY KEY,
+        jan         TEXT NOT NULL,
+        forecast_dt DATE NOT NULL,
+        predicted   NUMERIC NOT NULL DEFAULT 0,
+        actual      NUMERIC NOT NULL DEFAULT 0,
+        mape        NUMERIC,
+        calc_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+        UNIQUE(jan, forecast_dt)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_forecast_accuracy_jan ON forecast_accuracy(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_forecast_accuracy_dt  ON forecast_accuracy(forecast_dt DESC)",
+    # 季節品の販売期間スケジュール
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS season_start_mmdd TEXT",
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS season_end_mmdd   TEXT",
 ]
 
 def migrate_db():

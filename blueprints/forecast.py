@@ -155,6 +155,36 @@ def abc_analysis():
         ORDER BY sales_value DESC
     """).fetchall()
 
+    # XYZ分析用: 週次CV（変動係数）計算
+    import statistics as _st
+    xyz_rows = db.execute("""
+        SELECT jan,
+               EXTRACT(WEEK FROM sale_date::date)::int AS wk,
+               SUM(quantity) AS wqty
+        FROM sales_history
+        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
+        GROUP BY jan, wk
+    """).fetchall()
+    xyz_map: dict = {}  # jan -> 'X'/'Y'/'Z'
+    jan_weeks: dict = {}
+    for r in xyz_rows:
+        jan_weeks.setdefault(r['jan'], []).append(float(r['wqty'] or 0))
+    for jan, wqtys in jan_weeks.items():
+        if len(wqtys) < 4:
+            xyz_map[jan] = 'Z'
+            continue
+        mu = _st.mean(wqtys)
+        if mu <= 0:
+            xyz_map[jan] = 'Z'
+            continue
+        cv = _st.stdev(wqtys) / mu
+        if cv < 0.25:
+            xyz_map[jan] = 'X'
+        elif cv < 0.75:
+            xyz_map[jan] = 'Y'
+        else:
+            xyz_map[jan] = 'Z'
+
     abc_rows = []
     for r in rows:
         ratio = float(r['running_ratio'] or 1.0)
@@ -165,10 +195,16 @@ def abc_analysis():
         else:
             rank = 'C'
         d = dict(r)
-        d['abc_rank']       = rank
+        d['abc_rank']          = rank
+        d['xyz_rank']          = xyz_map.get(r['jan'], 'Z')
         d['running_ratio_pct'] = round(ratio * 100, 1)
-        d['sales_value']    = round(float(r['sales_value'] or 0), 0)
+        d['sales_value']       = round(float(r['sales_value'] or 0), 0)
         abc_rows.append(d)
+
+    # ABC×XYZ 9マトリックス集計
+    matrix = {a+x: 0 for a in 'ABC' for x in 'XYZ'}
+    for r in abc_rows:
+        matrix[r['abc_rank'] + r['xyz_rank']] += 1
 
     # 集計
     summary = {
@@ -182,9 +218,54 @@ def abc_analysis():
         summary[rk]['qty']   += int(r['total_qty'] or 0)
         summary[rk]['value'] += float(r['sales_value'] or 0)
 
+    # ABCランクを products テーブルに保存（変化があった商品のみ更新）
+    changed = 0
+    today_str = str(date.today())
+    for r in abc_rows:
+        jan, new_rank = r['jan'], r['abc_rank']
+        existing = db.execute(
+            "SELECT abc_rank FROM products WHERE jan=%s", [jan]
+        ).fetchone()
+        if existing and existing['abc_rank'] != new_rank:
+            old_rank = existing['abc_rank'] or 'C'
+            db.execute("""
+                UPDATE products
+                SET abc_rank_prev = %s, abc_rank = %s, abc_rank_updated = %s
+                WHERE jan = %s
+            """, [old_rank, new_rank, today_str, jan])
+            db.execute("""
+                INSERT INTO alert_logs (alert_type, jan, product_name, message, mail_sent)
+                VALUES ('ABCランク変化', %s, %s, %s, 0)
+            """, [jan, r['product_name'],
+                  f"ABCランク変化: {old_rank} → {new_rank} ({today_str})"])
+            changed += 1
+        elif existing and existing['abc_rank'] is None:
+            db.execute("""
+                UPDATE products SET abc_rank = %s, abc_rank_updated = %s WHERE jan = %s
+            """, [new_rank, today_str, jan])
+    if changed:
+        db.commit()
+        logger.info(f'[ABC] ランク変化: {changed}商品')
+
+    # 前回ランクマップ（ランク変化表示用）
+    prev_rank_map = {}
+    try:
+        prev_rows = db.execute(
+            "SELECT jan, abc_rank_prev, abc_rank_updated FROM products WHERE abc_rank_prev IS NOT NULL"
+        ).fetchall()
+        for pr in prev_rows:
+            prev_rank_map[pr['jan']] = {
+                'prev': pr['abc_rank_prev'],
+                'updated': pr['abc_rank_updated'] or '',
+            }
+    except Exception:
+        pass
+
     return render_template('abc_analysis.html',
                            rows=abc_rows, summary=summary,
-                           a_threshold=a_threshold, b_threshold=b_threshold)
+                           a_threshold=a_threshold, b_threshold=b_threshold,
+                           prev_rank_map=prev_rank_map,
+                           matrix=matrix)
 
 
 @bp.route('/reports/abc/export')
@@ -269,6 +350,20 @@ def weekly_md():
             'actual': int(r['actual_qty'] or 0),
         }
 
+    # 週次予測値マップ（当週のAI予測 = 直近30日日次平均 × 7）
+    forecast_weekly_map: dict = {}
+    try:
+        fc_rows = db.execute("""
+            SELECT jan,
+                   ROUND(SUM(qty) / NULLIF(COUNT(DISTINCT sale_dt), 0) * 7, 0) AS weekly_fc
+            FROM sales_daily_agg
+            WHERE sale_dt >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY jan
+        """).fetchall()
+        forecast_weekly_map = {r['jan']: int(r['weekly_fc'] or 0) for r in fc_rows}
+    except Exception:
+        pass
+
     # 検索絞り込みに関わらず W1〜W52 を常に全列表示
     weeks     = list(range(1, 53))
     prod_list = sorted(products_md.values(), key=lambda x: (x['supplier_cd'], x['product_cd']))
@@ -277,6 +372,7 @@ def weekly_md():
                            prod_list=prod_list, weeks=weeks,
                            fiscal_year=year_param,
                            current_week=today.isocalendar()[1],
+                           forecast_weekly_map=forecast_weekly_map,
                            q=q)
 
 
@@ -345,6 +441,56 @@ def weekly_md_export():
                     plan, actual, ach])
     return Response(sio.getvalue().encode('utf-8-sig'), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': f'attachment; filename=weekly_md_{fiscal_year}.csv'})
+
+
+@bp.route('/reports/weekly_md/apply_order', methods=['POST'])
+@permission_required('reports')
+def weekly_md_apply_order():
+    """今後4週のMDプラン計画数からリードタイム分の発注数を自動算出しproductsに反映"""
+    import math
+    db = get_db()
+    fiscal_year = int(request.form.get('fiscal_year', date.today().year))
+    today_week  = int(date.today().strftime('%V'))  # ISO週番号
+
+    # 今後4週の計画数を商品別に集計
+    plan_rows = db.execute("""
+        SELECT wm.jan, SUM(wm.plan_qty) AS plan4w,
+               p.lead_time_days, p.order_unit, p.unit_qty, p.safety_factor
+        FROM weekly_md_plans wm
+        JOIN products p ON p.jan = wm.jan
+        WHERE wm.fiscal_year = %s
+          AND wm.week_no >= %s AND wm.week_no < %s
+          AND wm.plan_qty > 0
+          AND p.is_active = 1
+        GROUP BY wm.jan, p.lead_time_days, p.order_unit, p.unit_qty, p.safety_factor
+    """, [fiscal_year, today_week, today_week + 4]).fetchall()
+
+    updated = 0
+    for r in plan_rows:
+        plan4w      = int(r['plan4w'] or 0)
+        if plan4w <= 0:
+            continue
+        daily_avg   = plan4w / 28.0
+        lt          = int(r['lead_time_days'] or 3)
+        sf          = float(r['safety_factor'] or 1.3)
+        order_unit  = max(1, int(r['order_unit'] or 1))
+        # 発注量 = 日次平均 × (LT + 14日) × 安全係数、order_unit の倍数切り上げ
+        raw_oq = daily_avg * (lt + 14) * sf
+        new_oq = max(order_unit, math.ceil(raw_oq / order_unit) * order_unit)
+        # 発注点 = 日次平均 × LT × 安全係数、order_unit 倍数切り上げ
+        raw_rp = daily_avg * lt * sf
+        new_rp = max(order_unit, math.ceil(raw_rp / order_unit) * order_unit)
+
+        db.execute("""
+            UPDATE products
+            SET order_qty = %s, reorder_point = %s
+            WHERE jan = %s AND lock_order_qty = 0
+        """, [new_oq, new_rp, r['jan']])
+        updated += 1
+
+    db.commit()
+    flash(f'MDプランから {updated} 商品の発注数・発注点を更新しました（{fiscal_year}年度 W{today_week}〜W{today_week+3}）。', 'success')
+    return redirect(url_for('forecast.weekly_md', year=fiscal_year))
 
 
 # ── 気温データ管理 ───────────────────────────────────────────────────────

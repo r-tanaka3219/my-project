@@ -621,7 +621,7 @@ def product_edit(pid):
             shelf_life_days=%s,expiry_alert_days=%s,safety_factor=%s,lead_time_days=%s,
             mixed_group=%s,mixed_lot_mode=%s,mixed_lot_cases=%s,mixed_force_days=%s,
             cost_price=%s,sell_price=%s,location_code=%s,shelf_face_qty=%s,shelf_replenish_point=%s,
-            manual_adj_factor=%s
+            manual_adj_factor=%s,season_start_mmdd=%s,season_end_mmdd=%s
             WHERE id=%s
         """, [f['supplier_cd'],f['supplier_name'],f.get('supplier_email',''),
               f['product_cd'],f['product_name'],
@@ -640,6 +640,8 @@ def product_edit(pid):
               int(f.get('shelf_face_qty',0) or 0),
               int(f.get('shelf_replenish_point',0) or 0),
               float(f.get('manual_adj_factor',1.0) or 1.0),
+              f.get('season_start_mmdd','') or None,
+              f.get('season_end_mmdd','') or None,
               pid])
         db.commit()
         flash('商品情報を更新しました。', 'success')

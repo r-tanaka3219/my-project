@@ -787,7 +787,161 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
     except Exception:
         pass
 
+    # 売上異常値チェック（取込完了後）
+    try:
+        _check_sales_anomaly(get_db_long(), target_date)
+    except Exception as _ae:
+        logger.warning(f'[AnomalyCheck] エラー: {_ae}')
+
     return all_results
+
+
+def _check_sales_anomaly(db, target_date=None):
+    """
+    取込した日付の日次売上が前週同曜日比 3倍超かつ10個以上の場合に
+    alert_logs へ '売上異常値' アラートを記録する。
+    """
+    if not target_date:
+        target_date = str(date.today())
+    try:
+        prev_date = str(date.fromisoformat(str(target_date)) - timedelta(days=7))
+    except Exception:
+        return
+    # 当日の JAN 別合計
+    today_rows = db.execute("""
+        SELECT jan, SUM(quantity) AS qty
+        FROM sales_history
+        WHERE sale_date = %s
+        GROUP BY jan
+    """, [target_date]).fetchall()
+    if not today_rows:
+        return
+    # 前週同曜日の JAN 別合計
+    prev_rows = db.execute("""
+        SELECT jan, SUM(quantity) AS qty
+        FROM sales_history
+        WHERE sale_date = %s
+        GROUP BY jan
+    """, [prev_date]).fetchall()
+    prev_map = {r['jan']: int(r['qty'] or 0) for r in prev_rows}
+
+    for r in today_rows:
+        jan = r['jan']
+        today_qty = int(r['qty'] or 0)
+        prev_qty  = prev_map.get(jan, 0)
+        if today_qty < 10:
+            continue  # 少量は無視
+        if prev_qty > 0 and today_qty >= prev_qty * 3:
+            prod = db.execute(
+                "SELECT product_name FROM products WHERE jan=%s LIMIT 1", [jan]
+            ).fetchone()
+            pname = prod['product_name'] if prod else jan
+            # 同日・同JANの重複アラートを防ぐ
+            exists = db.execute("""
+                SELECT 1 FROM alert_logs
+                WHERE alert_type='売上異常値' AND jan=%s
+                  AND created_at::date = %s::date
+                LIMIT 1
+            """, [jan, target_date]).fetchone()
+            if not exists:
+                db.execute("""
+                    INSERT INTO alert_logs (alert_type, jan, product_name, message, mail_sent)
+                    VALUES ('売上異常値', %s, %s, %s, 0)
+                """, [jan, pname,
+                      f"前週比 {round(today_qty/prev_qty,1)}倍 ({prev_qty}→{today_qty}個) [{target_date}]"])
+                db.commit()
+                logger.info(f'[AnomalyCheck] 売上異常値 JAN:{jan} {prev_qty}→{today_qty}個')
+
+
+def _calc_forecast_accuracy(db):
+    """30日前の予測値と実績を比較してMAPEをforecast_accuracyテーブルへUPSERT"""
+    from datetime import date, timedelta
+    target_dt = date.today() - timedelta(days=30)
+
+    # forecast_cache から30日前時点の予測値を取得（q50_daily × 30 を予測量とする）
+    fc_rows = db.execute("""
+        SELECT jan, q50_daily
+        FROM forecast_cache
+        WHERE updated_at::date = %s::date
+          AND q50_daily IS NOT NULL AND q50_daily > 0
+    """, [target_dt]).fetchall()
+    if not fc_rows:
+        logger.info('[MAPE] forecast_cache に対象データなし（30日前: %s）', target_dt)
+        return
+
+    jans = [r['jan'] for r in fc_rows]
+    predicted_map = {r['jan']: float(r['q50_daily']) * 30 for r in fc_rows}
+
+    # sales_history から30日間の実績合計を取得
+    actual_rows = db.execute("""
+        SELECT jan, SUM(quantity) AS actual_qty
+        FROM sales_history
+        WHERE jan = ANY(%s)
+          AND sale_date::date >= %s::date
+          AND sale_date::date < %s::date
+        GROUP BY jan
+    """, [jans, target_dt, date.today()]).fetchall()
+    actual_map = {r['jan']: float(r['actual_qty']) for r in actual_rows}
+
+    upserted = 0
+    for jan, predicted in predicted_map.items():
+        actual = actual_map.get(jan)
+        if actual is None or actual == 0:
+            continue
+        mape = abs(predicted - actual) / actual * 100
+        db.execute("""
+            INSERT INTO forecast_accuracy (jan, forecast_dt, predicted, actual, mape, calc_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (jan, forecast_dt) DO UPDATE
+              SET predicted = EXCLUDED.predicted,
+                  actual    = EXCLUDED.actual,
+                  mape      = EXCLUDED.mape,
+                  calc_date = EXCLUDED.calc_date
+        """, [jan, target_dt, predicted, actual, round(mape, 2), date.today()])
+        upserted += 1
+
+    db.commit()
+    logger.info('[MAPE] %d 件のMAPE更新完了（基準日: %s）', upserted, target_dt)
+
+
+def _toggle_seasonal_products(db, today=None):
+    """season_start_mmdd / season_end_mmdd に基づいて商品を自動有効化/無効化"""
+    from datetime import date
+    if today is None:
+        today = date.today()
+    mmdd = today.strftime('%m-%d')
+
+    # 季節設定のある商品を全取得
+    rows = db.execute("""
+        SELECT id, jan, product_name, is_active, season_start_mmdd, season_end_mmdd
+        FROM products
+        WHERE season_start_mmdd IS NOT NULL AND season_end_mmdd IS NOT NULL
+          AND season_start_mmdd <> '' AND season_end_mmdd <> ''
+    """).fetchall()
+
+    activated = deactivated = 0
+    for r in rows:
+        start = r['season_start_mmdd']  # MM-DD
+        end   = r['season_end_mmdd']    # MM-DD
+        # 期間内かどうか判定（年跨ぎ対応: start > end なら12月〜翌年などを許容）
+        if start <= end:
+            in_season = start <= mmdd <= end
+        else:
+            in_season = mmdd >= start or mmdd <= end
+
+        new_active = 1 if in_season else 0
+        if r['is_active'] != new_active:
+            db.execute("UPDATE products SET is_active=%s WHERE id=%s", [new_active, r['id']])
+            action = '有効化' if new_active else '無効化'
+            logger.info(f'[Season] {action} JAN:{r["jan"]} {r["product_name"]} ({start}〜{end})')
+            if new_active:
+                activated += 1
+            else:
+                deactivated += 1
+
+    if activated or deactivated:
+        db.commit()
+    logger.info(f'[Season] 季節品切替完了: 有効化={activated} 無効化={deactivated} ({mmdd})')
 
 
 def _deduct_stock(db, product, qty_to_deduct, sale_date, source_file):
@@ -1764,6 +1918,11 @@ def start_scheduler():
                             last_run['daily'] = today
                             run_order_check()
                             run_expiry_check()
+                            # 季節品の自動有効化/無効化
+                            try:
+                                _toggle_seasonal_products(get_db_long(), today)
+                            except Exception as _se:
+                                logger.warning(f'[Scheduler] 季節品切替エラー: {_se}')
             except Exception as e:
                 logger.info(f"[Scheduler] Daily: {e}")
             # 毎月1日05:00 前月分の月末月次取込（monthフォルダ）
@@ -1818,6 +1977,12 @@ def start_scheduler():
                                 _sens_db.close()
                             except Exception as _se:
                                 logger.warning(f'[Scheduler] 気温感応度再計算エラー: {_se}')
+                            # 月次：予測精度MAPE計算（30日前の予測 vs 実績）
+                            try:
+                                _calc_forecast_accuracy(get_db_long())
+                                logger.info('[Scheduler] 予測精度(MAPE)更新完了')
+                            except Exception as _mape_e:
+                                logger.warning(f'[Scheduler] MAPE計算エラー: {_mape_e}')
             except Exception as e:
                 logger.info(f"[Scheduler] Monthly: {e}")
             # 毎年1月1日 00:10 に52週MDプラン自動生成
