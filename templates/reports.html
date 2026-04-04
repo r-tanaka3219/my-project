@@ -196,13 +196,13 @@
   <div class="card-title">🏭 仕入先別在庫集計</div>
   {% if supplier_stock %}
   <div class="table-wrap">
-  <table id="supplier-table"><thead><tr>
-    <th class="sort-th" data-col="0" data-type="str" style="min-width:80px">仕入先CD<span class="sort-icon"></span></th>
+  <table><thead><tr>
+    <th style="min-width:80px">仕入先CD</th>
     <th style="min-width:90px;max-width:150px">仕入先名</th>
-    <th class="sort-th text-right" data-col="2" data-type="num" style="min-width:80px">商品数<span class="sort-icon"></span></th>
-    <th class="sort-th text-right" data-col="3" data-type="num" style="min-width:90px">総在庫数<span class="sort-icon"></span></th>
-    <th class="sort-th text-right" data-col="4" data-type="num" style="min-width:110px">在庫原価額(円)<span class="sort-icon"></span></th>
-  </tr></thead><tbody id="supplier-tbody">
+    <th class="text-right" style="min-width:80px">商品数</th>
+    <th class="text-right" style="min-width:90px">総在庫数</th>
+    <th class="text-right" style="min-width:110px">在庫原価額(円)</th>
+  </tr></thead><tbody>
   {% set total_cost = supplier_stock|sum(attribute='stock_cost') %}
   {% for s in supplier_stock %}
   <tr>
@@ -224,45 +224,17 @@
 </div><!-- /table-wrap -->
   {% else %}<p style="color:#9ca3af;padding:20px 0">データなし</p>{% endif %}
 </div>
-<script>
-(function(){
-  var state = {col: null, dir: 1};
-  document.querySelectorAll('#supplier-table .sort-th').forEach(function(th){
-    th.addEventListener('click', function(){
-      var col  = parseInt(th.dataset.col);
-      var type = th.dataset.type;
-      if(state.col === col){ state.dir *= -1; } else { state.col = col; state.dir = 1; }
-      // ヘッダーアイコン更新
-      document.querySelectorAll('#supplier-table .sort-th').forEach(function(h){ h.classList.remove('asc','desc'); });
-      th.classList.add(state.dir === 1 ? 'asc' : 'desc');
-      // 行ソート
-      var tbody = document.getElementById('supplier-tbody');
-      var rows  = Array.from(tbody.querySelectorAll('tr'));
-      rows.sort(function(a,b){
-        var av = a.cells[col].textContent.trim().replace(/,/g,'');
-        var bv = b.cells[col].textContent.trim().replace(/,/g,'');
-        if(type === 'num'){
-          return (parseFloat(av)||0) > (parseFloat(bv)||0) ? state.dir : -state.dir;
-        }
-        // 仕入先CDは数値部分で自然順ソート
-        var am = av.match(/\d+/), bm = bv.match(/\d+/);
-        if(am && bm){ var n = parseInt(am[0]) - parseInt(bm[0]); if(n!==0) return n * state.dir; }
-        return av.localeCompare(bv, 'ja') * state.dir;
-      });
-      rows.forEach(function(r){ tbody.appendChild(r); });
-    });
-  });
-})();
-</script>
 
 {# ══ ⑥月別発注集計 ══ #}
 <div id="pane-order" class="card" style="display:none">
   <div class="card-title">📋 月別発注集計（直近12ヶ月）</div>
   {% if monthly_order %}
   <div class="table-wrap">
-<table><thead><tr>
-    <th style="min-width:90px">月</th><th class="text-right" style="min-width:80px">発注件数</th>
-    <th class="text-right" style="min-width:90px">発注商品数</th><th class="text-right" style="min-width:100px">発注数量合計</th>
+  <table><thead><tr>
+    <th style="min-width:90px">月</th>
+    <th class="text-right" style="min-width:80px">発注件数</th>
+    <th class="text-right" style="min-width:90px">発注商品数</th>
+    <th class="text-right" style="min-width:100px">発注数量合計</th>
   </tr></thead><tbody>
   {% for m in monthly_order %}
   <tr>

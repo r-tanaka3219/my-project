@@ -319,5 +319,74 @@ function closeErrorModal() {
 {% endif %}
 
 
+<style>
+/* 汎用テーブルソート */
+.tbl-sort-th{cursor:pointer;user-select:none;white-space:nowrap}
+.tbl-sort-th:hover{background:#e2e8f0 !important}
+.tbl-sort-th::after{content:' ⇅';font-size:10px;color:#94a3b8}
+.tbl-sort-th.tbl-asc::after{content:' ▲';color:#1e40af}
+.tbl-sort-th.tbl-desc::after{content:' ▼';color:#1e40af}
+</style>
+<script>
+(function(){
+  function initSortable(table){
+    if(table.dataset.sortInit) return;
+    table.dataset.sortInit = '1';
+    var thead = table.tHead;
+    if(!thead) return;
+    // ヘッダー行（最後の行）のthを対象にする
+    var headerRow = thead.rows[thead.rows.length - 1];
+    var state = {col: -1, dir: 1};
+    Array.from(headerRow.cells).forEach(function(th, idx){
+      // colspan>1（結合セル）はスキップ
+      if((th.colSpan || 1) > 1) return;
+      th.classList.add('tbl-sort-th');
+      th.addEventListener('click', function(){
+        if(state.col === idx){ state.dir *= -1; } else { state.col = idx; state.dir = 1; }
+        Array.from(headerRow.cells).forEach(function(h){ h.classList.remove('tbl-asc','tbl-desc'); });
+        th.classList.add(state.dir === 1 ? 'tbl-asc' : 'tbl-desc');
+        // tbodyの行だけソート（tfootは除外）
+        var tbody = table.tBodies[0];
+        if(!tbody) return;
+        var rows = Array.from(tbody.rows);
+        rows.sort(function(a,b){
+          var ac = a.cells[idx], bc = b.cells[idx];
+          if(!ac || !bc) return 0;
+          var av = ac.textContent.trim().replace(/,/g,'');
+          var bv = bc.textContent.trim().replace(/,/g,'');
+          var an = parseFloat(av), bn = parseFloat(bv);
+          if(!isNaN(an) && !isNaN(bn)) return (an - bn) * state.dir;
+          // 日付文字列（YYYY-MM など）もそのまま文字列比較で正しく動く
+          return av.localeCompare(bv, 'ja') * state.dir;
+        });
+        rows.forEach(function(r){ tbody.appendChild(r); });
+      });
+    });
+  }
+
+  function applyAll(){
+    document.querySelectorAll('table').forEach(initSortable);
+  }
+
+  // 初回ロード時
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', applyAll);
+  } else {
+    applyAll();
+  }
+
+  // タブ切替など動的にテーブルが表示される場合に対応
+  var obs = new MutationObserver(function(mutations){
+    mutations.forEach(function(m){
+      m.addedNodes.forEach(function(n){
+        if(n.nodeType !== 1) return;
+        if(n.tagName === 'TABLE') initSortable(n);
+        n.querySelectorAll && n.querySelectorAll('table').forEach(initSortable);
+      });
+    });
+  });
+  obs.observe(document.body, {childList:true, subtree:true});
+})();
+</script>
 </body>
 </html>
