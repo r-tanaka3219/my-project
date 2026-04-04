@@ -498,12 +498,13 @@ def recalc_temp_sensitivity(db) -> int:
 
     temp_by_date = {r['obs_date']: float(r['avg_temp']) for r in temp_rows}
 
-    # 商品ごとの日次売上（保持期間365日に合わせて同期間を参照）
+    # 商品ごとの日次売上（商品マスタ登録済みJANのみ・保持期間365日）
     sales_rows = db.execute("""
-        SELECT jan, sale_date::date AS dt, SUM(quantity) AS qty
-        FROM sales_history
-        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
-        GROUP BY jan, sale_date::date
+        SELECT sh.jan, sh.sale_date::date AS dt, SUM(sh.quantity) AS qty
+        FROM sales_history sh
+        WHERE sh.sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
+          AND sh.jan IN (SELECT jan FROM products WHERE jan IS NOT NULL AND jan <> '')
+        GROUP BY sh.jan, sh.sale_date::date
     """).fetchall()
 
     by_jan: dict[str, dict] = {}
