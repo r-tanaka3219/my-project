@@ -315,7 +315,7 @@
         {% if sales_q %}<button type="button" onclick="clearSalesSearch()" class="btn btn-outline btn-sm">✕</button>{% endif %}
       </form>
       <select id="sales-year-select" onchange="setSalesYear(this.value)"
-              style="padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+              style="width:90px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         <option value="">年を選択...</option>
       </select>
       <button type="button" onclick="setSalesMode('master')" id="btn-sales-master" class="btn btn-sm {% if sales_mode=='master' %}btn-primary{% else %}btn-outline{% endif %}">📦 商品マスタのみ</button>
