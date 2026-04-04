@@ -588,23 +588,32 @@ def _build_forecast_rows_raw(db, flags=None):
     reorder_mode = flags.get('forecast_reorder_mode', 'sf')  # P2: 'sf'/'p80'/'p90'
 
     # P2: 分位点計算のために過去30日の日次売上を取得
-    # sale_date は TEXT 型 → ::date キャストを除去し文字列比較でインデックスを活用
+    # sales_daily_agg が利用可能な場合は高速パスを使用（sales_history の直接スキャンを回避）
     quantile_map = {}
     _q30_start = (date.today() - timedelta(days=30)).strftime('%Y-%m-%d')
     try:
-        qrows = db.execute("""
-            SELECT jan,
-                   array_agg(qty ORDER BY sale_dt) AS daily_qtys
-            FROM (
+        if _use_agg:
+            qrows = db.execute("""
                 SELECT jan,
-                       sale_date AS sale_dt,
-                       SUM(quantity) AS qty
-                FROM sales_history
-                WHERE sale_date >= %s
-                GROUP BY jan, sale_date
-            ) d
-            GROUP BY jan
-        """, [_q30_start]).fetchall()
+                       array_agg(qty ORDER BY sale_dt) AS daily_qtys
+                FROM sales_daily_agg
+                WHERE sale_dt >= %s
+                GROUP BY jan
+            """, [_q30_start]).fetchall()
+        else:
+            qrows = db.execute("""
+                SELECT jan,
+                       array_agg(qty ORDER BY sale_dt) AS daily_qtys
+                FROM (
+                    SELECT jan,
+                           sale_date AS sale_dt,
+                           SUM(quantity) AS qty
+                    FROM sales_history
+                    WHERE sale_date >= %s
+                    GROUP BY jan, sale_date
+                ) d
+                GROUP BY jan
+            """, [_q30_start]).fetchall()
         for qr in qrows:
             qtys = sorted([int(x) for x in (qr['daily_qtys'] or []) if x is not None])
             if len(qtys) >= 5:  # 前日データのみ取込環境を考慮して5件以上で算出
