@@ -463,18 +463,22 @@ def products():
     db = get_db()
     q    = request.args.get('q', '').strip()
     ptype = request.args.get('ptype', '').strip()  # '' / '通常品' / '季節品'
-    rows = db.execute("""
-        SELECT p.*, COALESCE((SELECT SUM(quantity) FROM stocks WHERE jan=p.jan),0) as stock_qty
-        FROM products p WHERE p.is_active=1 ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST
-    """).fetchall()
+    sql = """
+        SELECT p.*, COALESCE(s.stock_qty, 0) AS stock_qty
+        FROM products p
+        LEFT JOIN (SELECT jan, SUM(quantity) AS stock_qty FROM stocks GROUP BY jan) s
+               ON s.jan = p.jan
+        WHERE p.is_active=1
+    """
+    params = []
     if q:
-        rows = [r for r in rows if q.lower() in (r['jan'] or '').lower()
-                or q.lower() in (r['product_cd'] or '').lower()
-                or q.lower() in (r['product_name'] or '').lower()
-                or q.lower() in (r['supplier_cd'] or '').lower()
-                or q.lower() in (r['supplier_name'] or '').lower()]
+        sql += " AND (p.jan ILIKE %s OR p.product_cd ILIKE %s OR p.product_name ILIKE %s OR p.supplier_cd ILIKE %s OR p.supplier_name ILIKE %s)"
+        params += [f'%{q}%'] * 5
     if ptype:
-        rows = [r for r in rows if (r['product_type'] or '通常品') == ptype]
+        sql += " AND COALESCE(p.product_type, '通常品') = %s"
+        params.append(ptype)
+    sql += " ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST"
+    rows = db.execute(sql, params).fetchall()
     return render_template('products.html', products=rows, q=q, ptype=ptype)
 
 
@@ -536,22 +540,22 @@ def products_inactive():
     db = get_db()
     q     = request.args.get('q', '').strip()
     ptype = request.args.get('ptype', '').strip()
-    products = db.execute("""
-        SELECT p.*, COALESCE(SUM(s.quantity),0) AS stock_qty
+    sql = """
+        SELECT p.*, COALESCE(s.stock_qty, 0) AS stock_qty
         FROM products p
-        LEFT JOIN stocks s ON s.jan=p.jan
+        LEFT JOIN (SELECT jan, SUM(quantity) AS stock_qty FROM stocks GROUP BY jan) s
+               ON s.jan = p.jan
         WHERE p.is_active=0
-        GROUP BY p.id
-        ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST
-    """).fetchall()
+    """
+    params = []
     if q:
-        products = [r for r in products if q.lower() in (r['jan'] or '').lower()
-                or q.lower() in (r['product_cd'] or '').lower()
-                or q.lower() in (r['product_name'] or '').lower()
-                or q.lower() in (r['supplier_cd'] or '').lower()
-                or q.lower() in (r['supplier_name'] or '').lower()]
+        sql += " AND (p.jan ILIKE %s OR p.product_cd ILIKE %s OR p.product_name ILIKE %s OR p.supplier_cd ILIKE %s OR p.supplier_name ILIKE %s)"
+        params += [f'%{q}%'] * 5
     if ptype:
-        products = [r for r in products if (r['product_type'] or '通常品') == ptype]
+        sql += " AND COALESCE(p.product_type, '通常品') = %s"
+        params.append(ptype)
+    sql += " ORDER BY CAST(NULLIF(regexp_replace(p.supplier_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST, CAST(NULLIF(regexp_replace(p.product_cd,'[^0-9]','','g'),'') AS BIGINT) NULLS LAST"
+    products = db.execute(sql, params).fetchall()
     return render_template('products_inactive.html', products=products, q=q, ptype=ptype)
 
 

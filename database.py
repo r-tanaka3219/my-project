@@ -583,6 +583,14 @@ _MIGRATIONS = [
     # 気温データ・感応度
     "CREATE INDEX IF NOT EXISTS ix_weather_data_obs_date     ON weather_data(obs_date DESC)",
     "CREATE INDEX IF NOT EXISTS ix_temp_sensitivity_jan      ON temp_sensitivity(jan)",
+    # order_pending（自動発注チェックで毎回参照）
+    "CREATE INDEX IF NOT EXISTS ix_order_pending_jan         ON order_pending(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_order_pending_jan_status  ON order_pending(jan, status)",
+    # alert_logs（アラート参照）
+    "CREATE INDEX IF NOT EXISTS ix_alert_logs_jan            ON alert_logs(jan)",
+    "CREATE INDEX IF NOT EXISTS ix_alert_logs_created_at     ON alert_logs(created_at DESC)",
+    # products product_type（取扱区分フィルタ）
+    "CREATE INDEX IF NOT EXISTS ix_products_product_type     ON products(product_type) WHERE is_active=1",
 ]
 
 def migrate_db():
