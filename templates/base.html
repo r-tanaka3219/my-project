@@ -94,6 +94,9 @@ hr{border:none;border-top:1px solid #e5e7eb;margin:12px 0}
 @media (min-width:1800px){.main{padding:18px 48px}}
 @media print{nav{display:none}.btn{display:none}.main{margin-top:0}}
 
+/* 設定ページ用2列グリッド */
+.settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
+@media(max-width:1100px){.settings-grid{grid-template-columns:1fr}}
 /* layout helpers for added features */
 .page-title-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
 .page-title > form{margin-left:auto}
