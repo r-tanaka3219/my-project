@@ -171,35 +171,30 @@
         </td>
         {% for w in weeks %}
         {% set wd = p.weeks.get(w, {}) %}
-        <td class="week-cell {% if w == current_week %}current-week{% endif %}">
+        {% set plan_val = wd.plan if wd else 0 %}
+        {% set actual_val = wd.actual if wd else 0 %}
+        <td class="week-cell {% if w == current_week %}current-week{% endif %}"
+            data-jan="{{ p.jan }}" data-week="{{ w }}" data-year="{{ fiscal_year }}">
+          <span class="week-plan editable-plan"
+                title="クリックして計画数を編集"
+                style="cursor:pointer;border-bottom:1px dashed #93c5fd"
+                data-val="{{ plan_val }}">{{ plan_val if plan_val > 0 or wd else '-' }}</span>
           {% if wd %}
-            <span class="week-plan">{{ wd.plan }}</span><br>
-            <span class="week-actual">{{ wd.actual }}</span>
-            {% if wd.plan > 0 %}
-              {% set ach = (wd.actual / wd.plan * 100)|round(0)|int %}
+            <br><span class="week-actual">{{ actual_val }}</span>
+            {% if plan_val > 0 %}
+              {% set ach = (actual_val / plan_val * 100)|round(0)|int %}
               <br><span class="week-ach {% if ach >= 100 %}ach-good{% elif ach >= 70 %}ach-warn{% else %}ach-bad{% endif %}">{{ ach }}%</span>
             {% endif %}
-            {% if w == current_week %}
-              {% set fc = forecast_weekly_map.get(p.jan, 0) %}
-              {% if fc > 0 %}
-                {% set gap = fc - wd.plan %}
-                <br><span style="font-size:9px;color:#7c3aed" title="AI週次予測">
-                  予{{ fc }}
-                  {% if gap > 0 %}<span style="color:#16a34a">+{{ gap }}</span>
-                  {% elif gap < 0 %}<span style="color:#dc2626">{{ gap }}</span>{% endif %}
-                </span>
-              {% endif %}
-            {% endif %}
-          {% else %}
-            {% if w == current_week %}
-              {% set fc = forecast_weekly_map.get(p.jan, 0) %}
-              {% if fc > 0 %}
-                <span style="font-size:9px;color:#7c3aed">予{{ fc }}</span>
-              {% else %}
-                <span style="color:#e2e8f0">-</span>
-              {% endif %}
-            {% else %}
-              <span style="color:#e2e8f0">-</span>
+          {% endif %}
+          {% if w == current_week %}
+            {% set fc = forecast_weekly_map.get(p.jan, 0) %}
+            {% if fc > 0 %}
+              {% set gap = fc - plan_val %}
+              <br><span style="font-size:9px;color:#7c3aed" title="AI週次予測">
+                予{{ fc }}
+                {% if gap > 0 %}<span style="color:#16a34a">+{{ gap }}</span>
+                {% elif gap < 0 %}<span style="color:#dc2626">{{ gap }}</span>{% endif %}
+              </span>
             {% endif %}
           {% endif %}
         </td>
@@ -215,4 +210,75 @@
   {{ fiscal_year }}年度のMDプランがありません。「前年実績から一括生成」ボタンで自動生成できます。
 </div>
 {% endif %}
+
+<script>
+(function(){
+  // 計画数クリックでインライン編集
+  document.addEventListener('click', function(e){
+    var span = e.target.closest('.editable-plan');
+    if(!span) return;
+    var td = span.closest('td');
+    if(!td) return;
+    var jan  = td.dataset.jan;
+    var week = td.dataset.week;
+    var year = td.dataset.year;
+    var cur  = parseInt(span.dataset.val) || 0;
+
+    // 既に編集中なら何もしない
+    if(td.querySelector('input.plan-input')) return;
+
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.min  = '0';
+    input.value = cur;
+    input.className = 'plan-input';
+    input.style.cssText = 'width:44px;font-size:11px;padding:1px 3px;border:1px solid #3b82f6;border-radius:3px;text-align:center';
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function save(){
+      var newVal = Math.max(0, parseInt(input.value) || 0);
+      fetch('/reports/weekly_md/update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)
+            + '&jan=' + encodeURIComponent(jan)
+            + '&fiscal_year=' + encodeURIComponent(year)
+            + '&week_no=' + encodeURIComponent(week)
+            + '&plan_qty=' + encodeURIComponent(newVal)
+            + '&actual_qty=0'
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var newSpan = document.createElement('span');
+        newSpan.className = 'week-plan editable-plan';
+        newSpan.title = 'クリックして計画数を編集';
+        newSpan.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd';
+        newSpan.dataset.val = newVal;
+        newSpan.textContent = newVal > 0 ? newVal : '-';
+        input.replaceWith(newSpan);
+        // 保存完了を一瞬フラッシュ
+        newSpan.style.background = '#dcfce7';
+        setTimeout(function(){ newSpan.style.background = ''; }, 800);
+      })
+      .catch(function(){ input.replaceWith(document.createTextNode(cur)); });
+    }
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){ ev.preventDefault(); save(); }
+      if(ev.key === 'Escape'){
+        var s = document.createElement('span');
+        s.className = 'week-plan editable-plan';
+        s.title = 'クリックして計画数を編集';
+        s.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd';
+        s.dataset.val = cur;
+        s.textContent = cur > 0 ? cur : '-';
+        input.replaceWith(s);
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}
