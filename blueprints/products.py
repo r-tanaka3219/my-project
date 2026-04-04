@@ -534,7 +534,8 @@ def product_new():
 @login_required
 def products_inactive():
     db = get_db()
-    q = request.args.get('q','').strip()
+    q     = request.args.get('q', '').strip()
+    ptype = request.args.get('ptype', '').strip()
     products = db.execute("""
         SELECT p.*, COALESCE(SUM(s.quantity),0) AS stock_qty
         FROM products p
@@ -549,7 +550,24 @@ def products_inactive():
                 or q.lower() in (r['product_name'] or '').lower()
                 or q.lower() in (r['supplier_cd'] or '').lower()
                 or q.lower() in (r['supplier_name'] or '').lower()]
-    return render_template('products_inactive.html', products=products, q=q)
+    if ptype:
+        products = [r for r in products if (r['product_type'] or '通常品') == ptype]
+    return render_template('products_inactive.html', products=products, q=q, ptype=ptype)
+
+
+@bp.route('/products/seasonal/restore', methods=['POST'])
+@admin_required
+def products_seasonal_restore():
+    """無効化された季節品を一括復活"""
+    db = get_db()
+    targets = db.execute(
+        "SELECT id, product_name FROM products WHERE is_active=0 AND product_type='季節品'"
+    ).fetchall()
+    for p in targets:
+        db.execute("UPDATE products SET is_active=1 WHERE id=%s", [p['id']])
+    db.commit()
+    flash(f'季節品 {len(targets)} 件を一括復活しました。', 'success')
+    return redirect(url_for('products.products_inactive', ptype='季節品'))
 
 
 @bp.route('/products/<int:pid>/delete', methods=['POST'])
