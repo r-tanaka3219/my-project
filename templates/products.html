@@ -8,6 +8,11 @@
     <a href="/products/export?fmt=xlsx" class="btn btn-outline btn-sm">📤 Excel出力</a>
     <a href="/products/export?fmt=csv" class="btn btn-outline btn-sm">📤 CSV出力</a>
     <a href="/products/inactive" class="btn btn-outline btn-sm">🗄 無効商品</a>
+    <form method="post" action="/products/seasonal/deactivate" style="display:inline"
+          onsubmit="return confirm('有効な季節品をすべて無効化します。\nよろしいですか？')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none">🍂 季節品を一括無効化</button>
+    </form>
   </div>
 </div>
 <div class="card" style="padding:10px 16px;margin-bottom:0">
@@ -23,24 +28,11 @@
   </form>
 </div>
 
-{% if ptype == '季節品' %}
-<div class="card" style="padding:10px 16px;margin-bottom:0;background:#fffbeb;border-left:4px solid #f59e0b">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <span style="font-size:13px;color:#92400e">🍂 季節品が <strong>{{ products|length }} 件</strong> 表示されています</span>
-    <form method="post" action="/products/seasonal/deactivate"
-          onsubmit="return confirm('季節品 {{ products|length }} 件をすべて無効化します。\nよろしいですか？')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-danger btn-sm">🔒 季節品を一括無効化（{{ products|length }}件）</button>
-    </form>
-  </div>
-</div>
-{% endif %}
-
 <div class="card">
 <div class="table-wrap">
 <table><thead><tr>
   <th style="min-width:70px">仕入先CD</th><th style="min-width:90px;max-width:150px">仕入先名</th><th style="min-width:110px">JAN</th><th style="min-width:70px">商品CD</th><th style="min-width:140px;max-width:220px">商品名</th>
-  <th class="text-center" style="min-width:65px">区分</th>
+  <th class="text-center" style="width:42px;min-width:42px">区分</th>
   <th class="text-right" style="min-width:65px">在庫</th><th class="text-right" style="min-width:60px">入数</th>
   <th class="text-right" style="min-width:70px">発注点</th><th class="text-right" style="min-width:60px">ロット</th>
   <th class="text-right" style="min-width:70px">発注数</th><th class="text-center" style="min-width:55px">LT</th><th class="text-center" style="min-width:75px">安全係数</th><th class="text-center" style="min-width:60px">自動</th><th class="text-center" style="min-width:110px">操作</th>
@@ -52,11 +44,9 @@
   <td style="font-family:monospace;font-size:12px">{{ p.jan }}</td>
   <td style="font-family:monospace;font-size:12px">{{ p.product_cd or '' }}</td>
   <td>{{ p.product_name }}</td>
-  <td class="text-center">
+  <td class="text-center" style="padding:4px 2px">
     {% if (p.product_type or '通常品') == '季節品' %}
-      <span class="badge badge-yellow">🍂 季節品</span>
-    {% else %}
-      <span style="font-size:11px;color:#9ca3af">通常品</span>
+      <span class="badge badge-yellow" style="font-size:10px;padding:2px 4px">🍂</span>
     {% endif %}
   </td>
   <td class="text-right">
@@ -73,9 +63,9 @@
   <td class="text-center" style="white-space:nowrap">
     <a href="/products/{{ p.id }}/edit" class="btn btn-outline btn-sm">編集</a>
     <form method="post" action="/products/{{ p.id }}/delete" style="display:inline;margin-left:4px"
-          onsubmit="return confirm('「{{ p.product_name }}」を削除しますか？\n在庫・発注履歴は残ります。')">
+          onsubmit="return confirm('「{{ p.product_name }}」を無効化しますか？\n在庫・発注履歴は残ります。')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-danger btn-sm">削除</button>
+      <button type="submit" class="btn btn-danger btn-sm">無効化</button>
     </form>
   </td>
 </tr>
