@@ -1,11 +1,9 @@
 """商品管理 Blueprint"""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, session
-from datetime import date
 import csv, io, logging
-from urllib.parse import quote
 from db import get_db
-from auth_helpers import login_required, admin_required, permission_required, _hash
-from helpers import _normalize_jan, _normalize_date, _to_int, _PRODUCT_COLS, _EXPORT_ROW_LIMIT, _excel_bytes_from_rows
+from auth_helpers import login_required, admin_required, permission_required
+from helpers import _PRODUCT_COLS, _EXPORT_ROW_LIMIT
 
 logger = logging.getLogger('inventory.products')
 bp = Blueprint('products', __name__)
@@ -132,7 +130,6 @@ def product_template():
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.worksheet.datavalidation import DataValidation
-    from openpyxl.comments import Comment
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = '商品マスタ'

@@ -1,12 +1,11 @@
 """問屋向け需要予測Blueprint: 予測一覧 / 52週MD / ABC分析 / 気温データ管理"""
-import io, csv, math, logging
-from datetime import date, timedelta
+import io, csv, logging
+from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
 from db import get_db
-from auth_helpers import permission_required, login_required
+from auth_helpers import permission_required
 from wholesale_forecast import (
     build_wholesale_forecast_rows,
-    build_abc_map,
     generate_weekly_md_plan,
     recalc_temp_sensitivity,
 )

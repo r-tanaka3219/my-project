@@ -9,15 +9,11 @@ import os
 import threading
 import time
 import csv
-import glob
-import hashlib
 import calendar
 import math
 import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from database import get_db, get_dsn
-import psycopg2, psycopg2.extras
 
 logger = logging.getLogger('inventory.scheduler')
 
@@ -28,7 +24,7 @@ def get_db_long():
     conn = psycopg2.connect(**get_dsn(long_timeout=True))
     conn.autocommit = False
     return DBConn(conn)
-from mail_service import send_order_mail, send_expiry_alert, flush_order_mail, queue_order
+from mail_service import send_expiry_alert, flush_order_mail, queue_order
 
 
 # ─── ファイル名パターン解決 ─────────────────────────────────────
@@ -801,6 +797,7 @@ def _deduct_stock(db, product, qty_to_deduct, sale_date, source_file):
     stocks = db.execute("""
         SELECT * FROM stocks WHERE jan=%s AND quantity>0
         ORDER BY CASE WHEN expiry_date='' THEN '9999-99-99' ELSE expiry_date END ASC
+        FOR UPDATE
     """, [jan]).fetchall()
     before_total = sum(s['quantity'] for s in stocks)
     for s in stocks:
@@ -975,7 +972,7 @@ def _do_order(db, product, order_qty, trigger, today):
     db.commit()
     # メールはキューに追加（run_order_check完了後にまとめて送信）
     queue_order(dict(product), order_qty, trigger)
-    hist = db.execute(
+    db.execute(
         "SELECT id FROM order_history WHERE jan=%s AND order_date=%s ORDER BY id DESC LIMIT 1",
         [product['jan'], today]).fetchone()
     label = {'reorder':'発注点到達','lot':'ロット数到達',

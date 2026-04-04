@@ -1,7 +1,5 @@
 """共有ヘルパー関数・定数"""
-import io, csv, logging
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import logging
 from datetime import date, timedelta, datetime
 
 logger = logging.getLogger('inventory.helpers')
@@ -280,7 +278,7 @@ def _build_forecast_rows(db, q=''):
         ORDER BY p.supplier_cd, p.product_cd
     """).fetchall()
 
-    import calendar, statistics as _stats
+    import statistics as _stats
 
     reorder_mode = flags.get('forecast_reorder_mode', 'sf')  # P2: 'sf'/'p80'/'p90'
 

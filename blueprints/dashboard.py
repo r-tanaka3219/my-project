@@ -1,6 +1,6 @@
 """ダッシュボード Blueprint"""
 from flask import Blueprint, render_template, request
-from datetime import date, timedelta
+from datetime import date
 import logging
 from db import get_db
 from auth_helpers import permission_required
