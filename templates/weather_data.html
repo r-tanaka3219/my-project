@@ -23,12 +23,12 @@
 </div>
 
 
-<div class="card">
+<div class="card" style="max-width:760px">
   <div class="card-title">📥 気象データ 一括インポート</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
 
     {# Excel一括インポート #}
-    <div style="flex:1 1 260px;max-width:480px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+    <div style="flex:1 1 300px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
       <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:8px">📊 Excelインポート（推奨）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <a href="/reports/weather/excel_template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
@@ -47,7 +47,7 @@
     </div>
 
     {# 気温感応度再計算 #}
-    <div style="flex:0 0 220px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
+    <div style="flex:0 0 200px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
       <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px">🧮 気温感応度を再計算</div>
       <form method="post" action="/reports/weather/recalc_sensitivity"
             onsubmit="return confirm('全商品の気温感応度を再計算します。よろしいですか？')" style="margin:0">
@@ -68,8 +68,8 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-title">🌐 気象データ取得（Open-Meteo API・無料）</div>
+<div class="card" style="max-width:760px">
+  <div class="card-title">🌐 気象データ取得</div>
   <div style="font-size:12px;color:#374151;margin-bottom:12px">
     無料の気象APIから過去最大365日分の実測データを自動取得します。インターネット接続が必要です。
     地域名をクリックするとその地域を一括選択/解除できます。
