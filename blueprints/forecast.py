@@ -491,15 +491,78 @@ def weekly_md_update():
     fiscal_year = int(request.form.get('fiscal_year', date.today().year))
     week_no     = int(request.form.get('week_no', 1))
     plan_qty    = int(request.form.get('plan_qty', 0) or 0)
-    actual_qty  = int(request.form.get('actual_qty', 0) or 0)
+
+    # fiscal_year と week_no から week_start（ISO週の月曜日）を算出
+    # 4月始まり年度のため、week_no 1〜13 は翌年、14〜53 は当年の ISO 週に対応
+    fiscal_start = date(fiscal_year, 4, 1)
+    fiscal_end   = date(fiscal_year + 1, 3, 31)
+    week_start_val = None
+    for cal_year in [fiscal_year, fiscal_year + 1]:
+        try:
+            candidate = date.fromisocalendar(cal_year, week_no, 1)
+            if fiscal_start <= candidate <= fiscal_end:
+                week_start_val = candidate
+                break
+        except ValueError:
+            continue
+    if week_start_val is None:
+        week_start_val = date.fromisocalendar(
+            fiscal_year if week_no >= 14 else fiscal_year + 1, week_no, 1)
 
     db.execute("""
-        UPDATE weekly_md_plans
-        SET plan_qty=%s, actual_qty=%s, updated_at=NOW()
-        WHERE jan=%s AND fiscal_year=%s AND week_no=%s
-    """, [plan_qty, actual_qty, jan, fiscal_year, week_no])
+        INSERT INTO weekly_md_plans (jan, fiscal_year, week_no, week_start, plan_qty, actual_qty, updated_at)
+        VALUES (%s, %s, %s, %s, %s, 0, NOW())
+        ON CONFLICT (jan, fiscal_year, week_no)
+        DO UPDATE SET plan_qty = EXCLUDED.plan_qty, updated_at = NOW()
+    """, [jan, fiscal_year, week_no, week_start_val, plan_qty])
     db.commit()
     return jsonify({'ok': True})
+
+
+@bp.route('/reports/weekly_md/batch_update', methods=['POST'])
+@permission_required('reports')
+def weekly_md_batch_update():
+    db   = get_db()
+    data = request.get_json(silent=True) or {}
+    items = data.get('items', [])
+    if not items:
+        return jsonify({'ok': False, 'error': 'no items'})
+
+    fiscal_start_cache: dict = {}
+    for item in items:
+        jan         = str(item.get('jan', '')).strip()
+        fiscal_year = int(item.get('fiscal_year', date.today().year))
+        week_no     = int(item.get('week_no', 1))
+        plan_qty    = max(0, int(item.get('plan_qty', 0) or 0))
+
+        if fiscal_year not in fiscal_start_cache:
+            fiscal_start_cache[fiscal_year] = (
+                date(fiscal_year, 4, 1), date(fiscal_year + 1, 3, 31))
+        fiscal_start, fiscal_end = fiscal_start_cache[fiscal_year]
+
+        week_start_val = None
+        for cal_year in [fiscal_year, fiscal_year + 1]:
+            try:
+                candidate = date.fromisocalendar(cal_year, week_no, 1)
+                if fiscal_start <= candidate <= fiscal_end:
+                    week_start_val = candidate
+                    break
+            except ValueError:
+                continue
+        if week_start_val is None:
+            week_start_val = date.fromisocalendar(
+                fiscal_year if week_no >= 14 else fiscal_year + 1, week_no, 1)
+
+        db.execute("""
+            INSERT INTO weekly_md_plans
+              (jan, fiscal_year, week_no, week_start, plan_qty, actual_qty, updated_at)
+            VALUES (%s, %s, %s, %s, %s, 0, NOW())
+            ON CONFLICT (jan, fiscal_year, week_no)
+            DO UPDATE SET plan_qty = EXCLUDED.plan_qty, updated_at = NOW()
+        """, [jan, fiscal_year, week_no, week_start_val, plan_qty])
+
+    db.commit()
+    return jsonify({'ok': True, 'saved': len(items)})
 
 
 @bp.route('/reports/weekly_md/export')

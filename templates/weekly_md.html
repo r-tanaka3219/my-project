@@ -90,6 +90,11 @@
     </form>
     <a href="/reports/weekly_md/export?year={{ fiscal_year }}" class="btn btn-outline btn-sm">CSV出力</a>
     <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">← AI予測一覧</a>
+    <button id="md-save-btn" class="btn btn-primary btn-sm" onclick="saveAllChanges()" disabled
+            style="min-width:110px">
+      💾 計画を保存
+    </button>
+    <span id="md-dirty-count" style="font-size:12px;color:#d97706;display:none"></span>
   </div>
 </div>
 
@@ -211,73 +216,122 @@
 {% endif %}
 
 <script>
-(function(){
-  // 計画数クリックでインライン編集
-  document.addEventListener('click', function(e){
-    var span = e.target.closest('.editable-plan');
-    if(!span) return;
-    var td = span.closest('td');
-    if(!td) return;
-    var jan  = td.dataset.jan;
-    var week = td.dataset.week;
-    var year = td.dataset.year;
-    var cur  = parseInt(span.dataset.val) || 0;
+// 未保存の変更を管理: key = "jan_weekno" → {jan, fiscal_year, week_no, plan_qty}
+var _mdPending = {};
 
-    // 既に編集中なら何もしない
-    if(td.querySelector('input.plan-input')) return;
+function _mdUpdateUI(){
+  var n = Object.keys(_mdPending).length;
+  var btn = document.getElementById('md-save-btn');
+  var lbl = document.getElementById('md-dirty-count');
+  if(n > 0){
+    btn.disabled = false;
+    lbl.style.display = '';
+    lbl.textContent = n + '件 未保存';
+  } else {
+    btn.disabled = true;
+    lbl.style.display = 'none';
+  }
+}
 
-    var input = document.createElement('input');
-    input.type = 'number';
-    input.min  = '0';
-    input.value = cur;
-    input.className = 'plan-input';
-    input.style.cssText = 'width:44px;font-size:11px;padding:1px 3px;border:1px solid #3b82f6;border-radius:3px;text-align:center';
-    span.replaceWith(input);
-    input.focus();
-    input.select();
+function saveAllChanges(){
+  var items = Object.values(_mdPending);
+  if(!items.length) return;
 
-    function save(){
-      var newVal = Math.max(0, parseInt(input.value) || 0);
-      fetch('/reports/weekly_md/update', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'csrf_token=' + encodeURIComponent(document.querySelector('input[name=csrf_token]').value)
-            + '&jan=' + encodeURIComponent(jan)
-            + '&fiscal_year=' + encodeURIComponent(year)
-            + '&week_no=' + encodeURIComponent(week)
-            + '&plan_qty=' + encodeURIComponent(newVal)
-            + '&actual_qty=0'
-      })
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var newSpan = document.createElement('span');
-        newSpan.className = 'week-plan editable-plan';
-        newSpan.title = 'クリックして計画数を編集';
-        newSpan.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd';
-        newSpan.dataset.val = newVal;
-        newSpan.textContent = newVal > 0 ? newVal : '-';
-        input.replaceWith(newSpan);
-        // 保存完了を一瞬フラッシュ
-        newSpan.style.background = '#dcfce7';
-        setTimeout(function(){ newSpan.style.background = ''; }, 800);
-      })
-      .catch(function(){ input.replaceWith(document.createTextNode(cur)); });
-    }
+  var btn = document.getElementById('md-save-btn');
+  btn.disabled = true;
+  btn.textContent = '保存中…';
 
-    input.addEventListener('blur', save);
-    input.addEventListener('keydown', function(ev){
-      if(ev.key === 'Enter'){ ev.preventDefault(); save(); }
-      if(ev.key === 'Escape'){
-        var s = document.createElement('span');
-        s.className = 'week-plan editable-plan';
-        s.title = 'クリックして計画数を編集';
-        s.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd';
-        s.dataset.val = cur;
-        s.textContent = cur > 0 ? cur : '-';
-        input.replaceWith(s);
-      }
+  var csrf = (document.querySelector('input[name=csrf_token]') || {}).value || '';
+  fetch('/reports/weekly_md/batch_update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrf
+    },
+    body: JSON.stringify({items: items})
+  })
+  .then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(data){
+    if(!data.ok) throw new Error(data.error || '不明なエラー');
+    // 保存済みセルのハイライトを解除
+    document.querySelectorAll('.editable-plan.md-dirty').forEach(function(s){
+      s.classList.remove('md-dirty');
+      s.style.background = '#dcfce7';
+      setTimeout(function(){ s.style.background = ''; }, 1000);
     });
+    _mdPending = {};
+    btn.textContent = '💾 計画を保存';
+    _mdUpdateUI();
+  })
+  .catch(function(err){
+    alert('保存に失敗しました: ' + err);
+    btn.disabled = false;
+    btn.textContent = '💾 計画を保存';
+    _mdUpdateUI();
   });
-})();
+}
+
+// 計画数クリックでインライン編集（変更はローカルに蓄積、保存ボタンで一括送信）
+document.addEventListener('click', function(e){
+  var span = e.target.closest('.editable-plan');
+  if(!span) return;
+  var td = span.closest('td');
+  if(!td) return;
+  if(td.querySelector('input.plan-input')) return;
+
+  var jan  = td.dataset.jan;
+  var week = td.dataset.week;
+  var year = td.dataset.year;
+  var cur  = parseInt(span.dataset.val) || 0;
+
+  var input = document.createElement('input');
+  input.type = 'number';
+  input.min  = '0';
+  input.value = cur;
+  input.className = 'plan-input';
+  input.style.cssText = 'width:44px;font-size:11px;padding:1px 3px;border:1px solid #3b82f6;border-radius:3px;text-align:center';
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+
+  function applyEdit(){
+    var newVal = Math.max(0, parseInt(input.value) || 0);
+    var newSpan = document.createElement('span');
+    newSpan.className = 'week-plan editable-plan' + (newVal !== cur ? ' md-dirty' : '');
+    newSpan.title = 'クリックして計画数を編集';
+    newSpan.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd'
+                          + (newVal !== cur ? ';background:#fef9c3' : '');
+    newSpan.dataset.val = newVal;
+    newSpan.textContent = newVal > 0 ? newVal : '-';
+    input.replaceWith(newSpan);
+    if(newVal !== cur){
+      _mdPending[jan + '_' + week] = {
+        jan: jan, fiscal_year: parseInt(year), week_no: parseInt(week), plan_qty: newVal
+      };
+    }
+    _mdUpdateUI();
+  }
+
+  function cancelEdit(){
+    var s = document.createElement('span');
+    s.className = 'week-plan editable-plan' + (_mdPending[jan+'_'+week] ? ' md-dirty' : '');
+    s.title = 'クリックして計画数を編集';
+    var hasPending = !!_mdPending[jan+'_'+week];
+    s.style.cssText = 'cursor:pointer;border-bottom:1px dashed #93c5fd'
+                    + (hasPending ? ';background:#fef9c3' : '');
+    s.dataset.val = cur;
+    s.textContent = cur > 0 ? cur : '-';
+    input.replaceWith(s);
+  }
+
+  input.addEventListener('blur', applyEdit);
+  input.addEventListener('keydown', function(ev){
+    if(ev.key === 'Enter'){ ev.preventDefault(); applyEdit(); }
+    if(ev.key === 'Escape'){ ev.preventDefault(); cancelEdit(); }
+  });
+});
 </script>
 {% endblock %}
