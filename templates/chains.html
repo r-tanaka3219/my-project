@@ -34,7 +34,7 @@
 </div>
 
 <!-- ━━━ チェーンCD管理 ━━━ -->
-<div id="pane-chain" class="card" style="border-radius:0 8px 8px 8px">
+<div id="pane-chain" class="card" style="border-radius:0 8px 8px 8px;max-width:900px">
   <div style="margin-bottom:12px">
     <div class="card-title" style="margin-bottom:4px">チェーンCD管理</div>
     <div style="font-size:12px;color:#6b7280">「在庫引き当て除外」をONにするとそのチェーンの売上は在庫から引き算されません。</div>
@@ -42,7 +42,7 @@
 
   <form method="post" action="/chains/chain/add">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div id="new-chain-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px;max-width:1100px">
+    <div id="new-chain-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:8px">新規チェーン追加</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" name="chain_cd" placeholder="チェーンCD" required
@@ -116,7 +116,7 @@
 </div>
 
 <!-- ━━━ 店舗CD管理 ━━━ -->
-<div id="pane-store" class="card" style="display:none;border-radius:0 8px 8px 8px">
+<div id="pane-store" class="card" style="display:none;border-radius:0 8px 8px 8px;max-width:900px">
   <div style="margin-bottom:12px">
     <div class="card-title" style="margin-bottom:4px">店舗CD管理</div>
     <div style="font-size:12px;color:#6b7280">特定店舗のみ在庫引き当てから除外できます。チェーンCDが除外済みの場合はチェーン設定が優先されます。</div>
@@ -124,7 +124,7 @@
 
   <form method="post" action="/chains/store/add">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div id="new-store-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px;max-width:1100px">
+    <div id="new-store-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:8px">新規店舗追加</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" name="store_cd" placeholder="店舗CD" required
@@ -209,7 +209,7 @@
 </div>
 
 <!-- ━━━ 仕入先CD設定 ━━━ -->
-<div id="pane-supplier" class="card" style="display:none;border-radius:0 8px 8px 8px">
+<div id="pane-supplier" class="card" style="display:none;border-radius:0 8px 8px 8px;max-width:900px">
   <div style="margin-bottom:8px">
     <div class="card-title" style="margin-bottom:4px">仕入先CD設定</div>
     <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で仕入先CDごとの在庫引き当て除外を設定できます。チェーンCD・店舗CDを空白にすると全体設定になります。</div>
@@ -217,7 +217,7 @@
 
   <form method="post" action="/chains/supplier-setting/add">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div id="new-supplier-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:12px;max-width:1100px">
+    <div id="new-supplier-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:10px">仕入先CD設定を追加</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
@@ -335,7 +335,7 @@
 </div>
 
 <!-- ━━━ 商品CD設定 ━━━ -->
-<div id="pane-product" class="card" style="display:none;border-radius:0 8px 8px 8px">
+<div id="pane-product" class="card" style="display:none;border-radius:0 8px 8px 8px;max-width:900px">
   <div style="margin-bottom:8px">
     <div class="card-title" style="margin-bottom:4px">商品CD設定</div>
     <div style="font-size:12px;color:#6b7280">チェーン・店舗単位で商品CDごとの在庫引き当て除外を設定できます。商品CDとJANは片方のみでも登録可能です。</div>
@@ -343,7 +343,7 @@
 
   <form method="post" action="/chains/product-setting/add">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div id="new-product-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:12px;max-width:1100px">
+    <div id="new-product-row" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:bold;color:#16a34a;margin-bottom:10px">商品CD設定を追加</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
         <div>

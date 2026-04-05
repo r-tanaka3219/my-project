@@ -3,10 +3,21 @@
 {% block content %}
 <div class="page-title"><span>📥 入庫登録</span><div class="page-title-actions"><a href="/receipt/import" class="btn btn-outline btn-sm">📄 一括インポート</a><a href="/receipt/history" class="btn btn-outline btn-sm">📋 入庫履歴</a></div></div>
 
-<div class="card" style="max-width:min(820px,100%)"
+<style>
+.receipt-card input[type=text],
+.receipt-card input[type=number],
+.receipt-card input[type=date] { width:100%; max-width:280px }
+.receipt-card select            { width:100%; max-width:420px }
+#jan-input                      { max-width:none; flex:1 }
+#qty-direct                     { max-width:160px }
+#cases-input,#pieces-input,
+#unit-input                     { max-width:120px }
+</style>
+
+<div class="card receipt-card" style="max-width:min(560px,100%)">
 
   {# ── 入力モード切替タブ ── #}
-  <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;max-width:420px">
+  <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;max-width:380px">
     <button type="button" id="tab-jan" onclick="switchMode('jan')"
             style="flex:1;padding:7px;font-size:13px;font-weight:bold;border:none;cursor:pointer;
                    background:#1d4ed8;color:white">
