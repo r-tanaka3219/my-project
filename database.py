@@ -613,16 +613,52 @@ _MIGRATIONS = [
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS season_end_mmdd   TEXT",
 ]
 
+def _grant_privileges():
+    """DBユーザーに必要な権限を付与する（権限不足でmigrate_dbが失敗する場合の対策）"""
+    try:
+        dsn = get_dsn(long_timeout=True)
+        conn = psycopg2.connect(**dsn)
+        conn.autocommit = True
+        cur = conn.cursor()
+        user = dsn.get('user', 'inventory_user')
+        db   = dsn.get('dbname', 'inventory')
+        cur.execute(f"GRANT ALL PRIVILEGES ON DATABASE {db} TO {user}")
+        cur.execute(f"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {user}")
+        cur.execute(f"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {user}")
+        cur.execute(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {user}")
+        cur.execute(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {user}")
+        conn.close()
+        logger.info("[migrate_db] 権限付与完了: user=%s", user)
+    except Exception as e:
+        logger.debug("[migrate_db] 権限付与スキップ(superuser不要): %s", e)
+
 def migrate_db():
-    conn = psycopg2.connect(**get_dsn(long_timeout=True))
-    conn.autocommit = True
-    cur = conn.cursor()
-    for sql in _MIGRATIONS:
-        try:
-            cur.execute(sql)
-        except Exception:
-            pass
-    conn.close()
+    """起動時に自動実行されるDBマイグレーション。IF NOT EXISTS付きのため冪等性あり。"""
+    _grant_privileges()
+    try:
+        conn = psycopg2.connect(**get_dsn(long_timeout=True))
+        conn.autocommit = True
+        cur = conn.cursor()
+        ok = skip = fail = 0
+        for sql in _MIGRATIONS:
+            try:
+                cur.execute(sql)
+                ok += 1
+            except psycopg2.errors.DuplicateColumn:
+                skip += 1  # ADD COLUMN IF NOT EXISTS でも稀に発生するDBバージョン対策
+            except psycopg2.errors.DuplicateTable:
+                skip += 1
+            except psycopg2.errors.DuplicateObject:
+                skip += 1
+            except Exception as e:
+                fail += 1
+                logger.warning("[migrate_db] FAILED: %s | SQL: %.80s", e, sql)
+        conn.close()
+        logger.info("[migrate_db] 完了: 適用=%d スキップ=%d 失敗=%d", ok, skip, fail)
+        if fail > 0:
+            logger.warning("[migrate_db] 失敗が %d 件あります。DBユーザーの権限を確認してください。", fail)
+    except Exception as e:
+        logger.error("[migrate_db] DB接続エラー: %s", e)
 
 def init_db():
     conn = psycopg2.connect(**get_dsn(long_timeout=True))
