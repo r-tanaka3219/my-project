@@ -93,13 +93,13 @@
       </div>
 
       <!-- 明細検索 -->
-      <form method="get" action="/csv/import_detail" style="display:flex;gap:6px;margin-bottom:10px">
+      <form method="get" action="/csv/import_detail" style="display:flex;gap:6px;margin-bottom:10px;max-width:480px">
         <input type="hidden" name="source_file" value="{{ source_file }}">
         <input type="hidden" name="file_q" value="{{ file_q }}">
         <input type="hidden" name="file_page" value="{{ file_page }}">
         <input type="text" name="q" value="{{ q }}"
                placeholder="JAN・商品名・得意先・店舗名で絞込"
-               style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
+               style="flex:1;min-width:0;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px">
         <button type="submit" class="btn btn-outline btn-sm">🔍 検索</button>
         {% if q %}
         <a href="/csv/import_detail?source_file={{ source_file|urlencode }}&file_q={{ file_q|urlencode }}&file_page={{ file_page }}" class="btn btn-outline btn-sm">✕</a>
