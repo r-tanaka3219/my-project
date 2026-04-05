@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 import hashlib, logging
 from db import get_db
-from auth_helpers import _hash, _check_hash, _rate_limit, has_permission, PAGE_PERMISSIONS
+from auth_helpers import _hash, _check_hash, _rate_limit, has_permission, PAGE_PERMISSIONS, PERMISSION_ENDPOINTS
 
 logger = logging.getLogger('inventory.auth')
 bp = Blueprint('auth', __name__)
@@ -16,7 +16,7 @@ def login():
             return redirect(url_for('dashboard.dashboard'))
         for perm, _ in PAGE_PERMISSIONS:
             if perm != 'dashboard' and has_permission(perm):
-                return redirect(url_for(perm))
+                return redirect(url_for(PERMISSION_ENDPOINTS.get(perm, perm)))
     if request.method == 'POST':
         username = request.form.get('username','').strip()
         password = request.form.get('password','')
@@ -88,6 +88,6 @@ def change_password_required():
                 return redirect(url_for('dashboard.dashboard'))
             for perm, _ in PAGE_PERMISSIONS:
                 if perm != 'dashboard' and has_permission(perm):
-                    return redirect(url_for(perm))
+                    return redirect(url_for(PERMISSION_ENDPOINTS.get(perm, perm)))
             return redirect(url_for('auth.login'))
     return render_template('change_password_required.html')
