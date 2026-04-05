@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS products (
     mixed_lot_mode      TEXT    DEFAULT 'gte',
     mixed_lot_cases     INTEGER DEFAULT 3,
     mixed_force_days    INTEGER DEFAULT 3,
+    product_type        TEXT    DEFAULT '通常品',
     created_at          TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS stocks (
@@ -590,6 +591,7 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS ix_alert_logs_jan            ON alert_logs(jan)",
     "CREATE INDEX IF NOT EXISTS ix_alert_logs_created_at     ON alert_logs(created_at DESC)",
     # products product_type（取扱区分フィルタ）
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT '通常品'",
     "CREATE INDEX IF NOT EXISTS ix_products_product_type     ON products(product_type) WHERE is_active=1",
     # ABCランク変化追跡カラム
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS abc_rank         TEXT DEFAULT 'C'",
