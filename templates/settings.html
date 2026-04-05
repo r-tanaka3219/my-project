@@ -295,13 +295,11 @@
     <!-- 復元 -->
     <div>
       <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">▲ 復元（インポート）</div>
-      <form method="post" action="/admin/backup/sales/restore" enctype="multipart/form-data"
-            style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"
-            onsubmit="return confirm('バックアップCSVから売上履歴を復元します。重複データはスキップされます。よろしいですか？')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="file" name="file" accept=".csv" required style="font-size:12px">
-        <button type="submit" class="btn btn-warning btn-sm">♻️ 復元実行</button>
-      </form>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" id="restore-csrf" value="{{ csrf_token() }}">
+        <input type="file" id="restore-file" name="file" accept=".csv" style="font-size:12px">
+        <button type="button" class="btn btn-warning btn-sm" onclick="submitRestoreForm()">♻️ 復元実行</button>
+      </div>
       <div style="font-size:11px;color:#94a3b8;margin-top:4px">
         ※ このシステムでエクスポートしたCSVのみ対応
       </div>
@@ -323,6 +321,22 @@
 </div>
 
 <script>
+function submitRestoreForm() {
+  var fileInput = document.getElementById('restore-file');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    alert('CSVファイルを選択してください。');
+    return;
+  }
+  if (!confirm('バックアップCSVから売上履歴を復元します。重複データはスキップされます。よろしいですか？')) return;
+  var csrf = document.getElementById('restore-csrf').value;
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/backup/sales/restore';
+  f.enctype = 'multipart/form-data'; f.style.display = 'none';
+  var ci = document.createElement('input'); ci.type = 'hidden'; ci.name = 'csrf_token'; ci.value = csrf; f.appendChild(ci);
+  f.appendChild(fileInput);
+  document.body.appendChild(f); f.submit();
+}
+
 function startSalesDownload() {
   var modal   = document.getElementById('sales-dl-modal');
   var countEl = document.getElementById('sales-dl-count');

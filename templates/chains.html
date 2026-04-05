@@ -59,10 +59,7 @@
   </form>
 
   {% for c in chains %}
-  <form id="cf{{ c.id }}" method="post" action="/chains/chain/{{ c.id }}/update" style="display:none">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="exclude_deduct" value="0">
-  </form>
+  <input type="hidden" id="csrf-chain-{{ c.id }}" value="{{ csrf_token() }}">
   {% endfor %}
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -95,16 +92,16 @@
           data-search="{{ c.chain_cd }}|{{ c.chain_name }}">
         <td class="cd-cell">{{ c.chain_cd }}</td>
         <td style="padding:5px 10px">
-          <input type="text" name="chain_name" value="{{ c.chain_name }}" form="cf{{ c.id }}"
+          <input type="text" name="chain_name" value="{{ c.chain_name }}"
                  style="width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;box-sizing:border-box">
         </td>
         <td style="text-align:center">
-          <input type="checkbox" name="exclude_deduct" value="1" form="cf{{ c.id }}"
+          <input type="checkbox" name="exclude_deduct" value="1"
                  {% if c.exclude_deduct %}checked{% endif %}
                  style="width:16px;height:16px;cursor:pointer">
         </td>
         <td style="text-align:center;padding:5px 10px">
-          <button type="submit" form="cf{{ c.id }}" class="btn btn-primary btn-sm">保存</button>
+          <button type="button" onclick="saveChain({{ c.id }}, this)" class="btn btn-primary btn-sm">保存</button>
         </td>
       </tr>
       {% else %}
@@ -159,10 +156,7 @@
   </div>
 
   {% for s in stores %}
-  <form id="sf{{ s.id }}" method="post" action="/chains/store/{{ s.id }}/update" style="display:none">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="exclude_deduct" value="0">
-  </form>
+  <input type="hidden" id="csrf-store-{{ s.id }}" value="{{ csrf_token() }}">
   {% endfor %}
 
   <div style="overflow-x:auto">
@@ -183,21 +177,21 @@
           data-search="{{ s.store_cd }}|{{ s.store_name }}|{{ s.chain_cd }}|{{ s.client_name }}">
         <td class="cd-cell">{{ s.chain_cd }}</td>
         <td style="padding:5px 10px">
-          <input type="text" name="client_name" value="{{ s.client_name }}" form="sf{{ s.id }}"
+          <input type="text" name="client_name" value="{{ s.client_name }}"
                  style="width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;color:#2563eb;font-weight:600;box-sizing:border-box">
         </td>
         <td class="cd-cell">{{ s.store_cd }}</td>
         <td style="padding:5px 10px">
-          <input type="text" name="store_name" value="{{ s.store_name }}" form="sf{{ s.id }}"
+          <input type="text" name="store_name" value="{{ s.store_name }}"
                  style="width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;box-sizing:border-box">
         </td>
         <td style="text-align:center">
-          <input type="checkbox" name="exclude_deduct" value="1" form="sf{{ s.id }}"
+          <input type="checkbox" name="exclude_deduct" value="1"
                  {% if s.exclude_deduct %}checked{% endif %}
                  style="width:16px;height:16px;cursor:pointer">
         </td>
         <td style="text-align:center;padding:5px 10px">
-          <button type="submit" form="sf{{ s.id }}" class="btn btn-primary btn-sm">保存</button>
+          <button type="button" onclick="saveStore({{ s.id }}, this)" class="btn btn-primary btn-sm">保存</button>
         </td>
       </tr>
       {% else %}
@@ -469,6 +463,31 @@
 </div>
 
 <script>
+function postForm(url, data) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = url; f.style.display = 'none';
+  Object.entries(data).forEach(function([k, v]) {
+    var i = document.createElement('input');
+    i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i);
+  });
+  document.body.appendChild(f); f.submit();
+}
+function saveChain(id, btn) {
+  var tr = btn.closest('tr');
+  var name = tr.querySelector('[name="chain_name"]').value;
+  var excl = tr.querySelector('[name="exclude_deduct"]').checked ? '1' : '0';
+  var csrf = document.getElementById('csrf-chain-' + id).value;
+  postForm('/chains/chain/' + id + '/update', {csrf_token: csrf, chain_name: name, exclude_deduct: excl});
+}
+function saveStore(id, btn) {
+  var tr = btn.closest('tr');
+  var sname = tr.querySelector('[name="store_name"]').value;
+  var cname = tr.querySelector('[name="client_name"]').value;
+  var excl = tr.querySelector('[name="exclude_deduct"]').checked ? '1' : '0';
+  var csrf = document.getElementById('csrf-store-' + id).value;
+  postForm('/chains/store/' + id + '/update', {csrf_token: csrf, store_name: sname, client_name: cname, exclude_deduct: excl});
+}
+
 const TABS = ['chain','store','supplier','product'];
 
 function switchTab(tab) {
