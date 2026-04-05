@@ -80,7 +80,7 @@ def order_send():
             INSERT INTO order_history
             (supplier_cd,supplier_name,supplier_email,jan,product_cd,product_name,
              order_qty,trigger_type,order_date,expected_receipt_date,mail_sent,mail_result)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, [p['supplier_cd'],p['supplier_name'],p['supplier_email'],
               p['jan'],p['product_cd'],p['product_name'],order_qty,'manual',today,str(date.today() + timedelta(days=int(p.get('lead_time_days') or 3))),0,''])
         db.commit()
@@ -142,6 +142,7 @@ def pending_force():
     return redirect(url_for('orders.orders'))
 
 @bp.route('/orders/pending_force_single', methods=['POST'])
+@login_required
 def pending_force_single():
     """個別ペンディング発注を強制送信"""
     db = get_db()
@@ -169,6 +170,7 @@ def pending_force_single():
     return redirect(url_for('orders.orders'))
 
 @bp.route('/orders/pending_cancel_single', methods=['POST'])
+@login_required
 def pending_cancel_single():
     """個別ペンディング発注をキャンセル"""
     db = get_db()
@@ -391,6 +393,7 @@ def pending_force_group_manual():
 
 
 @bp.route('/orders/pending_force_group', methods=['POST'])
+@login_required
 def pending_force_group():
     from auto_check import _do_order
     db = get_db()

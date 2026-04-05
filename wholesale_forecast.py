@@ -460,7 +460,7 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
             'iqr_std':               round(iqr_std, 2),
             'dynamic_safety_stock':  round(dyn_ss, 1),
             'temp_adj_factor':       round(temp_adj, 3),
-            'demand_add_30d':        int(demand_add) if 'demand_add' in dir() else 0,
+            'demand_add_30d':        int(demand_add),
             'suggested_reorder_point': suggested_rp,
             'suggested_order_qty':   suggested_oq,
             'lock_order_qty':        int(p.get('lock_order_qty') or 0),
