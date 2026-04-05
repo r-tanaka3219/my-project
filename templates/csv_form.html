@@ -2,7 +2,19 @@
 {% block title %}CSV取込設定{% endblock %}
 {% block content %}
 <div class="page-title">{% if setting %}✏️ CSV設定編集{% else %}➕ CSV取込設定 新規作成{% endif %}</div>
-<div style="max-width:min(1100px,100%)"
+
+<style>
+.csv-form input[type=text],
+.csv-form input[type=password],
+.csv-form input[type=time]  { width:100%; max-width:280px }
+.csv-form input[name=name],
+.csv-form input[name=folder_path],
+.csv-form input[name=filename_pattern],
+.csv-form input[name=filter_cd_values] { max-width:420px }
+.csv-form select             { width:100%; max-width:320px }
+</style>
+
+<div class="csv-form" style="max-width:min(800px,100%)">
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="card" style="margin-bottom:14px">
