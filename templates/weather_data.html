@@ -48,7 +48,7 @@
 
     {# 気温感応度再計算 #}
     <div style="flex:0 0 200px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
-      <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px">🧮 気温感応度を再計算</div>
+      <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px;white-space:nowrap">🧮 気温感応度を再計算</div>
       <form method="post" action="/reports/weather/recalc_sensitivity"
             onsubmit="return confirm('全商品の気温感応度を再計算します。よろしいですか？')" style="margin:0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
