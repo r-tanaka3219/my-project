@@ -180,14 +180,11 @@
 
     <div class="print-hide" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
       <button type="submit" class="btn btn-primary">💾 実棚数を保存</button>
-      <form method="post" action="/stocktake/apply" style="margin:0">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="count_date" value="{{ count_date }}">
-        <button type="submit" class="btn btn-danger"
-                onclick="return confirm('差異を在庫に反映しますか？\n※この操作は取り消せません。')">
-          ⚡ 差異を在庫に反映
-        </button>
-      </form>
+      <input type="hidden" id="stocktake-csrf" value="{{ csrf_token() }}">
+      <button type="button" class="btn btn-danger"
+              onclick="submitStocktakeApply('{{ count_date }}')">
+        ⚡ 差異を在庫に反映
+      </button>
     </div>
   </form>
 
@@ -292,6 +289,16 @@
 </style>
 
 <script>
+function submitStocktakeApply(countDate) {
+  if (!confirm('差異を在庫に反映しますか？\n※この操作は取り消せません。')) return;
+  var csrf = document.getElementById('stocktake-csrf').value;
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/stocktake/apply'; f.style.display = 'none';
+  var ci = document.createElement('input'); ci.type = 'hidden'; ci.name = 'csrf_token'; ci.value = csrf; f.appendChild(ci);
+  var di = document.createElement('input'); di.type = 'hidden'; di.name = 'count_date'; di.value = countDate; f.appendChild(di);
+  document.body.appendChild(f); f.submit();
+}
+
 function calcDiff(jan, sysQty) {
   const input = document.getElementById('actual_' + jan);
   const el = document.getElementById('diff_' + jan);
