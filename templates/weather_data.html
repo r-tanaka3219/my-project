@@ -13,7 +13,6 @@
   <span>気温データ管理</span>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="/reports/forecast/wholesale" class="btn btn-outline btn-sm">需要予測へ</a>
-    <a href="/reports" class="btn btn-outline btn-sm">← レポート</a>
   </div>
 </div>
 
@@ -28,8 +27,8 @@
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
 
     {# Excel一括インポート #}
-    <div style="flex:1 1 300px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
-      <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:8px">📊 Excelインポート（推奨）</div>
+    <div style="flex:1 1 340px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px">
+      <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:8px;white-space:nowrap">📊 Excelインポート（推奨）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <a href="/reports/weather/excel_template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
         <span style="font-size:11px;color:#6b7280">.xlsx形式</span>
@@ -37,32 +36,32 @@
       <form method="post" action="/reports/weather/excel_import" enctype="multipart/form-data"
             style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="file" name="excel_file" accept=".xlsx,.xls,.csv" required style="font-size:12px;max-width:220px">
+        <input type="file" name="excel_file" accept=".xlsx,.xls,.csv" required style="font-size:12px;max-width:260px">
         <button type="submit" class="btn btn-success btn-sm">📤 インポート</button>
       </form>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">
+      <div style="font-size:11px;color:#6b7280;margin-top:6px;white-space:nowrap">
         列：日付 / 地点 / 平均気温(℃) / 最高気温(℃) / 最低気温(℃) / 降水量(mm)<br>
         同一「日付×地点」は上書き更新。CSV(.csv)も対応。
       </div>
     </div>
 
     {# 気温感応度再計算 #}
-    <div style="flex:0 0 200px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
+    <div style="flex:0 0 240px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:14px">
       <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px;white-space:nowrap">🧮 気温感応度を再計算</div>
       <form method="post" action="/reports/weather/recalc_sensitivity"
             onsubmit="return confirm('全商品の気温感応度を再計算します。よろしいですか？')" style="margin:0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-purple btn-sm">再計算を実行</button>
       </form>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">
+      <div style="font-size:11px;color:#6b7280;margin-top:6px;white-space:nowrap">
         インポート・取得時に自動実行されます<br>手動でも随時実行できます
       </div>
       {% if sens_last_run %}
-      <div style="margin-top:8px;padding:6px 8px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;font-size:11px;color:#6d28d9">
+      <div style="margin-top:8px;padding:6px 8px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;font-size:11px;color:#6d28d9;white-space:nowrap">
         🕐 最終実行: {{ sens_last_run }}
       </div>
       {% else %}
-      <div style="margin-top:8px;font-size:11px;color:#9ca3af">🕐 最終実行: 未実行</div>
+      <div style="margin-top:8px;font-size:11px;color:#9ca3af;white-space:nowrap">🕐 最終実行: 未実行</div>
       {% endif %}
     </div>
   </div>
