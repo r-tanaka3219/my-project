@@ -12,6 +12,7 @@ import csv
 import calendar
 import math
 import logging
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -283,6 +284,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                     continue
 
             rows_ok = rows_err = rows_skip = rows_skip_unrg = 0
+            unrg_jans = {}
             errors = []
             import_type = cfg['import_type'] or 'sales'
 
@@ -394,6 +396,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                             elif import_type == 'sales':
                                 if not product:
                                     rows_skip_unrg += 1
+                                    unrg_jans[jan] = jan
                                     continue
                                 _deduct_stock(db, product, qty, row_date, log_key)
                                 result_me = db.execute("""
@@ -408,6 +411,7 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                             else:
                                 if not product:
                                     rows_skip_unrg += 1
+                                    unrg_jans[jan] = jan
                                     continue
                                 _add_stock(db, product, qty, expiry, log_key)
 
@@ -446,9 +450,10 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                     db.execute("DELETE FROM import_logs WHERE filename=%s", [log_key])
                 db.execute("""
                     INSERT INTO import_logs
-                    (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)
-                """, [cfg['id'], log_key, rows_ok, rows_err, status, detail, trigger_type])
+                    (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type,unrg_jans_json)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, [cfg['id'], log_key, rows_ok, rows_err, status, detail, trigger_type,
+                      json.dumps(sorted(unrg_jans.keys()), ensure_ascii=False) if unrg_jans else ''])
                 db.execute("""
                     UPDATE csv_import_settings
                     SET last_run_at=NOW(), last_result=%s WHERE id=%s
@@ -552,6 +557,7 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
 
         for csv_path in files:
             rows_ok = rows_err = rows_skip = rows_skip_unrg = 0
+            unrg_jans = {}
             errors = []
             import_type = cfg['import_type'] or 'sales'
             # チェーンCD・店舗CD除外キャッシュ（DB問い合わせ削減）
@@ -702,6 +708,7 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                 elif import_type == 'sales':
                                     if not product:
                                         rows_skip_unrg += 1
+                                        unrg_jans[jan] = jan
                                     elif not exclude:
                                         _deduct_stock(db, product, qty, sale_date, csv_path.name)
                                 result = db.execute("""
@@ -718,6 +725,7 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                             else:
                                 if not product:
                                     rows_skip_unrg += 1
+                                    unrg_jans[jan] = jan
                                 else:
                                     _add_stock(db, product, qty, expiry, csv_path.name)
 
@@ -746,9 +754,10 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                 else:
                     status = 'partial'
                 db.execute("""
-                    INSERT INTO import_logs (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)
-                """, [cfg['id'], csv_path.name, rows_ok, rows_err, status, detail, trigger_type])
+                    INSERT INTO import_logs (setting_id,filename,rows_ok,rows_err,status,detail,trigger_type,unrg_jans_json)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, [cfg['id'], csv_path.name, rows_ok, rows_err, status, detail, trigger_type,
+                      json.dumps(sorted(unrg_jans.keys()), ensure_ascii=False) if unrg_jans else ''])
                 db.execute("""
                     UPDATE csv_import_settings
                     SET last_run_at=NOW(), last_result=%s

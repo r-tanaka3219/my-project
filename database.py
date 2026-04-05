@@ -620,6 +620,8 @@ _MIGRATIONS = [
     # settings テーブル追加カラム
     "ALTER TABLE settings ADD COLUMN IF NOT EXISTS order_history_months INTEGER DEFAULT 12",
     "ALTER TABLE settings ADD COLUMN IF NOT EXISTS disposed_months INTEGER DEFAULT 12",
+    # 未登録JANリスト（CSV取込スキップ分の特定）
+    "ALTER TABLE import_logs ADD COLUMN IF NOT EXISTS unrg_jans_json TEXT DEFAULT ''",
 ]
 
 def _grant_privileges():
