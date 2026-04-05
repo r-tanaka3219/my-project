@@ -22,48 +22,13 @@
   気象庁CSVをダウンロードしてインポートするか、手動で入力してください。
 </div>
 
-<div class="card">
-  <div class="card-title">手動入力</div>
-  <form method="post" action="/reports/weather/add">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="input-grid">
-      <div>
-        <label style="font-size:12px;color:#6b7280">日付 *</label>
-        <input type="date" name="obs_date" required style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div>
-        <label style="font-size:12px;color:#6b7280">地点</label>
-        <input type="text" name="location" value="東京" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div>
-        <label style="font-size:12px;color:#6b7280">平均気温(℃) *</label>
-        <input type="number" name="avg_temp" step="0.1" required style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div>
-        <label style="font-size:12px;color:#6b7280">最高気温(℃)</label>
-        <input type="number" name="max_temp" step="0.1" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div>
-        <label style="font-size:12px;color:#6b7280">最低気温(℃)</label>
-        <input type="number" name="min_temp" step="0.1" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div>
-        <label style="font-size:12px;color:#6b7280">降水量(mm)</label>
-        <input type="number" name="precipitation" step="0.1" value="0" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-      </div>
-      <div style="padding-top:18px">
-        <button type="submit" class="btn btn-primary btn-sm" style="padding:4px 16px">登録</button>
-      </div>
-    </div>
-  </form>
-</div>
 
 <div class="card">
   <div class="card-title">📥 気象データ 一括インポート</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
 
     {# Excel一括インポート #}
-    <div style="flex:1;min-width:280px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+    <div style="flex:1 1 260px;max-width:480px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
       <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:8px">📊 Excelインポート（推奨）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <a href="/reports/weather/excel_template" class="btn btn-outline btn-sm">📥 テンプレートDL</a>
@@ -82,7 +47,7 @@
     </div>
 
     {# 気温感応度再計算 #}
-    <div style="flex:0 0 auto;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
+    <div style="flex:0 0 220px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">
       <div style="font-size:13px;font-weight:600;color:#7c3aed;margin-bottom:8px">🧮 気温感応度を再計算</div>
       <form method="post" action="/reports/weather/recalc_sensitivity"
             onsubmit="return confirm('全商品の気温感応度を再計算します。よろしいですか？')" style="margin:0">

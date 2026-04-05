@@ -307,13 +307,7 @@
   <div class="card-toolbar">
     <span>📈 前年実績（{{ last_year }}年）月別売上数量</span>
     <div class="right">
-      <form method="get" class="filter-form" id="sales-search-form" style="grid-template-columns:minmax(220px,1fr) auto auto;margin:0">
-        <input type="hidden" name="tab" value="sales">
-        <input type="hidden" name="sales_mode" id="sales-mode-input" value="{{ sales_mode }}">
-        <input type="text" id="sales-q-input" name="sales_q" value="{{ sales_q or '' }}" placeholder="仕入先CD・仕入先名・商品CD・JAN・商品名">
-        <button type="button" onclick="loadSalesData(true)" class="btn btn-outline btn-sm">🔍</button>
-        {% if sales_q %}<button type="button" onclick="clearSalesSearch()" class="btn btn-outline btn-sm">✕</button>{% endif %}
-      </form>
+      <input type="hidden" id="sales-mode-input" value="{{ sales_mode }}">
       <select id="sales-year-select" onchange="setSalesYear(this.value)"
               style="width:90px;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
         <option value="">年を選択...</option>
@@ -424,7 +418,7 @@ function switchTab(tab) {
 // ── 前年実績 AJAX ─────────────────────────────────────────────────────
 let _salesLoaded = false;
 let _salesMode   = '{{ sales_mode }}';
-let _salesQ      = '{{ sales_q | e }}';
+let _salesQ      = '{{ (sales_q or q) | e }}';
 let _salesYear   = '';
 
 function loadSalesData(forceReload) {
@@ -498,7 +492,8 @@ function setSalesYear(year) {
 
 function setSalesMode(mode) {
   _salesMode = mode;
-  document.getElementById('sales-mode-input').value = mode;
+  const modeInp = document.getElementById('sales-mode-input');
+  if (modeInp) modeInp.value = mode;
   document.getElementById('btn-sales-master').className = 'btn btn-sm ' + (mode === 'master' ? 'btn-primary' : 'btn-outline');
   document.getElementById('btn-sales-all').className    = 'btn btn-sm ' + (mode === 'all'    ? 'btn-primary' : 'btn-outline');
   _salesLoaded = false;

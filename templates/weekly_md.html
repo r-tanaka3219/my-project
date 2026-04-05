@@ -107,7 +107,7 @@
     </div>
     <form method="get" style="display:flex;gap:6px;align-items:center;margin:0">
       <input type="hidden" name="year" value="{{ fiscal_year }}">
-      <input type="text" name="q" value="{{ q or '' }}" placeholder="商品名・商品CD" style="width:180px">
+      <input type="text" name="q" value="{{ q or '' }}" placeholder="商品名・商品CD・仕入先CD・JAN" style="width:260px">
       <button type="submit" class="btn btn-outline btn-sm">検索</button>
       {% if q %}<a href="/reports/weekly_md?year={{ fiscal_year }}" class="btn btn-outline btn-sm">✕</a>{% endif %}
     </form>

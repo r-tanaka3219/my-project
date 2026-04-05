@@ -673,7 +673,7 @@ SUP002       佐藤飲料             4909876543210  P003         緑茶 500ml  
       <span style="font-size:11px;font-weight:400;color:#6b7280;margin-left:6px">毎日の自動取得後に古いデータを自動削除</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <select name="weather_data_retention_days" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px">
+      <select name="weather_data_retention_days" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;max-width:200px">
         <option value="90"  {% if weather_settings.get('weather_data_retention_days','365') == '90'  %}selected{% endif %}>90日（約3ヶ月）</option>
         <option value="180" {% if weather_settings.get('weather_data_retention_days','365') == '180' %}selected{% endif %}>180日（約6ヶ月）</option>
         <option value="365" {% if weather_settings.get('weather_data_retention_days','365') in ['365',''] %}selected{% endif %}>365日（1年）※推奨</option>
