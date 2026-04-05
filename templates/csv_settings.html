@@ -396,7 +396,24 @@ document.addEventListener('DOMContentLoaded', function() {
         {% elif l.status=='partial_skip' %}<span class="badge badge-orange">未登録スキップ</span>
         {% elif l.status=='skip' %}<span class="badge badge-gray">スキップ</span>
         {% else %}<span class="badge badge-red">エラー</span>{% endif %}</td>
-    <td style="font-size:11px;color:#6b7280">{{ l.detail }}</td>
+    <td style="font-size:11px;color:#6b7280">
+      {{ l.detail }}
+      {% if l.status=='partial_skip' and l.unrg_jans_json %}
+        {% set jans = l.unrg_jans_json | fromjson %}
+        {% if jans %}
+        <details style="margin-top:5px">
+          <summary style="cursor:pointer;color:#d97706;font-weight:bold;font-size:11px;user-select:none">
+            ⚠️ 未登録JAN {{ jans|length }}件（クリックで表示）
+          </summary>
+          <div style="margin-top:4px;padding:6px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;max-height:160px;overflow-y:auto">
+            {% for jan in jans %}
+            <span style="display:inline-block;margin:2px 4px 2px 0;padding:1px 6px;background:#fef3c7;border:1px solid #fcd34d;border-radius:3px;font-size:11px;font-family:monospace">{{ jan }}</span>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+      {% endif %}
+    </td>
     <td style="text-align:center">
       {% if l.filename %}
       <a href="/csv/import_detail?source_file={{ l.filename|urlencode }}" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">📄 明細確認</a>

@@ -219,6 +219,17 @@ def format_number_filter(value):
     except (ValueError, TypeError):
         return str(value) if value is not None else '-'
 
+@app.template_filter('fromjson')
+def fromjson_filter(value):
+    """JSON文字列をPythonオブジェクトに変換するJinjaフィルター"""
+    import json as _json
+    try:
+        if not value:
+            return []
+        return _json.loads(value)
+    except Exception:
+        return []
+
 
 
 def _normalize_jan(val):
