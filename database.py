@@ -613,6 +613,13 @@ _MIGRATIONS = [
     # 季節品の販売期間スケジュール
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS season_start_mmdd TEXT",
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS season_end_mmdd   TEXT",
+    # 発注残クローズフラグ（入庫完了・手動クローズ日時）
+    "ALTER TABLE order_history ADD COLUMN IF NOT EXISTS closed_at TEXT DEFAULT NULL",
+    # order_pending 混載強制発注日数
+    "ALTER TABLE order_pending ADD COLUMN IF NOT EXISTS mixed_force_days INTEGER DEFAULT 3",
+    # settings テーブル追加カラム
+    "ALTER TABLE settings ADD COLUMN IF NOT EXISTS order_history_months INTEGER DEFAULT 12",
+    "ALTER TABLE settings ADD COLUMN IF NOT EXISTS disposed_months INTEGER DEFAULT 12",
 ]
 
 def _grant_privileges():
