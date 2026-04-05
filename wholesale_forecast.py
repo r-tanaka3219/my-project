@@ -49,12 +49,12 @@ def build_abc_map(db, a_threshold: float = 0.70, b_threshold: float = 0.90) -> d
     """
     rows = db.execute("""
         WITH sales AS (
-            SELECT sh.jan,
-                   SUM(sh.quantity * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
-            FROM sales_history sh
-            LEFT JOIN products p ON p.jan = sh.jan
-            WHERE sh.sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
-            GROUP BY sh.jan
+            SELECT a.jan,
+                   SUM(a.qty * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
+            FROM sales_daily_agg a
+            LEFT JOIN products p ON p.jan = a.jan
+            WHERE a.sale_dt >= CURRENT_DATE - INTERVAL '365 days'
+            GROUP BY a.jan
         ), ranked AS (
             SELECT jan, sales_value,
                    SUM(sales_value) OVER () AS total_sales,
@@ -250,15 +250,12 @@ def build_wholesale_forecast_rows(db, q: str = '') -> list[dict]:
         ORDER BY p.supplier_cd, p.product_cd
     """).fetchall()
 
-    # ── 過去180日の日次売上データを一括取得 ──────────────────────────
+    # ── 過去180日の日次売上データを一括取得（sales_daily_agg を使用）──
     sales_rows = db.execute("""
-        SELECT jan,
-               sale_date::date AS sale_dt,
-               SUM(quantity)   AS qty
-        FROM sales_history
-        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '180 days'
-        GROUP BY jan, sale_date::date
-        ORDER BY jan, sale_date::date
+        SELECT jan, sale_dt, qty
+        FROM sales_daily_agg
+        WHERE sale_dt >= CURRENT_DATE - INTERVAL '180 days'
+        ORDER BY jan, sale_dt
     """).fetchall()
 
     # jan → [(date, qty)] の辞書

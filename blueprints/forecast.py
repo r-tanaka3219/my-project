@@ -51,16 +51,10 @@ def forecast_wholesale():
     zero_days_map = {}
     try:
         zd_rows = db.execute("""
-            SELECT g.jan,
-                   30 - COUNT(d.sale_dt) AS zero_days
-            FROM (SELECT DISTINCT jan FROM sales_daily_agg
-                  WHERE sale_dt >= CURRENT_DATE - INTERVAL '29 days') g
-            CROSS JOIN generate_series(
-                CURRENT_DATE - INTERVAL '29 days',
-                CURRENT_DATE, INTERVAL '1 day') gs(d)
-            LEFT JOIN sales_daily_agg d
-                   ON d.jan = g.jan AND d.sale_dt = gs.d::date
-            GROUP BY g.jan
+            SELECT jan, 30 - COUNT(DISTINCT sale_dt) AS zero_days
+            FROM sales_daily_agg
+            WHERE sale_dt >= CURRENT_DATE - INTERVAL '29 days'
+            GROUP BY jan
         """).fetchall()
         zero_days_map = {r['jan']: int(r['zero_days']) for r in zd_rows}
     except Exception:
@@ -199,14 +193,14 @@ def abc_analysis():
 
     rows = db.execute("""
         WITH sales AS (
-            SELECT sh.jan,
+            SELECT a.jan,
                    p.product_cd, p.product_name, p.supplier_cd, p.supplier_name,
-                   SUM(sh.quantity) AS total_qty,
-                   SUM(sh.quantity * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
-            FROM sales_history sh
-            JOIN products p ON p.jan = sh.jan
-            WHERE sh.sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
-            GROUP BY sh.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name
+                   SUM(a.qty)::int AS total_qty,
+                   SUM(a.qty * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
+            FROM sales_daily_agg a
+            JOIN products p ON p.jan = a.jan
+            WHERE a.sale_dt >= CURRENT_DATE - INTERVAL '365 days'
+            GROUP BY a.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name
         ), ranked AS (
             SELECT *,
                    SUM(sales_value) OVER () AS total_sales,
@@ -224,10 +218,10 @@ def abc_analysis():
     import statistics as _st
     xyz_rows = db.execute("""
         SELECT jan,
-               EXTRACT(WEEK FROM sale_date::date)::int AS wk,
-               SUM(quantity) AS wqty
-        FROM sales_history
-        WHERE sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
+               EXTRACT(WEEK FROM sale_dt)::int AS wk,
+               SUM(qty) AS wqty
+        FROM sales_daily_agg
+        WHERE sale_dt >= CURRENT_DATE - INTERVAL '365 days'
         GROUP BY jan, wk
     """).fetchall()
     xyz_map: dict = {}  # jan -> 'X'/'Y'/'Z'
@@ -283,16 +277,21 @@ def abc_analysis():
         summary[rk]['qty']   += int(r['total_qty'] or 0)
         summary[rk]['value'] += float(r['sales_value'] or 0)
 
-    # ABCランクを products テーブルに保存（変化があった商品のみ更新）
+    # ABCランクを products テーブルに保存（一括取得→差分のみ更新）
+    existing_ranks = {}
+    try:
+        er = db.execute("SELECT jan, abc_rank FROM products WHERE is_active = 1").fetchall()
+        existing_ranks = {r['jan']: r['abc_rank'] for r in er}
+    except Exception:
+        pass
+
     changed = 0
     today_str = str(date.today())
     for r in abc_rows:
         jan, new_rank = r['jan'], r['abc_rank']
-        existing = db.execute(
-            "SELECT abc_rank FROM products WHERE jan=%s", [jan]
-        ).fetchone()
-        if existing and existing['abc_rank'] != new_rank:
-            old_rank = existing['abc_rank'] or 'C'
+        cur_rank = existing_ranks.get(jan)
+        if cur_rank is not None and cur_rank != new_rank:
+            old_rank = cur_rank or 'C'
             db.execute("""
                 UPDATE products
                 SET abc_rank_prev = %s, abc_rank = %s, abc_rank_updated = %s
@@ -304,7 +303,7 @@ def abc_analysis():
             """, [jan, r['product_name'],
                   f"ABCランク変化: {old_rank} → {new_rank} ({today_str})"])
             changed += 1
-        elif existing and existing['abc_rank'] is None:
+        elif cur_rank is None:
             db.execute("""
                 UPDATE products SET abc_rank = %s, abc_rank_updated = %s WHERE jan = %s
             """, [new_rank, today_str, jan])
@@ -339,13 +338,13 @@ def abc_export():
     db = get_db()
     rows = db.execute("""
         WITH sales AS (
-            SELECT sh.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name,
-                   SUM(sh.quantity) AS total_qty,
-                   SUM(sh.quantity * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
-            FROM sales_history sh
-            JOIN products p ON p.jan = sh.jan
-            WHERE sh.sale_date::date >= CURRENT_DATE - INTERVAL '365 days'
-            GROUP BY sh.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name
+            SELECT a.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name,
+                   SUM(a.qty)::int AS total_qty,
+                   SUM(a.qty * COALESCE(NULLIF(p.cost_price,0), 1)) AS sales_value
+            FROM sales_daily_agg a
+            JOIN products p ON p.jan = a.jan
+            WHERE a.sale_dt >= CURRENT_DATE - INTERVAL '365 days'
+            GROUP BY a.jan, p.product_cd, p.product_name, p.supplier_cd, p.supplier_name
         ), ranked AS (
             SELECT *, SUM(sales_value) OVER () AS total,
                    SUM(sales_value) OVER (ORDER BY sales_value DESC NULLS LAST, jan) AS running
@@ -397,17 +396,17 @@ def weekly_md():
         rows = [r for r in rows if any(q in str(r.get(k) or '').lower()
                                        for k in ('jan', 'product_cd', 'product_name', 'supplier_cd', 'supplier_name'))]
 
-    # 実績：sales_history から週番号別に集計（年度内の全週）
+    # 実績：sales_daily_agg から週番号別に集計（年度内の全週）
     # 年度開始月（4月）〜終了月（翌年3月）の範囲で絞り込む
     fiscal_start = date(year_param, 4, 1)
     fiscal_end   = date(year_param + 1, 3, 31)
     actual_rows = db.execute("""
         SELECT jan,
-               EXTRACT(ISODOW FROM sale_date::date)::int AS dow,
-               EXTRACT(WEEK  FROM sale_date::date)::int AS week_no,
-               SUM(quantity) AS qty
-        FROM sales_history
-        WHERE sale_date::date BETWEEN %s AND %s
+               dow,
+               EXTRACT(WEEK FROM sale_dt)::int AS week_no,
+               SUM(qty) AS qty
+        FROM sales_daily_agg
+        WHERE sale_dt BETWEEN %s AND %s
         GROUP BY jan, week_no, dow
     """, [fiscal_start, fiscal_end]).fetchall()
 
