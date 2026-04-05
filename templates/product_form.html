@@ -2,7 +2,17 @@
 {% block title %}{% if product %}商品編集{% else %}商品登録{% endif %}{% endblock %}
 {% block content %}
 <div class="page-title">{% if product %}✏️ 商品編集{% else %}➕ 商品登録{% endif %}</div>
-<div class="card" style="max-width:min(1100px,100%)"
+
+<style>
+.pf-card input[type=text],
+.pf-card input[type=number] { width:100%; max-width:240px }
+.pf-card input[name=product_name],
+.pf-card input[name=supplier_name],
+.pf-card input[name=mixed_group]  { max-width:340px }
+.pf-card select                   { width:100%; max-width:340px }
+</style>
+
+<div class="card pf-card" style="max-width:min(760px,100%)">
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="form-grid-2">
