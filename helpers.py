@@ -332,6 +332,7 @@ def _build_forecast_rows(db, q=''):
             avg_daily           = ly_daily
             season_idx_display  = 1.0
             dow_idx_display     = 1.0
+            manual_adj          = 1.0
             promo_count         = 0
             promo_uplift_qty    = 0.0
             # AIモードOFF時でも受注予定は反映する

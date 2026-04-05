@@ -45,7 +45,8 @@ def login():
             # ダッシュボード権限がない場合は最初に許可されたページへ
             for perm, _ in PAGE_PERMISSIONS:
                 if perm != 'dashboard' and has_permission(perm):
-                    return redirect(url_for(perm))
+                    endpoint = PERMISSION_ENDPOINTS.get(perm, perm)
+                    return redirect(url_for(endpoint))
             return redirect(url_for('auth.login'))
         flash('IDまたはパスワードが違います。', 'danger')
     return render_template('login.html')
