@@ -609,6 +609,7 @@ def product_restore(pid):
 
 
 @bp.route('/products/<int:pid>/edit', methods=['GET','POST'])
+@login_required
 def product_edit(pid):
     db = get_db()
     product = db.execute("SELECT * FROM products WHERE id=%s", [pid]).fetchone()
