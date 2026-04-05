@@ -2029,6 +2029,7 @@ def csv_edit(sid):
     return render_template('csv_form.html', setting=setting, env=dict(os.environ))
 
 @app.route('/csv/<int:sid>/run', methods=['POST'])
+@admin_required
 def csv_run(sid):
     import uuid
     job_id = str(uuid.uuid4())
@@ -2114,6 +2115,7 @@ def csv_run_all():
     return redirect(url_for('csv_settings'))
 
 @app.route('/csv/<int:sid>/run_month_end', methods=['POST'])
+@admin_required
 def csv_run_month_end(sid):
     """月末月次CSV手動取込（進捗モニター対応）"""
     import uuid
@@ -2279,6 +2281,7 @@ def recipient_send_type(rid):
     return redirect(url_for('recipients'))
 
 @app.route('/recipients/<int:rid>/toggle', methods=['POST'])
+@admin_required
 def recipient_toggle(rid):
     db = get_db()
     r = db.execute("SELECT * FROM mail_recipients WHERE id=%s",[rid]).fetchone()
@@ -2289,6 +2292,7 @@ def recipient_toggle(rid):
     return redirect(url_for('recipients'))
 
 @app.route('/recipients/<int:rid>/delete', methods=['POST'])
+@admin_required
 def recipient_delete(rid):
     db = get_db()
     db.execute("DELETE FROM mail_recipients WHERE id=%s",[rid])
@@ -2447,6 +2451,7 @@ def stocktake():
                            expiry_detail=expiry_detail, q=q)
 
 @app.route('/stocktake/create', methods=['POST'])
+@permission_required('stocktake')
 def stocktake_create():
     count_date = request.form.get('count_date') or str(date.today())
     n = create_inventory_count(count_date)
@@ -2454,6 +2459,7 @@ def stocktake_create():
     return redirect(url_for('stocktake', date=count_date))
 
 @app.route('/stocktake/save', methods=['POST'])
+@permission_required('stocktake')
 def stocktake_save():
     db = get_db()
     count_date = request.form.get('count_date')
@@ -2502,6 +2508,7 @@ def stocktake_save():
     return redirect(url_for('stocktake', date=count_date))
 
 @app.route('/stocktake/apply', methods=['POST'])
+@permission_required('stocktake')
 def stocktake_apply():
     """棚卸差異を在庫に反映（賞味期限別実棚数でシステム在庫を上書き）"""
     import ast
@@ -2558,7 +2565,7 @@ def stocktake_apply():
                     if product:
                         db.execute("""
                             INSERT INTO stocks (product_id,jan,product_name,supplier_cd,
-                            supplier_name,product_cd,unit_qty,quantity)
+                            supplier_name,product_cd,unit_qty,quantity,location_code)
                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         """, [product['id'],row['jan'],row['product_name'],
                               product['supplier_cd'],product['supplier_name'],
@@ -3524,10 +3531,10 @@ def restore_sales():
             else:
                 skipped += 1
         except Exception:
-            db.execute("ROLLBACK")
+            db.rollback()
             errors += 1
 
-    db.execute("COMMIT")
+    db.commit()
 
     # sales_daily_agg を再集計
     try:
