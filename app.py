@@ -1139,6 +1139,25 @@ def admin_required(f):
 
 app.jinja_env.globals['current_user'] = current_user
 
+# ─── アプリバージョン（git commit hash + 日付）────────────────────
+def _get_app_version():
+    import subprocess, datetime
+    try:
+        hash_ = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=os.path.dirname(__file__), stderr=subprocess.DEVNULL
+        ).decode().strip()
+        date_ = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%ci'],
+            cwd=os.path.dirname(__file__), stderr=subprocess.DEVNULL
+        ).decode().strip()[:10]
+        return f"{date_} ({hash_})"
+    except Exception:
+        return datetime.date.today().strftime('%Y-%m-%d')
+
+APP_VERSION = _get_app_version()
+app.jinja_env.globals['APP_VERSION'] = APP_VERSION
+
 # ─── ページ権限リスト ────────────────────────────────────────────────
 PAGE_PERMISSIONS = [
     ('dashboard',     'ホーム'),
