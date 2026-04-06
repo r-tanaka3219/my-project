@@ -394,11 +394,10 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                                     rows_skip += 1
                                     continue
                             elif import_type == 'sales':
-                                if not product:
-                                    rows_skip_unrg += 1
+                                if product:
+                                    _deduct_stock(db, product, qty, row_date, log_key)
+                                else:
                                     unrg_jans[jan] = jan
-                                    continue
-                                _deduct_stock(db, product, qty, row_date, log_key)
                                 result_me = db.execute("""
                                     INSERT INTO sales_history
                                     (jan,product_name,quantity,sale_date,source_file,row_hash)
@@ -409,11 +408,10 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                                     rows_skip += 1
                                     continue
                             else:
-                                if not product:
-                                    rows_skip_unrg += 1
+                                if product:
+                                    _add_stock(db, product, qty, expiry, log_key)
+                                else:
                                     unrg_jans[jan] = jan
-                                    continue
-                                _add_stock(db, product, qty, expiry, log_key)
 
                             rows_ok += 1
 
@@ -433,14 +431,12 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                     skip_note = f" スキップ{rows_skip}行(重複)" if rows_skip else ""
                 else:
                     skip_note = f" スキップ{rows_skip}行(月末日以外)" if rows_skip else ""
-                unrg_note = f" 未登録商品スキップ{rows_skip_unrg}行(商品登録後に再取込可)" if rows_skip_unrg else ""
+                unrg_note = f" 未登録商品{len(unrg_jans)}件(マスタ未登録の為在庫引当なし)" if unrg_jans else ""
                 detail = (
                     f"月末月次取込({month_end_date}) 成功{rows_ok}行{skip_note}{unrg_note}"
                     + (f" エラー{rows_err}行: {'; '.join(errors[:3])}" if errors else "")
                 )
-                if rows_skip_unrg > 0 and rows_err == 0:
-                    status = 'partial_skip'
-                elif rows_err == 0:
+                if rows_err == 0:
                     status = 'ok'
                 else:
                     status = 'partial'
@@ -707,7 +703,6 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                     pass  # 引き当てなし
                                 elif import_type == 'sales':
                                     if not product:
-                                        rows_skip_unrg += 1
                                         unrg_jans[jan] = jan
                                     elif not exclude:
                                         _deduct_stock(db, product, qty, sale_date, csv_path.name)
@@ -724,7 +719,6 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                     rows_ok -= 1
                             else:
                                 if not product:
-                                    rows_skip_unrg += 1
                                     unrg_jans[jan] = jan
                                 else:
                                     _add_stock(db, product, qty, expiry, csv_path.name)
@@ -745,11 +739,9 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
 
                 db.commit()
                 skip_note = f" スキップ{rows_skip}行(重複・フィルター)" if rows_skip else ""
-                unrg_note = f" 未登録商品スキップ{rows_skip_unrg}行(商品登録後に再取込可)" if rows_skip_unrg else ""
+                unrg_note = f" 未登録商品{len(unrg_jans)}件(マスタ未登録の為在庫引当なし)" if unrg_jans else ""
                 detail = f"成功{rows_ok}行{skip_note}{unrg_note}" + (f" エラー{rows_err}行: {'; '.join(errors[:3])}" if errors else "")
-                if rows_skip_unrg > 0 and rows_err == 0:
-                    status = 'partial_skip'
-                elif rows_err == 0:
+                if rows_err == 0:
                     status = 'ok'
                 else:
                     status = 'partial'

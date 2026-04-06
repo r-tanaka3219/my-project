@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', function() {
         {% else %}<span class="badge badge-red">エラー</span>{% endif %}</td>
     <td style="font-size:11px;color:#6b7280">
       {{ l.detail }}
-      {% if l.status=='partial_skip' and l.unrg_jans_json %}
+      {% if l.unrg_jans_json %}
         {% set jans = l.unrg_jans_json | fromjson %}
         {% if jans %}
         <details style="margin-top:5px">
@@ -418,7 +418,9 @@ document.addEventListener('DOMContentLoaded', function() {
       {% if l.filename %}
       <a href="/csv/import_detail?source_file={{ l.filename|urlencode }}" class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">📄 明細確認</a>
       {% endif %}
-      {% if l.status=='partial_skip' and l.filename %}
+      {% if l.unrg_jans_json and l.filename %}
+        {% set jans_btn = l.unrg_jans_json | fromjson %}
+        {% if jans_btn %}
         {% if l.filename.startswith('month_end_') %}
           {# 月末月次再取込 #}
           {% set ym_part = l.filename.split('_')[2] if l.filename.split('_')|length > 2 else '' %}
@@ -442,6 +444,7 @@ document.addEventListener('DOMContentLoaded', function() {
               🔄 再取込
             </button>
           </form>
+        {% endif %}
         {% endif %}
       {% endif %}
     </td>
