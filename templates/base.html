@@ -259,7 +259,10 @@ tr:hover td.table-actions-cell {
 </head>
 <body>
 <nav>
-  <span class="brand" style="white-space:nowrap">📦 在庫管理 <span style="font-size:10px;color:#93c5fd;font-weight:normal">Ver.{{ APP_VERSION }}</span></span>
+  <span class="brand" style="white-space:nowrap;display:inline-flex;flex-direction:column;line-height:1.2">
+    <span>📦 在庫管理</span>
+    <span style="font-size:10px;color:#93c5fd;font-weight:normal">Ver.{{ APP_VERSION }}</span>
+  </span>
   {% if current_user() %}
   <a href="/" {% if request.endpoint=='dashboard' %}class="active"{% endif %}>ホーム</a>
   {% if has_permission('inventory') %}<a href="/inventory" {% if request.endpoint=='inventory' %}class="active"{% endif %}>在庫一覧</a>{% endif %}
