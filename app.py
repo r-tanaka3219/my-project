@@ -1141,20 +1141,45 @@ app.jinja_env.globals['current_user'] = current_user
 
 # ─── アプリバージョン（git commit hash + 日付）────────────────────
 def _get_app_version():
-    import subprocess, datetime
+    """
+    .git/HEAD → .git/refs/heads/<branch> を直接読んでコミットハッシュと日付を取得。
+    subprocess不要のためサーバー環境でも安定動作。
+    """
+    import datetime, zlib
     _dir = os.path.dirname(os.path.abspath(__file__))
     try:
-        hash_ = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            cwd=_dir, stderr=subprocess.DEVNULL
-        ).decode().strip()
-        date_ = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%ci'],
-            cwd=_dir, stderr=subprocess.DEVNULL
-        ).decode().strip()[:10]
-        return f"{date_} ({hash_})"
+        # HEAD からブランチ名またはハッシュを取得
+        head_path = os.path.join(_dir, '.git', 'HEAD')
+        with open(head_path, 'r') as f:
+            head = f.read().strip()
+
+        if head.startswith('ref: '):
+            # 通常ブランチ
+            ref = head[5:]  # e.g. refs/heads/master
+            ref_path = os.path.join(_dir, '.git', ref)
+            with open(ref_path, 'r') as f:
+                full_hash = f.read().strip()
+        else:
+            # detached HEAD
+            full_hash = head
+
+        short_hash = full_hash[:7]
+
+        # gitオブジェクト（commitオブジェクト）からコミット日時を取得
+        obj_path = os.path.join(_dir, '.git', 'objects', full_hash[:2], full_hash[2:])
+        with open(obj_path, 'rb') as f:
+            raw = zlib.decompress(f.read())
+        # "committer ... <...> 1234567890 +0900" 形式のUNIXタイムスタンプを取得
+        for line in raw.decode('utf-8', errors='replace').splitlines():
+            if line.startswith('committer '):
+                parts = line.rsplit(' ', 2)
+                ts = int(parts[-2])
+                commit_date = datetime.datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d')
+                return f"{commit_date} ({short_hash})"
+
+        return f"({short_hash})"
     except Exception:
-        return datetime.date.today().strftime('%Y-%m-%d') + ' (-)'
+        return datetime.date.today().strftime('%Y-%m-%d') + ' (-?-)'
 
 APP_VERSION = _get_app_version()
 app.jinja_env.globals['APP_VERSION'] = APP_VERSION
