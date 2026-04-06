@@ -139,7 +139,14 @@ def find_csv_files(folder_path: str, pattern: str, target_date: date = None, all
     folder = Path(folder_path)
     if all_files:
         try:
-            return sorted(folder.glob('*.csv')) + sorted(folder.glob('*.CSV'))
+            seen = set()
+            result = []
+            for p in sorted(folder.glob('*.csv')) + sorted(folder.glob('*.CSV')):
+                key = p.resolve()
+                if key not in seen:
+                    seen.add(key)
+                    result.append(p)
+            return result
         except Exception:
             return []
     try:
