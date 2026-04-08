@@ -1307,8 +1307,9 @@ def run_expiry_check():
             already = db.execute("""
                 SELECT COUNT(*) AS _cnt FROM alert_logs
                 WHERE alert_type='賞味期限アラート' AND jan=%s
-                AND created_at::date = CURRENT_DATE
-            """, [s['jan']]).fetchone()['_cnt']
+                AND message LIKE %s
+                AND created_at::date >= CURRENT_DATE - INTERVAL '7 days'
+            """, [s['jan'], f"%（{s['expiry_date']}）%"]).fetchone()['_cnt']
             if not already:
                 alert_items.append({
                     'jan':          s['jan'],
