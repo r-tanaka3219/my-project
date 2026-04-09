@@ -294,6 +294,11 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
             unrg_jans = {}
             errors = []
             import_type = cfg['import_type'] or 'sales'
+            # チェーンCD・店舗CD・仕入先CD・商品CD除外キャッシュ（月末取込用）
+            _me_chain_exclude_cache = {}
+            _me_store_exclude_cache = {}
+            _me_supplier_exclude_cache = {}
+            _me_product_exclude_cache = {}
 
             try:
                 enc = cfg['encoding'] or 'utf-8-sig'
@@ -343,10 +348,12 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                             import hashlib as _hashlib2
                             slip_col_me = (cfg.get('col_slip_no') or '伝票番号').strip()
                             row_no_col_me = (cfg.get('col_row_no') or '行番号').strip()
-                            chain_col_me = (cfg.get('col_chain_cd') or 'チェーンCD').strip()
+                            chain_col_me    = (cfg.get('col_chain_cd') or 'チェーンCD').strip()
+                            store_cd_col_me = (cfg.get('col_store_cd') or '得意先CD').strip()
                             slip_no_me  = str(row.get(slip_col_me, '') or '').strip()
                             row_no_me   = str(row.get(row_no_col_me, '') or '').strip()
                             chain_cd_me = str(row.get(chain_col_me, '') or '').strip()
+                            store_cd_me = str(row.get(store_cd_col_me, '') or '').strip()
                             row_hash_me = _hashlib2.md5(
                                 f"{row_date}|{chain_cd_me}|{slip_no_me}|{row_no_me}".encode()
                             ).hexdigest()
@@ -401,16 +408,68 @@ def run_month_end_import(setting_id=None, target_ym=None, all_dates=False, progr
                                     rows_skip += 1
                                     continue
                             elif import_type == 'sales':
-                                if product:
-                                    _deduct_stock(db, product, qty, row_date, log_key)
-                                else:
+                                # ── チェーンCD・店舗CD・仕入先CD・商品CD除外チェック ──
+                                me_exclude = False
+                                if chain_cd_me:
+                                    if chain_cd_me not in _me_chain_exclude_cache:
+                                        cm_me = db.execute(
+                                            "SELECT exclude_deduct FROM chain_masters WHERE chain_cd=%s",
+                                            [chain_cd_me]
+                                        ).fetchone()
+                                        _me_chain_exclude_cache[chain_cd_me] = bool(cm_me and cm_me['exclude_deduct'])
+                                    me_exclude = _me_chain_exclude_cache[chain_cd_me]
+                                if store_cd_me and not me_exclude:
+                                    if store_cd_me not in _me_store_exclude_cache:
+                                        sm_me = db.execute(
+                                            "SELECT exclude_deduct FROM store_masters WHERE store_cd=%s",
+                                            [store_cd_me]
+                                        ).fetchone()
+                                        _me_store_exclude_cache[store_cd_me] = bool(sm_me and sm_me['exclude_deduct'])
+                                    me_exclude = _me_store_exclude_cache[store_cd_me]
+                                if product and not me_exclude:
+                                    sup_cd_me = product.get('supplier_cd') or ''
+                                    if sup_cd_me:
+                                        sup_key_me = (sup_cd_me, chain_cd_me, store_cd_me)
+                                        if sup_key_me not in _me_supplier_exclude_cache:
+                                            ss_me = db.execute(
+                                                """SELECT 1 FROM supplier_cd_settings
+                                                   WHERE supplier_cd=%s
+                                                   AND (chain_cd IS NULL OR chain_cd='' OR chain_cd=%s)
+                                                   AND (store_cd IS NULL OR store_cd='' OR store_cd=%s)
+                                                   AND exclude_deduct=1 LIMIT 1""",
+                                                [sup_cd_me, chain_cd_me, store_cd_me]
+                                            ).fetchone()
+                                            _me_supplier_exclude_cache[sup_key_me] = bool(ss_me)
+                                        me_exclude = _me_supplier_exclude_cache[sup_key_me]
+                                if not me_exclude:
+                                    pcd_me = (product.get('product_cd') or '') if product else ''
+                                    pcd_key_me = (jan, pcd_me, chain_cd_me, store_cd_me)
+                                    if pcd_key_me not in _me_product_exclude_cache:
+                                        ps_me = db.execute(
+                                            """SELECT 1 FROM product_cd_settings
+                                               WHERE (jan=%s OR (product_cd IS NOT NULL AND product_cd<>'' AND product_cd=%s))
+                                               AND (chain_cd IS NULL OR chain_cd='' OR chain_cd=%s)
+                                               AND (store_cd IS NULL OR store_cd='' OR store_cd=%s)
+                                               AND exclude_deduct=1 LIMIT 1""",
+                                            [jan, pcd_me or jan, chain_cd_me, store_cd_me]
+                                        ).fetchone()
+                                        _me_product_exclude_cache[pcd_key_me] = bool(ps_me)
+                                    me_exclude = _me_product_exclude_cache[pcd_key_me]
+                                if not me_exclude:
+                                    if product:
+                                        _deduct_stock(db, product, qty, row_date, log_key)
+                                    else:
+                                        unrg_jans[jan] = jan
+                                elif not product:
                                     unrg_jans[jan] = jan
                                 result_me = db.execute("""
                                     INSERT INTO sales_history
-                                    (jan,product_name,quantity,sale_date,source_file,row_hash)
-                                    VALUES (%s,%s,%s,%s,%s,%s)
+                                    (jan,product_name,quantity,sale_date,source_file,row_hash,
+                                     chain_cd,store_cd)
+                                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                                     ON CONFLICT (row_hash) WHERE row_hash IS NOT NULL AND row_hash <> '' DO NOTHING
-                                """, [jan, product_name, qty, row_date, log_key, row_hash_me])
+                                """, [jan, product_name, qty, row_date, log_key, row_hash_me,
+                                      chain_cd_me, store_cd_me])
                                 if result_me.rowcount == 0:
                                     rows_skip += 1
                                     continue
