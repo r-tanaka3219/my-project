@@ -563,9 +563,11 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
             unrg_jans = {}
             errors = []
             import_type = cfg['import_type'] or 'sales'
-            # チェーンCD・店舗CD除外キャッシュ（DB問い合わせ削減）
+            # チェーンCD・店舗CD・仕入先CD・商品CD除外キャッシュ（DB問い合わせ削減）
             _chain_exclude_cache = {}
             _store_exclude_cache = {}
+            _supplier_exclude_cache = {}
+            _product_exclude_cache = {}
 
             # 総行数カウント
             try:
@@ -706,6 +708,37 @@ def run_csv_import(setting_id=None, target_date=None, target_ym=None, progress_c
                                             )
                                             _store_exclude_cache[store_cd] = False
                                     exclude = _store_exclude_cache[store_cd]
+                                # 仕入先CD除外チェック
+                                if product and not exclude:
+                                    sup_cd = product.get('supplier_cd') or ''
+                                    if sup_cd:
+                                        sup_cache_key = (sup_cd, chain_cd, store_cd)
+                                        if sup_cache_key not in _supplier_exclude_cache:
+                                            ss = db.execute(
+                                                """SELECT 1 FROM supplier_cd_settings
+                                                   WHERE supplier_cd=%s
+                                                   AND (chain_cd IS NULL OR chain_cd='' OR chain_cd=%s)
+                                                   AND (store_cd IS NULL OR store_cd='' OR store_cd=%s)
+                                                   AND exclude_deduct=1 LIMIT 1""",
+                                                [sup_cd, chain_cd, store_cd]
+                                            ).fetchone()
+                                            _supplier_exclude_cache[sup_cache_key] = bool(ss)
+                                        exclude = _supplier_exclude_cache[sup_cache_key]
+                                # 商品CD（JAN）除外チェック
+                                if not exclude:
+                                    pcd = (product.get('product_cd') or '') if product else ''
+                                    pcd_cache_key = (jan, pcd, chain_cd, store_cd)
+                                    if pcd_cache_key not in _product_exclude_cache:
+                                        ps = db.execute(
+                                            """SELECT 1 FROM product_cd_settings
+                                               WHERE (jan=%s OR (product_cd IS NOT NULL AND product_cd<>'' AND product_cd=%s))
+                                               AND (chain_cd IS NULL OR chain_cd='' OR chain_cd=%s)
+                                               AND (store_cd IS NULL OR store_cd='' OR store_cd=%s)
+                                               AND exclude_deduct=1 LIMIT 1""",
+                                            [jan, pcd or jan, chain_cd, store_cd]
+                                        ).fetchone()
+                                        _product_exclude_cache[pcd_cache_key] = bool(ps)
+                                    exclude = _product_exclude_cache[pcd_cache_key]
                                 if import_type == 'record_only':
                                     pass  # 引き当てなし
                                 elif import_type == 'sales':
