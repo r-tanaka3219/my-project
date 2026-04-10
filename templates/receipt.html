@@ -204,7 +204,7 @@ function lookupJan(val) {
       document.getElementById('jan-name').textContent = '✅ ' + p.name;
       document.getElementById('jan-info').textContent =
         `商品CD: ${p.product_cd}　JAN: ${p.jan}　仕入先: ${p.supplier}　入数: ${p.unit}個/ケース`;
-      document.getElementById('jan-hidden').value = v;
+      document.getElementById('jan-hidden').value = p.jan;
       document.getElementById('unit-input').value = p.unit;
       showQtySection();
     } else {
