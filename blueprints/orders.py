@@ -228,7 +228,7 @@ def pending_force_group_edit():
     for it in items:
         unit_qty = int(it['unit_qty'] or 1)
         base_cases = int(it['order_cases'] or 0)
-        base_order_qty = int(it['order_qty'] or it.get('product_order_qty') or unit_qty)
+        base_order_qty = int(it.get('product_order_qty') or it['order_qty'] or unit_qty)
         extra_cases = int(auto_extra.get(it['jan'], 0))
         final_order_qty = (base_cases + extra_cases) * base_order_qty
         view_items.append({
@@ -320,7 +320,7 @@ def pending_force_group_manual():
 
     for pid, it in item_map.items():
         base_cases = int(it['order_cases'] or 0)
-        base_order_qty = int(it['order_qty'] or it.get('product_order_qty') or 1)
+        base_order_qty = int(it.get('product_order_qty') or it['order_qty'] or 1)
         raw_extra = (request.form.get(f'extra_cases_{pid}', '') or '0').strip()
         try:
             extra_cases = int(raw_extra)
