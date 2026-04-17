@@ -403,7 +403,7 @@ def product_import():
                 db.execute("""
                     UPDATE products SET
                     supplier_cd=%s,supplier_name=%s,product_cd=%s,product_name=%s,
-                    unit_qty=%s,order_unit=%s,order_qty=%s,reorder_point=%s,reorder_auto=%s,
+                    unit_qty=%s,order_unit=%s,order_qty=%s,lock_order_qty=%s,reorder_point=%s,reorder_auto=%s,
                     lead_time_days=%s,safety_factor=%s,lot_size=%s,
                     shelf_life_days=%s,expiry_alert_days=%s,
                     mixed_group=%s,mixed_lot_mode=%s,mixed_lot_cases=%s,mixed_force_days=%s,
@@ -412,7 +412,7 @@ def product_import():
                     WHERE jan=%s
                 """, [
                     vals['supplier_cd'],vals['supplier_name'],vals['product_cd'],vals['product_name'],
-                    vals['unit_qty'],vals['order_unit'],vals['order_qty'],vals['reorder_point'],vals['reorder_auto'],
+                    vals['unit_qty'],vals['order_unit'],vals['order_qty'],vals.get('lock_order_qty') or 0,vals['reorder_point'],vals['reorder_auto'],
                     vals['lead_time_days'],vals['safety_factor'],vals['lot_size'],
                     vals['shelf_life_days'],vals['expiry_alert_days'],
                     vals['mixed_group'],vals['mixed_lot_mode'],vals['mixed_lot_cases'],vals['mixed_force_days'],
@@ -428,15 +428,15 @@ def product_import():
                 db.execute("""
                     INSERT INTO products
                     (jan,supplier_cd,supplier_name,product_cd,product_name,
-                     unit_qty,order_unit,order_qty,reorder_point,reorder_auto,
+                     unit_qty,order_unit,order_qty,lock_order_qty,reorder_point,reorder_auto,
                      lead_time_days,safety_factor,lot_size,
                      shelf_life_days,expiry_alert_days,
                      mixed_group,mixed_lot_mode,mixed_lot_cases,mixed_force_days,
                      cost_price,sell_price)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, [
                     jan_raw,vals['supplier_cd'],vals['supplier_name'],vals['product_cd'],vals['product_name'],
-                    vals['unit_qty'],vals['order_unit'],vals['order_qty'],vals['reorder_point'],vals['reorder_auto'],
+                    vals['unit_qty'],vals['order_unit'],vals['order_qty'],vals.get('lock_order_qty') or 0,vals['reorder_point'],vals['reorder_auto'],
                     vals['lead_time_days'],vals['safety_factor'],vals['lot_size'],
                     vals['shelf_life_days'],vals['expiry_alert_days'],
                     vals['mixed_group'],vals['mixed_lot_mode'],vals['mixed_lot_cases'],vals['mixed_force_days'],
